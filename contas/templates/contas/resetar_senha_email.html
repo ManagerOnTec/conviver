@@ -1,0 +1,16 @@
+{% autoescape off %}
+
+<p>Olá {{ user.username }},</p>
+
+<p>Clique no link abaixo para redefinir sua senha:</p>
+
+<p><a href="http://{{ domain }}/resetar/{{ uid }}/{{ token }}">Redefinir Senha</a></p>
+
+<p>Se você não solicitou esta redefinição de senha, por favor, ignore este e-mail.</p>
+<p>Se o link não funcionar, tente alterar de http:// para https://</p>
+
+<p>Atenciosamente,</p>
+<p>ManagerONTEC Solutions</p>
+
+
+{% endautoescape %}

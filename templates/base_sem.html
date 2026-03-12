@@ -1,0 +1,25 @@
+{% load static %}
+{% load tz %}
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <title>
+      {% block titulos %}
+
+      {% endblock %}ManagerONTEC
+    </title>
+    {% include 'parciais/_head.html' %}
+  </head>
+  <body>
+    <div class="container-fluid bg-dark min-vh-100">
+      <div class="d-flex justify-content-center"></div>
+      {% block content %}
+
+      {% endblock %}
+      {% block scriptcustom %}
+
+      {% endblock %}
+    </div>
+  </body>
+</html>

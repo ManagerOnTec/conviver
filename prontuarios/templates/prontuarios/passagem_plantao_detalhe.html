@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+{% load templatetags %}
+
+
+{% block titulos %}{{title}}|{% endblock %}
+
+
+{% block menul %}
+<!-- FIM MENU LATERAL -->
+{% endblock %}
+
+
+{% block cabdados %}
+<div class="p-2">
+    <span>Detalhes da Passagem de Plantão...</span>
+</div>
+
+<!-- FIM DADOS DO OBJETO -->
+{% endblock %}
+
+
+{% block lista %}
+<div class="container">
+    <form id='fomr-passagem-editar' class="form-control mt-2">
+        {% csrf_token %}
+        {{ passagem_form.media }}
+
+        <div class="row">
+            <div class="col-lg-9 col-md-9 col-sm-9 col-xs-9">
+
+
+
+
+
+                <div id="table-container">
+                    <div class="container">
+                        <div class="row">
+
+
+
+
+                            <div class="col-lg-12 col-md-12 col-sm-12">
+                                <label for="id_tipo_evolucao">Tipo de Passagem de Plantão:</label>
+                                <select class="form-control" id="id_tipo_passagem_plantao" name="tipo_passagem_plantao"
+                                    disabled>
+                                    {% for option in passagem_form.tipo_passagem_plantao %}
+                                    <option value="{{ option.id }}">{{ option }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+
+                            <div id="passagem_texto" class="col-lg-12 col-md-12 col-sm-12 detail-mode" disabled>
+                                {{ passagem_form.passagem_plantao }}
+                            </div>
+
+
+                            <div class="col-md-12">
+                                {{ passagem_form.us_registro|as_crispy_field }}
+                                {{ passagem_form.dt_registro|as_crispy_field }}
+                            </div>
+
+                            <div class="col-md-12">
+                                {{ passagem_form.us_atualizacao|as_crispy_field }}
+                                {{ passagem_form.dt_atualizacao|as_crispy_field }}
+                            </div>
+
+                            <div class="col-md-12">
+                                {{ passagem_form.status|as_crispy_field }}
+
+                            </div>
+
+                            <div class="col-md-12">
+                                {{ passagem_form.estabelecimento|as_crispy_field }}
+                            </div>
+
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+
+
+
+            <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
+                <div class="d-flex flex-column">
+                    <div class="d-flex justify-content-end">
+
+                        <a title="Clique aqui para fechar" href="{% url 'passagem_plantao_listar' %}"
+                            class="btn btn-outline-dark mx-2 ml-2">
+                            <i class="fas fa-times-circle" style="transition: color 0.3s;">Fechar</i>
+                        </a>
+                    </div>
+
+
+                    <div class="d-flex justify-content-end mt-2">
+                        <div class="mt-2">
+                            {% if objeto_anterior %}
+                            <a class="btn btn-outline-primary mx-2 ml-2"
+                                href="{% url 'passagem_plantao_detalhe' objeto_anterior.id %}">&lt; </a>
+                            {% endif %}
+                        </div>
+
+                        <div class="mt-2">
+                            {% if proximo_objeto %}
+                            <a class="btn btn-outline-primary mx-2 ml-2"
+                                href="{% url 'passagem_plantao_detalhe' proximo_objeto.id %}"> &gt;</a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+    </form>
+</div>
+{% endblock %}
+<!--FIM DETALHE-->

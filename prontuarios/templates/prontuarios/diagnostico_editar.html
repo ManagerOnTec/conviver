@@ -1,0 +1,207 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+{% load templatetags %}
+
+
+{% block titulos %}{{title}}|{% endblock %}
+
+
+{% block menul %}
+<div class="form-group text-left mt-2 m-3">
+
+
+    <a href="{% url 'prontuario_detalhe' pk=object.atendimento.id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-notes-medical me-2"></i>Prontuário
+    </a>
+    <a href="" class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded">
+        <i class="fas fa-diagnoses me-2"></i>Diagnósticos
+    </a>
+
+    <a href="{% url 'evolucao_listar' atendimento_id=object.atendimento.id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-file-alt me-2"></i>Evoluções
+    </a>
+
+
+    <a href="{% url 'psicoterapia_listar' atendimento_id=object.atendimento.id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-brain me-2"></i>Psicoterapias
+    </a>
+
+    <a href="{% url 'prescricao_listar' atendimento_id=object.atendimento.id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-capsules me-2"></i>Prescrições
+    </a>
+
+
+    <a href="{% url 'adep_listar' atendimento_id=object.atendimento.id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-syringe me-2"></i>ADEP
+    </a>
+
+
+    <a href="{% url 'sinais_vitais_listar' atendimento_id=object.atendimento.id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fa fa-heartbeat me-2"></i>Sinais Vitais
+    </a>
+    <a href="{% url 'sae_listar' atendimento_id=object.atendimento.id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-stethoscope me-2"></i>SAE
+    </a>
+    <a href="{% url 'plano_cuidados_listar' atendimento_id=object.atendimento.id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-procedures me-2"></i>Plano de Cuidados
+    </a>
+
+    <a href="{% url 'perdas_ganhos_listar' atendimento_id=object.atendimento.id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fa fa-weight me-2"></i>Perdas e Ganhos
+    </a>
+</div>
+
+<!-- FIM MENU LATERAL -->
+{% endblock %}
+
+
+
+{% block cabdados %}
+<div class="text-nowrap p-2" style="max-width: 150px;">
+    Prontuário:{{ object.atendimento_id }}
+</div>
+
+<div class="text-nowrap p-2" style="max-width: 400px;">
+    {{ pessoa_form.nome.value }}
+</div>
+
+
+
+{% if pessoa_form.alergico.value == 'S' %}
+
+<button class="btn btn-danger" type="button" disabled>
+    <span>Alergia(s):</span>
+    <span class="spinner-grow spinner-grow-sm" role="status" aria-hidden="true"></span>
+    {{ pessoa_form.alergias.value }}
+</button>
+{% endif %}
+
+<div class="text-nowrap p-2" style="max-width: 200px;">
+    D.N:{{ pessoa_form.dt_nascimento.value }}
+</div>
+
+<div class="text-nowrap p-2" style="max-width: 150px;">
+    CPF:{{ pessoa_form.cpf.value }}
+</div>
+
+<div class="p-2 text-nowrap" style="max-width: 190px;">
+    Cidade: {{ pessoa_form.instance.cidade }}
+</div>
+
+
+<div class="p-2 text-nowrap" style="max-width: 120px;">
+    Idade:{{ idade }}
+</div>
+<div class="text-nowrap p-2" style="max-width: 120px;">
+    Sexo:{{ pessoa_form.sexo.value }}
+</div>
+
+<div class="text-nowrap p-2" style="max-width: 150px;">
+    Cor/Raça:{{ pessoa_form.cor_raca.value }}
+</div>
+
+<div class="text-nowrap p-2" style="max-width: 180px;">
+    Religião:{{ pessoa_form.religiao.value }}
+</div>
+
+<div class="text-nowrap p-2" style="max-width: 300px;">
+    Filiação:{{ pessoa_form.pai.value }}, {{ pessoa_form.mae.value }}
+</div>
+
+<!-- FIM DADOS DO OBJETO -->
+{% endblock %}
+
+
+{% block lista %}
+<div class="container">
+    <form id="form-diagnostico-editar" method="post" enctype="multipart/form-data" class="form-control mt-2">
+
+        {% csrf_token %}
+        {{ form.media }}
+        {{ diagnostico_form.media }}
+
+        <div class="row">
+
+            <div class="col-lg-9 col-md-9 col-sm-9 col-xs-9">
+                <div id="table-container">
+                    <div class="container">
+                        <div class="row">
+
+
+                            <!-- Renderização explícita do campo 'diagnostico' -->
+                            <div class="form-group">
+                                <label for="{{ form.diagnostico.id_for_label }}">Diagnósticos*</label>
+                                {{ form.diagnostico|as_crispy_field }}
+                            </div>
+
+                            <!-- Renderize os campos do formulário exceto 'diagnostico' com Crispy Forms -->
+                            {% for field in form %}
+                            {% if field.name != "diagnostico" %}
+                            {{ field|as_crispy_field }}
+                            {% endif %}
+                            {% endfor %}
+
+
+                            <!-- Certifique-se de que o campo atendimento esteja incluído como um campo oculto -->
+                            <input type="hidden" name="atendimento" value="{{ atendimento_id }}">
+                            <input type="hidden" name="estabelecimento" value="{{ estabelecimento_id }}">
+
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
+
+
+                <div class="d-flex justify-content-end">
+
+                    <a title="Clique aqui para fechar"
+                        href="{% url 'diagnostico_listar' atendimento_id=object.atendimento.id %}"
+                        class="btn btn-outline-dark mx-2 ml-2">
+                        <i class="fas fa-times-circle" style="transition: color 0.3s;">Fechar</i>
+                    </a>
+                </div>
+                <div class="d-flex justify-content-end mt-2">
+
+
+                    <button id="btn-diagnostico-editar" type="submit" title="Salvar"
+                        class="btn btn-success btn-outline-light border border-black mx-2 ml-2">
+                        <i class="fas fa-save" style="transition: color 0.3s;">Salvar</i>
+                    </button>
+                </div>
+
+                <div class="d-flex justify-content-end mt-2">
+                    <div class="form-group text-center m-2">
+                        <!-- LOADING -->
+                        <div class="spinner-border text-warning mb-3" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+
+                        <!-- DETALHES E LINKS -->
+                        <div class="col-md-12 p-2">
+                            <label class="text-warning"><strong>Editando...</strong></label>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+
+        </div>
+
+    </form>
+</div>
+{% endblock %}
+<!--FIM CADASTRAR-->

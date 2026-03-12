@@ -1,0 +1,51 @@
+{% load static %}
+
+
+{% block footer %}
+{% if mostrar_rodape %}
+{% include 'parciais/_footer.html' %}
+{% endif %}
+{% endblock %}
+
+
+<footer class="footer footer-dark bg-black border border-black">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="d-flex justify-content-between">
+                <div class="item text">
+                    <h3>
+                        ManagerONTEC
+                    </h3>
+                    <ul>
+                        <li><a href="#">Sistema online para gerenciamento empresarial</a></li>
+                    </ul>
+                </div>
+
+                <div class="item text">
+                    <h3>
+                        Sobre
+                    </h3>
+                    <ul>
+                        <li><a href="#">Clique aqui</a></li>
+                    </ul>
+                </div>
+
+                <div class="item text">
+                    <h3>
+                        Serviços
+                    </h3>
+                    <ul>
+                        <li><a href="#">Desenvolvimento, Gerenciamento, e Consultorias.</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <br>
+        <div class="col item social"><a href="#"><i class="icon ion-social-facebook"></i></a><a href="#"><i
+                    class="icon ion-social-twitter"></i></a><a href="#"><i class="icon ion-social-instagram"></i></a>
+        </div>
+    </div>
+    <p class="copyright">ManagerONTEC © 2022</p>
+
+</footer>

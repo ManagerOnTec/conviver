@@ -1,0 +1,364 @@
+<!-- partier ignore -->
+{% extends 'base_sem.html' %}
+<!-- partier ignore -->
+{% load static %}
+<!-- partier ignore -->
+{% load crispy_forms_tags %}
+<!-- partier ignore -->
+{% load templatetags %} {% block titulos %}{{title}}|{% endblock %}
+
+<!-- partier ignore -->
+{% block content %}
+
+<div id="template-index" class="container-fluid bg-dark min-vh-90 rounded">
+  <form class="form" method="post">
+    {% csrf_token %}
+    <h3 class="text-white text-center mt-1 p-3 mb-1">Módulos do Sistema</h3>
+
+    <!-- Barra de Pesquisa -->
+    <div class="container-fluid px-3 mb-3">
+      <div class="input-group">
+        <span class="input-group-text bg-secondary border-0" id="basic-addon1">
+          <i class="fas fa-search text-white"></i>
+        </span>
+        <input type="text" class="form-control bg-dark text-white border-secondary" placeholder="Pesquisar módulos..."
+          aria-label="Pesquisar módulos" aria-describedby="basic-addon1" id="myInput" />
+      </div>
+    </div>
+
+    <!-- Grid de Cards -->
+    <div class="container-fluid px-3">
+      <div class="row g-3" id="myList">
+
+        <!-- ========== ATENDIMENTOS ========== -->
+        {% if user|has_perm:'atendimentos.view_atendimento' %}
+        <div class="col-lg-4 col-md-6 col-sm-12">
+          <a href="{% url 'atendimento_listar' %}" class="text-decoration-none h-100">
+            <div class="card h-100 bg-dark border-secondary text-white transition-card">
+              <div class="card-body d-flex flex-column align-items-center text-center p-4">
+                <i class="fas fa-hospital fa-3x mb-3 text-success"></i>
+                <h5 class="card-title fw-bold">Atendimentos</h5>
+                <p class="card-text text-muted small">Atendimentos.</p>
+              </div>
+            </div>
+          </a>
+        </div>
+        {% endif %}
+
+        <!-- ========== PRONTUÁRIOS ========== -->
+        {% if user|has_perm:'prontuarios.view_prontuario' %}
+        <div class="col-lg-4 col-md-6 col-sm-12">
+          {% if is_assistencial %}
+          <a href="{{ prontuario_listar_url }}" class="text-decoration-none h-100">
+            {% else %}
+            <a href="{{ prontuario_acessos_url }}" class="text-decoration-none h-100">
+              {% endif %}
+              <div class="card h-100 bg-dark border-secondary text-white transition-card">
+                <div class="card-body d-flex flex-column align-items-center text-center p-4">
+                  <i class="fas fa-notes-medical fa-3x mb-3 text-success"></i>
+                  <h5 class="card-title fw-bold">Prontuários</h5>
+                  <p class="card-text text-muted small">Prontuários.</p>
+                </div>
+              </div>
+            </a>
+        </div>
+        {% endif %}
+
+        <!-- ========== ADMINISTRAÇÃO ========== -->
+        {% if user.is_staff %}
+        <div class="col-lg-4 col-md-6 col-sm-12">
+          <a href="{% url 'admin:index' %}" class="text-decoration-none h-100">
+            <div class="card h-100 bg-dark border-secondary text-white transition-card">
+              <div class="card-body d-flex flex-column align-items-center text-center p-4">
+                <i class="fas fa-cogs fa-3x mb-3 text-success"></i>
+                <h5 class="card-title fw-bold">Administração</h5>
+                <p class="card-text text-muted small">Administração.</p>
+              </div>
+            </div>
+          </a>
+        </div>
+        {% endif %}
+
+        <!-- ========== PASSAGEM DE PLANTÃO ========== -->
+        {% if user|has_perm:'prontuarios.view_passagem_plantao' %}
+        <div class="col-lg-4 col-md-6 col-sm-12">
+          <a href="{% url 'passagem_plantao_listar' %}" class="text-decoration-none h-100">
+            <div class="card h-100 bg-dark border-secondary text-white transition-card">
+              <div class="card-body d-flex flex-column align-items-center text-center p-4">
+                <i class="fas fa-exchange-alt fa-3x mb-3 text-success"></i>
+                <h5 class="card-title fw-bold">Passagem de Plantão</h5>
+                <p class="card-text text-muted small">Passagem de Plantão.</p>
+              </div>
+            </div>
+          </a>
+        </div>
+        {% endif %}
+
+        <!-- ========== ADEP ASSINATURAS ========== -->
+        {% if user|has_perm:'prontuarios.view_adep' %}
+        <div class="col-lg-4 col-md-6 col-sm-12">
+          <a href="{% url 'adep_listar_assinar' %}" class="text-decoration-none h-100">
+            <div class="card h-100 bg-dark border-secondary text-white transition-card">
+              <div class="card-body d-flex flex-column align-items-center text-center p-4">
+                <i class="fas fa-syringe fa-3x mb-3 text-success"></i>
+                <h5 class="card-title fw-bold">ADEPs - Assinaturas</h5>
+                <p class="card-text text-muted small">Pendentes de Assinaturas.</p>
+              </div>
+            </div>
+          </a>
+        </div>
+        {% endif %}
+
+        <!-- ========== ADEP ADMINISTRAÇÕES ========== -->
+        {% if user|has_perm:'prontuarios.view_adep' %}
+        <div class="col-lg-4 col-md-6 col-sm-12">
+          <a href="{% url 'adep_listar_administrar' %}" class="text-decoration-none h-100">
+            <div class="card h-100 bg-dark border-secondary text-white transition-card">
+              <div class="card-body d-flex flex-column align-items-center text-center p-4">
+                <i class="fas fa-syringe fa-3x mb-3 text-success"></i>
+                <h5 class="card-title fw-bold">ADEPs - Administrações</h5>
+                <p class="card-text text-muted small">Pendentes de Administração.</p>
+              </div>
+            </div>
+          </a>
+        </div>
+        {% endif %}
+
+        <!-- ========== GESTÃO DE PACIENTES ========== -->
+        {% if user|has_perm:'prontuarios.view_gestao_pacientes' %}
+        <div class="col-lg-4 col-md-6 col-sm-12">
+          <a href="{% url 'gestao_pacientes' %}" class="text-decoration-none h-100">
+            <div class="card h-100 bg-dark border-secondary text-white transition-card">
+              <div class="card-body d-flex flex-column align-items-center text-center p-4">
+                <i class="fas fa-hospital-user fa-3x mb-3 text-success"></i>
+                <h5 class="card-title fw-bold">Gestão de Pacientes</h5>
+                <p class="card-text text-muted small">Gestão de Pacientes.</p>
+              </div>
+            </div>
+          </a>
+        </div>
+        {% endif %}
+
+        <!-- ========== ORÇAMENTOS ========== -->
+        {% if user|has_perm:'orcamentos.view_orcamentos' %}
+        <div class="col-lg-4 col-md-6 col-sm-12">
+          <a href="{% url 'orcamentos_listar' %}" class="text-decoration-none h-100">
+            <div class="card h-100 bg-dark border-secondary text-white transition-card">
+              <div class="card-body d-flex flex-column align-items-center text-center p-4">
+                <i class="fas fa-warehouse fa-3x mb-3 text-success"></i>
+                <h5 class="card-title fw-bold">Orçamentos</h5>
+                <p class="card-text text-muted small">Orçamentos.</p>
+              </div>
+            </div>
+          </a>
+        </div>
+        {% endif %}
+
+        <!-- ========== ATAS ========== -->
+        {% if user|has_perm:'atas.view_atas' %}
+        <div class="col-lg-4 col-md-6 col-sm-12">
+          <a href="{% url 'atas_listar' %}" class="text-decoration-none h-100">
+            <div class="card h-100 bg-dark border-secondary text-white transition-card">
+              <div class="card-body d-flex flex-column align-items-center text-center p-4">
+                <i class="fas fa-file-alt fa-3x mb-3 text-success"></i>
+                <h5 class="card-title fw-bold">Atas</h5>
+                <p class="card-text text-muted small">Atas.</p>
+              </div>
+            </div>
+          </a>
+        </div>
+        {% endif %}
+
+        <!-- ========== OFÍCIOS ========== -->
+        {% if user|has_perm:'oficios.view_oficios' %}
+        <div class="col-lg-4 col-md-6 col-sm-12">
+          <a href="{% url 'oficios_listar' %}" class="text-decoration-none h-100">
+            <div class="card h-100 bg-dark border-secondary text-white transition-card">
+              <div class="card-body d-flex flex-column align-items-center text-center p-4">
+                <i class="fas fa-envelope fa-3x mb-3 text-success"></i>
+                <h5 class="card-title fw-bold">Ofícios</h5>
+                <p class="card-text text-muted small">Ofícios.</p>
+              </div>
+            </div>
+          </a>
+        </div>
+        {% endif %}
+
+        <!-- ========== PRESCRIÇÕES ========== -->
+        {% if user|has_perm:'prontuarios.add_prescricao' %}
+        <div class="col-lg-4 col-md-6 col-sm-12">
+          <a href="{% url 'prescricao_geral_listar' %}" class="text-decoration-none h-100">
+            <div class="card h-100 bg-dark border-secondary text-white transition-card">
+              <div class="card-body d-flex flex-column align-items-center text-center p-4">
+                <i class="fas fa-pills fa-3x mb-3 text-success"></i>
+                <h5 class="card-title fw-bold">Gestão de Prescrições</h5>
+                <p class="card-text text-muted small">Prescrições.</p>
+              </div>
+            </div>
+          </a>
+        </div>
+        {% endif %}
+
+        <!-- ========== TESOURARIA ========== -->
+        {% if user|has_perm:'apptesouraria.view_caixa' %}
+        <div class="col-lg-4 col-md-6 col-sm-12">
+          <a href="{% url 'apptesouraria:tesouraria_index' %}" class="text-decoration-none h-100">
+            <div class="card h-100 bg-dark border-success text-white transition-card">
+              <div class="card-body d-flex flex-column align-items-center text-center p-4">
+                <i class="fas fa-cash-register fa-3x mb-3 text-success"></i>
+                <h5 class="card-title fw-bold">Tesouraria</h5>
+                <p class="card-text text-muted small">Gestão de caixas e movimentações.</p>
+              </div>
+            </div>
+          </a>
+        </div>
+        {% endif %}
+
+        <!-- ========== CONCILIAÇÃO BANCÁRIA ========== -->
+        {% if user|has_perm:'appconciliacao.view_extratobancario' %}
+        <div class="col-lg-4 col-md-6 col-sm-12">
+          <a href="{% url 'appconciliacao:conciliacao_index' %}" class="text-decoration-none h-100">
+            <div class="card h-100 bg-dark border-success text-white transition-card">
+              <div class="card-body d-flex flex-column align-items-center text-center p-4">
+                <i class="fas fa-sync-alt fa-3x mb-3 text-success"></i>
+                <h5 class="card-title fw-bold">Conciliação Bancária</h5>
+                <p class="card-text text-muted small">Importação e conciliação de extratos.</p>
+              </div>
+            </div>
+          </a>
+        </div>
+        {% endif %}
+
+        <!-- ========== CARTÃO DE PAGAMENTO ========== -->
+        {% if user|has_perm:'appcartao.view_cartaopagamento' %}
+        <div class="col-lg-4 col-md-6 col-sm-12">
+          <a href="{% url 'appcartao:cartao_index' %}" class="text-decoration-none h-100">
+            <div class="card h-100 bg-dark border-success text-white transition-card">
+              <div class="card-body d-flex flex-column align-items-center text-center p-4">
+                <i class="fas fa-credit-card fa-3x mb-3 text-success"></i>
+                <h5 class="card-title fw-bold">Cartão de Pagamento</h5>
+                <p class="card-text text-muted small">Controle de transações e faturas.</p>
+              </div>
+            </div>
+          </a>
+        </div>
+        {% endif %}
+
+        <!-- ========== BAIXA DE FATURA ========== -->
+        {% if user|has_perm:'appbaixa_fatura.view_baixafatura' %}
+        <div class="col-lg-4 col-md-6 col-sm-12">
+          <a href="{% url 'appbaixa_fatura:baixa_fatura_index' %}" class="text-decoration-none h-100">
+            <div class="card h-100 bg-dark border-success text-white transition-card">
+              <div class="card-body d-flex flex-column align-items-center text-center p-4">
+                <i class="fas fa-file-invoice-dollar fa-3x mb-3 text-success"></i>
+                <h5 class="card-title fw-bold">Baixa de Fatura</h5>
+                <p class="card-text text-muted small">Gestão de baixas e pagamentos.</p>
+              </div>
+            </div>
+          </a>
+        </div>
+        {% endif %}
+
+      </div>
+    </div>
+
+    <br />
+  </form>
+</div>
+
+{% endblock %}
+
+{% block scriptcustom %}
+<script src="{% static 'js/select_modulo.js' %}"></script>
+<style>
+  /* Estilos para melhor acessibilidade e responsividade */
+  .transition-card {
+    transition: all 0.3s ease;
+    cursor: pointer;
+    border-width: 2px;
+  }
+
+  .transition-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+    border-color: #0d6efd !important;
+  }
+
+  .transition-card:focus-within {
+    outline: 3px solid #0d6efd;
+    outline-offset: 2px;
+  }
+
+  .card-body i {
+    transition: color 0.3s ease;
+  }
+
+  .transition-card:hover i {
+    transform: scale(1.1);
+  }
+
+  /* Melhor contraste para acessibilidade */
+  .card-title {
+    font-size: 1.1rem;
+    letter-spacing: 0.5px;
+  }
+
+  .card-text {
+    font-size: 0.9rem;
+    line-height: 1.4;
+  }
+
+  /* Responsividade aprimorada */
+  @media (max-width: 768px) {
+    .card-body {
+      padding: 2rem 1rem !important;
+    }
+
+    .card-body i {
+      font-size: 2rem !important;
+    }
+
+    .card-title {
+      font-size: 1rem;
+    }
+
+    .card-text {
+      font-size: 0.85rem;
+    }
+  }
+
+  @media (max-width: 576px) {
+    #template-index {
+      padding: 1rem !important;
+    }
+
+    .card-body {
+      padding: 1.5rem 1rem !important;
+    }
+
+    .card-body i {
+      font-size: 1.8rem !important;
+    }
+
+    .card-title {
+      font-size: 0.95rem;
+    }
+
+    .card-text {
+      font-size: 0.8rem;
+    }
+  }
+
+  /* Melhor visibilidade do foco para navegação por teclado */
+  a:focus {
+    outline: 3px solid #0d6efd;
+    outline-offset: 2px;
+    border-radius: 0.25rem;
+  }
+
+  /* Animação suave para transições */
+  a {
+    transition: all 0.2s ease;
+  }
+</style>
+{% endblock %}

@@ -1,0 +1,77 @@
+{% extends 'appcartao/base_cartao.html' %}
+{% load static %}
+
+{% block app_content %}
+<div class="container-fluid px-3">
+    <div class="row mb-4">
+        <div class="col-12">
+            <a href="{% url 'cadastros_index' %}" class="btn btn-secondary btn-sm">
+                <i class="fas fa-arrow-left me-2"></i>Voltar
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <!-- Dashboard Cards -->
+        <div class="col-lg-3 col-md-6 col-sm-12">
+            <div class="card bg-dark border-success text-white">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="fas fa-credit-card me-2"></i>Cartões</h5>
+                    <p class="card-text text-muted">Gerencie cartões de pagamento.</p>
+                    <a href="{% url 'appcartao:cartaopagamento_listar' %}" class="btn btn-success btn-sm">
+                        <i class="fas fa-list me-1"></i>Listar
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 col-sm-12">
+            <div class="card bg-dark border-success text-white">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="fas fa-plus me-2"></i>Novo Cartão</h5>
+                    <p class="card-text text-muted">Cadastre novo cartão.</p>
+                    <a href="{% url 'appcartao:cartaopagamento_criar' %}" class="btn btn-success btn-sm">
+                        <i class="fas fa-plus me-1"></i>Criar
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 col-sm-12">
+            <div class="card bg-dark border-info text-white">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="fas fa-receipt me-2"></i>Faturas</h5>
+                    <p class="card-text text-muted">Veja faturas dos cartões.</p>
+                    <a href="{% url 'appcartao:faturacartao_listar' %}" class="btn btn-info btn-sm">
+                        <i class="fas fa-list me-1"></i>Listar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-12">
+            <h3 class="text-white mb-3">Últimas Transações</h3>
+            <div class="table-responsive">
+                <table class="table table-dark table-striped">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Cartão</th>
+                            <th>Descrição</th>
+                            <th>Valor</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="5" class="text-center text-muted">Nenhuma transação registrada</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

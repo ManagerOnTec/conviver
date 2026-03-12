@@ -1,0 +1,279 @@
+{% extends 'base.html' %} {% load static %} {% load crispy_forms_tags %} {% load
+tz %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
+<!--FIM MENU LATERAL-->
+{% endblock %} {% block cabdados %}
+<div class="text-nowrap p-2" style="max-width: 150px">
+  Atendimento:{{ object.pk }}
+</div>
+
+<div class="text-nowrap p-2" style="max-width: 400px">
+  {{ pessoa_form.nome.value }}
+</div>
+
+{% if pessoa_form.alergico.value == 'S' %}
+
+<button class="btn btn-danger" type="button" disabled>
+  <span>Alergia(s):</span>
+  <span
+    class="spinner-grow spinner-grow-sm"
+    role="status"
+    aria-hidden="true"
+  ></span>
+  {{ pessoa_form.alergias.value }}
+</button>
+{% endif %}
+
+<div class="text-nowrap p-2" style="max-width: 200px">
+  D.N:{{ pessoa_form.dt_nascimento.value }}
+</div>
+
+<div class="text-nowrap p-2" style="max-width: 150px">
+  CPF:{{ pessoa_form.cpf.value }}
+</div>
+
+<div class="p-2 text-nowrap" style="max-width: 190px">
+  Cidade: {{ pessoa_form.instance.cidade }}
+</div>
+
+<div class="text-nowrap p-2" style="max-width: 100px">Idade:{{ idade }}</div>
+
+<!-- FIM DADOS DO OBJETO -->
+{% endblock %} {% block lista %}
+<div class="container">
+  <form
+    id="atendimento-detalhe"
+    enctype="multipart/form-data"
+    class="form-control mt-2"
+  >
+    {% csrf_token %} {{ form.media }}
+
+    <div class="row">
+      <div class="col-lg-9 col-md-9 col-sm-9 col-xs-9">
+        <div id="table-container">
+          <div class="container">
+            <div class="row">
+              <div class="col-md-6">
+                {{ form.tipo_atendimento|as_crispy_field }}
+              </div>
+
+              <div class="col-md-6">
+                {{ form.carater_atendimento|as_crispy_field }}
+              </div>
+
+              <div class="col-md-6">
+                {{ form.estabelecimento|as_crispy_field }}
+              </div>
+              <div class="col-md-6">
+                {{ form.dt_atendimento|as_crispy_field }}
+              </div>
+
+              <div class="col-md-6">
+                {{ form.telefone_responsavel|as_crispy_field }}
+              </div>
+              <div class="col-md-6">
+                {{ form.telefone_familiar|as_crispy_field }}
+              </div>
+              <div class="col-md-6">
+                {{ form.telefone_extra|as_crispy_field }}
+              </div>
+              <div class="col-md-6">
+                {{ form.cidade_encaminhamento|as_crispy_field }}
+              </div>
+
+              <div class="col-md-6">
+                {{ form.entidade_encaminhamento|as_crispy_field }}
+              </div>
+
+              <div class="col-md-6">
+                <label>Diagnósticos dos encaminhamentos</label>
+                <div class="p-2 bg-secondary-subtle rounded">
+                  {% if diagnostico_encaminhamento %}
+                  <!-- prettier-ignore -->
+                  {% for ds in diagnostico_encaminhamento %} 
+                  {{ ds }}<br />
+                  <!-- prettier-ignore -->
+                  {% endfor %}
+                  <!-- prettier-ignore -->
+                  {% else %}
+                  <p>Nenhum diagnóstico encaminhado selecionado.</p>
+                  {% endif %}
+                </div>
+              </div>
+
+              <div class="col-md-6">{{ form.us_registro|as_crispy_field }}</div>
+              <div class="col-md-6">
+                {{ form.us_atualizacao|as_crispy_field }}
+              </div>
+              <div class="col-md-6">
+                {{ form.dt_atualizacao|as_crispy_field }}
+              </div>
+              <div class="col-md-6">{{ form.dt_alta|as_crispy_field }}</div>
+
+              <div class="col-md-6">{{ form.tipo_alta|as_crispy_field }}</div>
+
+              <div class="col-md-6">
+                {{ form.pessoa_docentrega|as_crispy_field }}
+              </div>
+
+              <div class="col-md-6">{{ form.convenio|as_crispy_field }}</div>
+
+              <div class="col-md-6">{{ form.status|as_crispy_field }}</div>
+
+              <div class="col-md-12">
+                {{ form.autos_internacao|as_crispy_field }}
+              </div>
+
+              <div class="col-md-12">
+                {{ form.autos_curatela|as_crispy_field }}
+              </div>
+
+              <div class="col-md-12">
+                {{ form.autos_cobranca|as_crispy_field }}
+              </div>
+              <div class="col-md-12">{{ form.medicacao|as_crispy_field }}</div>
+              <div class="col-md-12">
+                {{ form.observacoes|as_crispy_field }}
+              </div>
+
+              <!--CHECK BOX-->
+              <div class="form-control mt-4">
+                <h5 class="text-center">Check List de Documentos</h5>
+                <div class="row justify-content-center">
+                  {% for field in form %}
+                  <!-- prettier-ignore -->
+                  {% if field.field.widget.input_type == "checkbox" %}
+                  <!-- prettier-ignore -->
+                  <div class="col-lg-4 col-md-6 col-sm-12">
+                    {{ field|as_crispy_field }}
+                  </div>
+                  {% endif %}
+                  <!-- prettier-ignore -->
+                  {% endfor %}
+                </div>
+              </div>
+              <!--FIM CHECK BOX-->
+
+              <!-- Anexo Um -->
+              <div class="col-lg-12 col-md-12 col-sm-12 mt-4">
+                <label>Anexo Um:</label>
+                {% if atendimento.anexo_um.name %} {% if anexo_um_exists %}
+                <div class="d-flex align-items-center">
+                  <a
+                    href="{{ atendimento.anexo_um.url }}"
+                    target="_blank"
+                    class="btn btn-primary me-2"
+                    ><i class="fas fa-external-link-alt"></i
+                  ></a>
+                  <a
+                    href="{{ atendimento.anexo_um.url }}"
+                    download
+                    class="btn btn-secondary me-2"
+                    ><i class="fas fa-download"></i
+                  ></a>
+                  <p class="mb-0">{{ atendimento.anexo_um.name }}</p>
+                </div>
+                {% else %}
+                <p>Arquivo não encontrado.</p>
+                {% endif %} {% else %}
+                <p>Nenhum arquivo anexado.</p>
+                {% endif %}
+              </div>
+
+              <!-- Anexo Dois -->
+              <div class="col-lg-12 col-md-12 col-sm-12 mt-4">
+                <label>Anexo Dois:</label>
+                {% if atendimento.anexo_dois.name %} {% if anexo_dois_exists %}
+                <div class="d-flex align-items-center">
+                  <a
+                    href="{{ atendimento.anexo_dois.url }}"
+                    target="_blank"
+                    class="btn btn-primary me-2"
+                    ><i class="fas fa-external-link-alt"></i
+                  ></a>
+                  <a
+                    href="{{ atendimento.anexo_dois.url }}"
+                    download
+                    class="btn btn-secondary me-2"
+                    ><i class="fas fa-download"></i
+                  ></a>
+                  <p class="mb-0">{{ atendimento.anexo_dois.name }}</p>
+                </div>
+                {% else %}
+                <p>Arquivo não encontrado.</p>
+                {% endif %} {% else %}
+                <p>Nenhum arquivo anexado.</p>
+                {% endif %}
+              </div>
+
+              <!-- Anexo Três -->
+              <div class="col-lg-12 col-md-12 col-sm-12 mt-4">
+                <label>Anexo Três:</label>
+                {% if atendimento.anexo_tres.name %} {% if anexo_tres_exists %}
+                <div class="d-flex align-items-center">
+                  <a
+                    href="{{ atendimento.anexo_tres.url }}"
+                    target="_blank"
+                    class="btn btn-primary me-2"
+                    ><i class="fas fa-external-link-alt"></i
+                  ></a>
+                  <a
+                    href="{{ atendimento.anexo_tres.url }}"
+                    download
+                    class="btn btn-secondary me-2"
+                    ><i class="fas fa-download"></i
+                  ></a>
+                  <p class="mb-0">{{ atendimento.anexo_tres.name }}</p>
+                </div>
+                {% else %}
+                <p>Arquivo não encontrado.</p>
+                {% endif %} {% else %}
+                <p>Nenhum arquivo anexado.</p>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-ls-3 col-md-3 col-sm-3 col-xs-3">
+        <div class="d-flex flex-column">
+          <div class="d-flex justify-content-end mt-2">
+            <a
+              title="Clique aqui para fechar"
+              href="{% url 'atendimento_listar' %}"
+              class="btn btn-outline-dark mx-2 ml-2"
+            >
+              <i class="fas fa-times-circle" style="transition: color 0.3s"
+                >Fechar</i
+              >
+            </a>
+          </div>
+
+          <div class="d-flex justify-content-end mt-2">
+            <div class="mt-2">
+              {% if objeto_anterior %}
+              <a
+                class="btn btn-outline-primary mx-2 ml-2"
+                href="{% url 'atendimento_detalhe' objeto_anterior.id %}"
+                >&lt;
+              </a>
+              {% endif %}
+            </div>
+
+            <div class="mt-2">
+              {% if proximo_objeto %}
+              <a
+                class="btn btn-outline-primary mx-2 ml-2"
+                href="{% url 'atendimento_detalhe' proximo_objeto.id %}"
+              >
+                &gt;</a
+              >
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,77 @@
+{% extends 'apptesouraria/base_tesouraria.html' %}
+{% load static %}
+
+{% block app_content %}
+<div class="container-fluid px-3">
+    <div class="row mb-4">
+        <div class="col-12">
+            <a href="{% url 'cadastros_index' %}" class="btn btn-secondary btn-sm">
+                <i class="fas fa-arrow-left me-2"></i>Voltar
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <!-- Dashboard Cards -->
+        <div class="col-lg-3 col-md-6 col-sm-12">
+            <div class="card bg-dark border-success text-white">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="fas fa-box me-2"></i>Caixas</h5>
+                    <p class="card-text text-muted">Gerencie os caixas da tesouraria.</p>
+                    <a href="{% url 'apptesouraria:tesouraria_listar' %}" class="btn btn-success btn-sm">
+                        <i class="fas fa-list me-1"></i>Listar
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 col-sm-12">
+            <div class="card bg-dark border-success text-white">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="fas fa-plus me-2"></i>Novo Caixa</h5>
+                    <p class="card-text text-muted">Crie um novo caixa.</p>
+                    <a href="{% url 'apptesouraria:tesouraria_criar' %}" class="btn btn-success btn-sm">
+                        <i class="fas fa-plus me-1"></i>Criar
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 col-sm-12">
+            <div class="card bg-dark border-info text-white">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="fas fa-chart-bar me-2"></i>Relatórios</h5>
+                    <p class="card-text text-muted">Veja relatórios de movimentação.</p>
+                    <a href="{% url 'apptesouraria:tesouraria_listar' %}" class="btn btn-info btn-sm">
+                        <i class="fas fa-chart-bar me-1"></i>Relatórios
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-12">
+            <h3 class="text-white mb-3">Últimas Movimentações</h3>
+            <div class="table-responsive">
+                <table class="table table-dark table-striped">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Caixa</th>
+                            <th>Tipo</th>
+                            <th>Valor</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="5" class="text-center text-muted">Nenhuma movimentação registrada</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,228 @@
+{% extends 'base.html' %} {% load static %} {% load crispy_forms_tags %} {% load
+tz %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
+<!--FIM MENU LATERAL-->
+{% endblock %} {% block cabdados %}
+<div class="text-nowrap p-2" style="max-width: 150px">
+  Atendimento:{{ object.pk }}
+</div>
+
+<div class="text-nowrap p-2" style="max-width: 400px">
+  {{ pessoa_form.nome.value }}
+</div>
+
+{% if pessoa_form.alergico.value == 'S' %}
+
+<button class="btn btn-danger" type="button" disabled>
+  <span>Alergia(s):</span>
+  <span class="spinner-grow spinner-grow-sm" role="status" aria-hidden="true"></span>
+  {{ pessoa_form.alergias.value }}
+</button>
+{% endif %}
+
+<div class="text-nowrap p-2" style="max-width: 200px">
+  D.N:{{ pessoa_form.dt_nascimento.value }}
+</div>
+
+<div class="text-nowrap p-2" style="max-width: 150px">
+  CPF:{{ pessoa_form.cpf.value }}
+</div>
+
+<div class="p-2 text-nowrap" style="max-width: 190px">
+  Cidade: {{ pessoa_form.instance.cidade }}
+</div>
+
+<div class="text-nowrap p-2" style="max-width: 100px">Idade:{{ idade }}</div>
+
+<!-- FIM DADOS DO OBJETO -->
+{% endblock %} {% block lista %}
+<div class="container">
+  <form id="form-atendimento-editar" method="post" class="form-control mt-2" enctype="multipart/form-data">
+    {% csrf_token %} {{ form.media }}
+
+    <div class="row">
+      <div class="col-lg-9 col-md-9 col-sm-9 col-xs-9">
+        <div id="table-container">
+          <div class="container">
+            <div class="row">
+              <div class="col-md-6">
+                {{ form.tipo_atendimento|as_crispy_field }}
+              </div>
+
+              <div class="col-md-6">
+                {{ form.carater_atendimento|as_crispy_field }}
+              </div>
+
+              <div class="col-md-6">
+                {{ form.dt_atendimento|as_crispy_field }}
+              </div>
+
+              <div class="col-md-6">
+                {{ form.telefone_responsavel|as_crispy_field }}
+              </div>
+              <div class="col-md-6">
+                {{ form.telefone_familiar|as_crispy_field }}
+              </div>
+              <div class="col-md-6">
+                {{ form.telefone_extra|as_crispy_field }}
+              </div>
+              <div class="col-md-6">
+                {{ form.cidade_encaminhamento|as_crispy_field }}
+              </div>
+
+              <div class="col-md-6">
+                {{ form.entidade_encaminhamento|as_crispy_field }}
+              </div>
+              <div class="col-md-6">
+                {{ form.diagnostico_encaminhamento|as_crispy_field }}
+              </div>
+              <div class="col-md-6">{{ form.dt_alta|as_crispy_field }}</div>
+
+              <div class="col-md-6">{{ form.tipo_alta|as_crispy_field }}</div>
+
+              <div class="col-md-6">
+                {{ form.pessoa_docentrega|as_crispy_field }}
+              </div>
+              <div class="col-lg-6 col-md-6 col-sm-12">
+                {{ form.convenio|as_crispy_field }}
+              </div>
+
+              <div class="col-md-6">{{ form.status|as_crispy_field }}</div>
+
+              <div class="col-md-12">
+                {{ form.autos_internacao|as_crispy_field }}
+              </div>
+
+              <div class="col-md-12">
+                {{ form.autos_curatela|as_crispy_field }}
+              </div>
+
+              <div class="col-md-12">
+                {{ form.autos_cobranca|as_crispy_field }}
+              </div>
+
+              <div class="col-md-12">{{ form.medicacao|as_crispy_field }}</div>
+              <div class="col-md-12">
+                {{ form.observacoes|as_crispy_field }}
+              </div>
+
+              <!--CHECK BOX-->
+              <div class="container form-control mt-4">
+                <h5 class="text-center">Check List de Documentos</h5>
+                <div class="row justify-content-center">
+                  {% for field in form %}
+                  <!-- prettier-ignore-start -->
+                  {% if field.field.widget.input_type == "checkbox" %}
+                  <div class="col-md-6">{{ field|as_crispy_field }}</div>
+                  {% endif %}
+                  <!-- prettier-ignore-start -->
+                  {% endfor %}
+                </div>
+              </div>
+              <!--FIM CHECK BOX-->
+
+              <!--ANEXOS-->
+              <div class="form-control mt-4 p-4">
+                <h5 class="text-center">Anexos</h5>
+                <div class="row justify-content-center">
+                  <div class="col-lg-12 col-md-12 col-sm-12 mt-4">
+                    <label>{{ form.anexo_um.label }}</label>
+                    <input type="file" name="{{ form.anexo_um.name }}" id="{{ form.anexo_um.auto_id }}"
+                      class="form-control" />
+                    {% if object.anexo_um %}
+                    <div class="mt-2">
+                      <span>{{ object.anexo_um.url }}</span>
+                    </div>
+                    {% endif %}
+                  </div>
+
+                  <div class="col-lg-12 col-md-12 col-sm-12 mt-4">
+                    <label>{{ form.anexo_dois.label }}</label>
+                    <input type="file" name="{{ form.anexo_dois.name }}" id="{{ form.anexo_dois.auto_id }}"
+                      class="form-control" />
+                    {% if object.anexo_dois %}
+                    <div class="mt-2">
+                      <span>{{ object.anexo_dois.url }}</span>
+                    </div>
+                    {% endif %}
+                  </div>
+
+                  <div class="col-lg-12 col-md-12 col-sm-12 mt-4">
+                    <label>{{ form.anexo_tres.label }}</label>
+                    <input type="file" name="{{ form.anexo_tres.name }}" id="{{ form.anexo_tres.auto_id }}"
+                      class="form-control" />
+                    {% if object.anexo_tres %}
+                    <div class="mt-2">
+                      <span>{{ object.anexo_tres.url }}</span>
+                    </div>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+              <!--ANEXOS-->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
+        <div class="d-flex flex-column">
+          <div class="d-flex justify-content-end mt-2">
+            <a title="Clique aqui para fechar" href="{% url 'atendimento_listar' %}"
+              class="btn btn-outline-dark mx-2 ml-2">
+              <i class="fas fa-times-circle" style="transition: color 0.3s">Fechar</i>
+            </a>
+          </div>
+
+          <div class="d-flex justify-content-end mt-2">
+            <button id="btn-atendimento-cadastrar" type="submit" title="Salvar"
+              class="btn btn-success btn-outline-light border border-black mx-2 ml-2">
+              <i class="fas fa-save" style="transition: color 0.3s">Salvar</i>
+            </button>
+          </div>
+
+          <div class="d-flex justify-content-end mt-2">
+            <div class="form-group text-center m-2">
+              <!-- LOADING -->
+              <div class="spinner-border text-warning mb-3" role="status">
+                <span class="visually-hidden">Loading...</span>
+              </div>
+
+              <!-- DETALHES E LINKS -->
+              <div class="col-md-12 p-2">
+                <label class="text-warning"><strong>Editando...</strong></label>
+              </div>
+
+              <div class="col-md-12 mt-2">
+                {% if request.user.is_staff %}
+                <a title="Registrar ou atualziar Cadastros Admin"
+                  href="{% url 'admin:admin_cadastros_pessoa_changelist' %}"
+                  class="btn btn-sm btn-primary btn-outline-light border border-black" id="addPessoaBtn">
+                  <i class="fas fa-edit" style="transition: color 0.3s">Link Admin</i>
+                </a>
+
+                <div class="col-md-12 mt-2">
+                  <a title="Utilize quando retornar do admin" onclick="location.reload();"
+                    class="btn btn-sm btn-warning btn-outline-primary border border-black">
+                    <i class="fas fa-sync" style="transition: color 0.3s">Atualizar</i>
+                  </a>
+                </div>
+
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+
+{% endblock %} {% block scriptcustom %}
+
+<!-- Incluir o script para inicializar o Select2 -->
+<script src="{% static 'js/selectparadois.js' %}"></script>
+
+<!-- Incluir o script para checagem de anexos -->
+<script src="{% static 'js/anexoatendimento.js' %}"></script>
+
+{% endblock %}

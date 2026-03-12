@@ -1,0 +1,60 @@
+{% extends 'base_sem.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+
+{% block titulos %}{{title}}|{% endblock %}
+{% block content %}
+{% block extracss %}
+<link rel="stylesheet" href="{% static 'css/auth_style.css' %}">
+{% endblock %}
+
+<div class="row min-vh-100 rounded">
+
+
+
+    <div class="col-md-12 p-2">
+
+
+        {% block add %}
+        <div class="d-flex justify-content-center mt-4">
+            {% include 'parciais/_messages.html' %}
+        </div>
+        {% endblock %}
+
+        <div class="table-container p-2">
+            <div class="auth-container p-2">
+
+                <div class="auth-box bg-dark rounded">
+
+                    <div class="col-md-12 p-2 mt-4">
+                        <h1 class="text-white text-center">ManagerONTEC</h1>
+                    </div>
+
+                    <form method="POST" action=".">
+                        {% csrf_token %}
+                        <input type="hidden" name="uidb64" value="{{ uidb64 }}" class="form-control">
+                        <input type="hidden" name="token" value="{{ token }}" class="form-control">
+                        <div class="form-group">
+                            <label for="novasenha" class="form-label"><i class="fas fa-key"></i> Nova Senha</label>
+                            <input type="password" name="novasenha" id="novasenha" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label for="confirmasenha" class="form-label"><i class="fas fa-key"></i> Confirma
+                                Senha</label>
+                            <input type="password" name="confirmasenha" id="confirmasenha" class="form-control"
+                                autocomplete="off">
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <button title="Clique aqui para alterar" type="submit" class="btn btn-outline-light"
+                                id="btn-alterar">
+                                <i class="fas fa-key"></i> Alterar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,295 @@
+{% load static %}
+{% load tz %}
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <title>
+      {% block titulos %}
+
+      {% endblock %}ManagerONTEC
+    </title>
+
+    <style>
+      .selected {
+        background-color: #0d6efd !important; /* Cor primária (blue) do Bootstrap */
+        color: #ffffff !important; /* Cor do texto (white) */
+      }
+      
+      .item-left {
+        width: 90%;
+      }
+      
+      .item-left input,
+      .item-left select {
+        width: 90%;
+      }
+      
+      #func-menu {
+        height: 58px;
+        width: 225px;
+        position: fixed;
+        top: 0;
+        z-index: 1000;
+      }
+      
+      #nav-bar {
+        position: fixed;
+        top: 0;
+        width: 100%;
+        height: 58px;
+        z-index: 1000;
+      }
+      
+      #main-content {
+        display: flex;
+        margin-top: 0px; /* Ajuste esse valor para a altura do seu navbar */
+        height: calc(100vh - 58px);
+      }
+      
+      #left-menu {
+        width: 225px; /* Ajuste para o tamanho desejado */
+        position: fixed;
+        height: 100vh;
+        overflow: hidden;
+        overflow-y: auto;
+        background-color: #fff;
+        padding-top: 58px;
+      }
+      
+      #right-content {
+        position: fixed; /* Alteração */
+        top: 58px; /* Altura do func-menu */
+        /* Largura do left-menu */
+        margin-left: 225px; /* Remove a margem esquerda */
+        overflow: auto; /* Adicione rolagem ao conteúdo */
+        width: calc(100% - 225px); /* 195 */
+        height: 95vh;
+      }
+      
+      #cabdados {
+        position: sticky;
+        top: 0;
+        z-index: 95;
+      }
+      
+      #table-container {
+        position: relative; /* Garante que o thead fique fixo em relação a esse container */
+        /* Substitua 150px pela altura combinada de todos os outros elementos na página */
+        overflow-y: auto;
+        height: calc(100vh - 195px); /*195*/
+        z-index: 80;
+      }
+      
+      .table-responsive {
+        width: 100%;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -ms-overflow-style: -ms-autohiding-scrollbar;
+        -webkit-overflow-scrolling: touch;
+      }
+      
+      #paginate {
+        height: 50px;
+        position: fixed;
+        bottom: 0;
+        width: calc(100% -235px);
+        z-index: 100;
+      }
+      
+      table {
+        width: 100%;
+      }
+      
+      thead {
+        position: sticky;
+        top: 0;
+        z-index: 90;
+      }
+      
+      #context-menu {
+        display: none;
+        position: absolute;
+        background-color: rgb(255, 230, 0);
+        border: 1px solid #000000;
+        z-index: 1000;
+        border-radius: 5px;
+        box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+      }
+      
+      #context-menu ul {
+        list-style-type: none;
+        padding: 0;
+        margin: 0;
+        background-color: rgb(255, 230, 0);
+        border: 1px solid #000000;
+      }
+      
+      #context-menu li {
+        padding: 8px 12px;
+        cursor: pointer;
+        white-space: nowrap;
+        max-width: 500px;
+        word-wrap: break-word;
+      }
+      
+      #context-menu li:hover {
+        background-color: #7696ff;
+      }
+      
+      .submenu {
+        display: none;
+        position: absolute;
+        left: 100%;
+        top: 0;
+        white-space: nowrap;
+        width: 500px;
+        border-radius: 5px;
+        border: 1px solid #000000;
+      }
+      
+      .has-submenu:hover .submenu {
+        display: block;
+      }
+      
+      .has-submenu::after {
+        position: absolute;
+        right: 20px;
+      }
+      
+      .user-container {
+        background-color: white;
+        color: black;
+        padding: 0.7em;
+        border-radius: 50px;
+        display: inline-block;
+      }
+      
+      .rounded-bottom {
+        border-bottom-left-radius: 0.25rem;
+        border-bottom-right-radius: 0.25rem;
+      }
+    </style>
+
+    {% include 'parciais/_head.html' %}
+  </head>
+
+  <body class="bg-light">
+    {% if request.user.is_authenticated and not mostrar_nav %}
+      {% include 'parciais/_nav.html' %}
+    {% endif %}
+
+    <section id="main-content">
+      <aside id="left-menu" class="bg-dark">
+        <div class="text-right text-white m-2 p-2 usernav">
+          <div>
+            <i class="user-container fas fa-user"></i> {{ request.user }}
+          </div>
+          <hr />
+
+          {% if estabelecimento %}
+            <div class="mt-2">
+              <i class="fas fa-building"></i> {{ estabelecimento }}
+            </div>
+            <hr />
+          {% endif %}
+        </div>
+        {% block menul %}
+
+        {% endblock %}
+      </aside>
+      <main id="right-content" class="bg-black">
+        <div id="cabdados" class="bg-success text-white rounded m-2 p-1">
+          <div class="table-responsive text-white">
+            <div class="d-flex flex-nowrap justify-content-between align-items-center">
+              {% block cabdados %}
+
+              {% endblock %}
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-body-secondary m-2 p-2 border border-secondary rounded" id="lista">
+          {% if messages %}
+            <div class="d-flex justify-content-between mb-2">
+              <div class="d-flex justify-content-start">
+                {% include 'parciais/_messages.html' %}
+              </div>
+            </div>
+          {% endif %}
+
+          {% block lista %}
+
+          {% endblock %}
+        </div>
+
+        {% if is_paginated %}
+          <div id="paginate" class="mt-2">
+            {% block paginate %}
+
+            {% endblock %}
+          </div>
+        {% endif %}
+      </main>
+    </section>
+
+    {% block scriptcustom %}
+
+    {% endblock %}
+
+    <script>
+      document.addEventListener('DOMContentLoaded', (event) => {
+        var leftMenu = document.getElementById('left-menu')
+        var funcMenu = document.getElementById('func-menu')
+        var navDiv = document.getElementById('nav-div')
+        var rightContent = document.getElementById('right-content')
+      
+        var toggleButton = document.getElementById('toggle-button')
+        toggleButton.dataset.isExpanded = 'true'
+      
+        toggleButton.addEventListener('click', function () {
+          toggleMenu()
+        })
+      
+        leftMenu.addEventListener('mouseover', function () {
+          if (toggleButton.dataset.isExpanded === 'false') {
+            expandMenu()
+          }
+        })
+      
+        leftMenu.addEventListener('mouseout', function () {
+          if (toggleButton.dataset.isExpanded === 'false') {
+            collapseMenu()
+          }
+        })
+      
+        function toggleMenu() {
+          if (toggleButton.dataset.isExpanded === 'true') {
+            collapseMenu()
+          } else {
+            expandMenu()
+          }
+        }
+      
+        function collapseMenu() {
+          setStyles('50px')
+          toggleButton.dataset.isExpanded = 'false'
+        }
+      
+        function expandMenu() {
+          setStyles('225px')
+          toggleButton.dataset.isExpanded = 'true'
+        }
+      
+        function setStyles(width) {
+          leftMenu.style.width = width
+          funcMenu.style.width = width
+          navDiv.style.marginLeft = width
+          navDiv.style.width = `calc(100% - ${width})`
+          rightContent.style.marginLeft = width
+          rightContent.style.width = `calc(100% - ${width})`
+        }
+      })
+    </script>
+  </body>
+</html>

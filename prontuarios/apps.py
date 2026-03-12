@@ -1,0 +1,10 @@
+from django.apps import AppConfig
+
+
+class ProntuariosConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'prontuarios'
+    verbose_name = 'Z. PRONTUARIOS'
+
+    def ready(self):
+        import prontuarios.signals

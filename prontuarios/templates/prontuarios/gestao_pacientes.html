@@ -1,0 +1,230 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+{% load templatetags %}
+{% block titulos %}{{title}}{% endblock %}
+
+{% block menul %}
+<div class="form-group text-left m-3 mt-2">
+    <div class="col-md-12">
+        <div class="justify-content-center mt-2">
+            <select class="col-md-12 justify-content-center" id="modeloSelecionado">
+                <option value="todos">Todos</option>
+                <option value="ultimo_diagnostico">Diagnóstico</option>
+                <option value="ultima_evolucao">Evolução</option>
+                <option value="ultima_psicoterapia">Psicoterapia</option>
+                <option value="ultima_prescricao">Prescrição</option>
+                <option value="ultimo_adep">ADEP</option>
+                <option value="ultimo_sinal_vital">Sinal Vital</option>
+                <option value="ultimo_sae">SAE</option>
+                <option value="ultimo_plano_cuidados">Plano de Cuidados</option>
+                <option value="ultimo_perdas_ganhos">Perdas Ganhos</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="form-group text-left text-white m-3 mt-2">
+        <div class="col-md-12">
+            <div class="justify-content-center mt-2">
+
+                <label for="dataReferencia">Data de Referência:</label>
+                <input type="date" id="dataReferencia" class="form-control">
+
+                <div class="mt-2">
+                    <input type="radio" id="menor" name="comparacaoData" value="menor">
+                    <label for="menor">Menor que</label><br>
+                    <input type="radio" id="maior" name="comparacaoData" value="maior">
+                    <label for="maior">Maior que</label><br>
+                    <input type="radio" id="igual" name="comparacaoData" value="igual" checked>
+                    <label for="igual">Igual a</label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-12">
+        <div class="justify-content-center mt-2">
+            <button id="btnFiltrar" class="col-md-12 btn btn-primary btn-outline-light justify-content-center"
+                title="Filtrar">
+                <i class="fas fa-check" style="transition: color 0.3s;"></i> Filtrar
+            </button>
+        </div>
+    </div>
+
+
+    <div class="col-md-12">
+        <div class="justify-content-center mt-2">
+            <button class="col-md-12 btn btn-outline-danger justify-content-center" name="limpar" value="1"
+                title="Limpar">
+                <i class="fas fa-times-circle" style="transition: color 0.3s;"></i>
+                Limpar
+            </button>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+
+{% block cabdados %}
+<div class="p-2" data-bs-toggle="tooltip" data-bs-placement="top"
+    title="Esta função lista todas as administrações de medicamentos da enfermagem que precisam ser gerados os relatórios em PDF e suas respectivas assinaturas. Para gerar basta selecionar os itens e clicar em gerar!">
+    <i class="fas fa-hospital-user me-2"></i>
+    <span>Gestão de Pacientes</span>
+</div>
+{% endblock %}
+{% block lista %}
+<div>
+    {% for atendimento in atendimentos %}
+    <div class="card p-2 border border-primary mb-3">
+        <h2>
+            Atendimento: <a href="{% url 'prontuario_detalhe' pk=atendimento.pk %}">
+                {{ atendimento.id }} - {{ atendimento.pessoa.nome }}</a>
+        </h2>
+        <!-- Exibição dos detalhes dos últimos registros para cada modelo relacionado -->
+
+        <p class="ultimo_diagnostico">Último Diagnóstico:
+            {{ atendimento.ultimo_diagnostico.dt_registro|date:"d/m/Y"|default:"Não disponível" }}</p>
+
+        <p class="ultima_evolucao">Última Evolução:
+            {{ atendimento.ultima_evolucao.dt_registro|date:"d/m/Y"|default:"Não disponível" }}</p>
+
+        <p class="ultima_psicoterapia">Última Psicoterapia:
+            {{ atendimento.ultima_psicoterapia.dt_registro|date:"d/m/Y"|default:"Não disponível" }}</p>
+
+        <p class="ultima_prescricao">Última Prescrição:
+            {{ atendimento.ultima_prescricao.dt_registro|date:"d/m/Y"|default:"Não disponível" }} Início:
+            {{ atendimento.ultima_prescricao.dt_inicio|date:"d/m/Y"|default:"Não disponível" }} até
+            {{ atendimento.ultima_prescricao.dt_final|date:"d/m/Y"|default:"Não disponível" }} Fase:
+            {{ atendimento.ultima_prescricao.get_fase_display|default:"Não disponível" }}</p>
+
+        <p class="ultimo_adep">Último ADEP:
+            {{ atendimento.ultimo_adep.dt_registro|date:"d/m/Y"|default:"Não disponível" }}</p>
+
+        <p class="ultimo_sinal_vital">Último Sinal Vital:
+            {{ atendimento.ultimo_sinal_vital.dt_registro|date:"d/m/Y"|default:"Não disponível" }}</p>
+
+        <p class="ultimo_sae">Último SAE:
+            {{ atendimento.ultimo_sae.dt_registro|date:"d/m/Y"|default:"Não disponível" }}</p>
+
+        <p class="ultimo_plano_cuidados">Último Plano de Cuidados:
+            {{ atendimento.ultimo_plano_cuidados.dt_registro|date:"d/m/Y"|default:"Não disponível" }}</p>
+
+        <p class="ultimo_perdas_ganhos">Último Perdas Ganhos:
+            {{ atendimento.ultimo_perdas_ganhos.dt_registro|date:"d/m/Y"|default:"Não disponível" }}</p>
+
+
+
+    </div>
+    {% empty %}
+    <p>Nenhum registro encontrado.</p>
+    {% endfor %}
+</div>
+{% endblock %}
+{% block paginate %}
+<!--PAGINACAO-->
+{% if is_paginated %}
+<div id="pages" class="pagination justify-content-start p-2">
+    <ul class="pagination btn-sm">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+            <a href="{% url 'gestao_pacientes' %}?{{ request.GET.urlencode }}&page=1" class="page-link"><i
+                    class="fas fa-step-backward"></i></a>
+        </li>
+        <li class="page-item">
+            <a href="{% url 'gestao_pacientes' %}?{{ request.GET.urlencode }}&page={{ page_obj.previous_page_number }}"
+                class="page-link"><i class="fas fa-arrow-left"></i></a>
+        </li>
+        {% endif %}
+        {% for i in page_obj.paginator.page_range %}
+        {% if page_obj.number == i %}
+        <li class="page-item active">
+            <span class="page-link">{{ i }}</span>
+        </li>
+        {% elif i > page_obj.number|add:"-3" and i < page_obj.number|add:"3" %} <li class="page-item">
+            <a href="{% url 'gestao_pacientes' %}?{{ request.GET.urlencode }}&page={{ i }}" class="page-link">{{i}}</a>
+            </li>
+            {% endif %}
+            {% endfor %}
+            {% if page_obj.has_next %}
+            <li class="page-item">
+                <a href="{% url 'gestao_pacientes' %}?{{ request.GET.urlencode }}&page={{ page_obj.next_page_number }}"
+                    class="page-link"><i class="fas fa-arrow-right"></i></a>
+            </li>
+            <li class="page-item">
+                <a href="{% url 'gestao_pacientes' %}?{{ request.GET.urlencode }}&page={{ page_obj.paginator.num_pages }}"
+                    class="page-link"><i class="fas fa-step-forward"></i></a>
+            </li>
+            {% endif %}
+    </ul>
+</div>
+{% endif %}
+{% endblock %}
+
+
+{% block scriptcustom %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        document.getElementById('btnFiltrar').addEventListener('click', function () {
+            const modeloSelecionado = document.getElementById('modeloSelecionado').value;
+            const dataReferencia = document.getElementById('dataReferencia').value;
+            const comparacaoSelecionada = document.querySelector('input[name="comparacaoData"]:checked').value;
+
+            document.querySelectorAll('.card').forEach(function (card) {
+                let modeloVisivel = false; // Acompanha se algum elemento do modelo é visível após a filtragem
+
+                // Aplica filtro por modelo, se 'todos' não for selecionado
+                if (modeloSelecionado !== 'todos') {
+                    card.querySelectorAll('p').forEach(p => {
+                        p.style.display = 'none'; // Oculta todos os parágrafos
+                        if (p.classList.contains(modeloSelecionado)) {
+                            // Se o elemento pertence ao modelo selecionado, verifica a data
+                            const dtRegistroMatch = p.textContent.match(/\d{2}\/\d{2}\/\d{4}/);
+                            if (dtRegistroMatch) {
+                                const dtRegistro = dtRegistroMatch[0].split('/').reverse().join('-');
+                                if (comparaData(dtRegistro, dataReferencia, comparacaoSelecionada)) {
+                                    p.style.display = ''; // Mostra se passar no filtro de data
+                                    modeloVisivel = true; // Marca que há pelo menos um elemento visível do modelo selecionado
+                                }
+                            }
+                        }
+                    });
+                } else {
+                    // Se 'todos' for selecionado, aplica apenas o filtro de data
+                    card.querySelectorAll('p').forEach(p => {
+                        const dtRegistroMatch = p.textContent.match(/\d{2}\/\d{2}\/\d{4}/);
+                        if (dtRegistroMatch) {
+                            const dtRegistro = dtRegistroMatch[0].split('/').reverse().join('-');
+                            if (comparaData(dtRegistro, dataReferencia, comparacaoSelecionada)) {
+                                p.style.display = '';
+                                modeloVisivel = true;
+                            } else {
+                                p.style.display = 'none';
+                            }
+                        }
+                    });
+                }
+
+                // Oculta o card inteiro se não houver elementos do modelo visíveis
+                card.style.display = modeloVisivel ? '' : 'none';
+            });
+        });
+
+        // Função auxiliar para comparação de datas
+        function comparaData(dtRegistro, dataReferencia, comparacao) {
+            switch (comparacao) {
+                case 'menor': return dtRegistro < dataReferencia;
+                case 'maior': return dtRegistro > dataReferencia;
+                case 'igual': return dtRegistro === dataReferencia;
+                default: return false;
+            }
+        }
+
+        // Evento de clique para o botão Limpar
+        document.querySelector('button[name="limpar"]').addEventListener('click', function (e) {
+            e.preventDefault(); // Impede a submissão do formulário
+            window.location.reload(); // Recarrega a página
+        });
+    });
+</script>
+{% endblock %}

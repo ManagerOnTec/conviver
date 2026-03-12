@@ -1,0 +1,121 @@
+<!-- prettier-ignore -->
+{% extends 'base.html' %} 
+{% load static %} 
+{% load crispy_forms_tags %} 
+{% load tz %} 
+{% block titulos %}
+{{title}}|
+{% endblock %}
+
+<style>
+  .hidden {
+    display: none;
+  }
+</style>
+
+{% block menul %} {% endblock %} {% block cabdados %}
+
+<div class="p-2">
+  <span>Nova Ata...</span>
+</div>
+
+{% endblock %} {% block lista %}
+<!--TABELA CONT DIREITA-->
+<div class="container">
+  <form
+    id="form-atas-editar"
+    method="post"
+    class="form-control mt-2"
+    enctype="multipart/form-data"
+  >
+    {% csrf_token %} {{ form.media }}
+
+    <div class="row">
+      <div class="col-lg-9 col-md-9 col-sm-9 col-xs-9">
+        <div id="table-container">
+          <div class="container">
+            <div class="row">
+              <!-- Campo Participantes -->
+              <div class="col-md-6">
+                {{ form.participantes|as_crispy_field }}
+              </div>
+              <!-- Campo Assunto -->
+              <div class="col-md-6">{{ form.assunto|as_crispy_field }}</div>
+              <!-- Campo Tipo de Ata -->
+              <div class="col-md-6">{{ form.tipo_ata|as_crispy_field }}</div>
+
+              <div class="col-md-6">{{ form.observacoes|as_crispy_field }}</div>
+              <!-- Campo Ata -->
+              <div class="col-md-12">{{ form.ata|as_crispy_field }}</div>
+
+              <div class="col-md-12">{{ form.assinar|as_crispy_field }}</div>
+
+              <div class="col-md-12">{{ form.status|as_crispy_field }}</div>
+              <!-- ANEXOS -->
+              <div class="form-group mt-4">
+                <h5 class="text-center">Anexos</h5>
+                <div class="row justify-content-center">
+                  <div class="col-lg-12 col-md-12 col-sm-12 mt-4">
+                    <label>{{ form.anexo.label }}</label>
+                    <input
+                      type="file"
+                      name="{{ form.anexo.name }}"
+                      id="{{ form.anexo.auto_id }}"
+                      class="form-control"
+                    />
+                    {% if object.anexo %}
+                    <div class="mt-2">
+                      <a href="{{ object.anexo.url }}" target="_blank"
+                        >{{ object.anexo.name }}</a
+                      >
+                    </div>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+              <!-- FIM ANEXOS -->
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
+        <div class="d-flex justify-content-end">
+          <a
+            title="Clique aqui para fechar"
+            href="{% url 'atas_listar' %}"
+            class="btn btn-outline-dark mx-2 ml-2"
+          >
+            <i class="fas fa-times-circle" style="transition: color 0.3s"
+              >Fechar</i
+            >
+          </a>
+        </div>
+        <div class="d-flex justify-content-end mt-2">
+          <button
+            id="btn-atas-cadastrar"
+            type="submit"
+            title="Salvar"
+            class="btn btn-success btn-outline-light border border-black mx-2 ml-2"
+          >
+            <i class="fas fa-save" style="transition: color 0.3s">Salvar</i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+<!--FIM CADASTRAR-->
+{% endblock %}
+<!-- prettier-ignore -->
+{% block scriptcustom %}
+<!-- Incluir o script para inicializar o Select2 -->
+<script src="{% static 'js/selectparadois.js' %}"></script>
+<!-- Incluir o script para checagem de anexos -->
+
+<script>
+  $(document).ready(function () {
+    $(".django-select2").select2();
+  });
+</script>
+
+{% endblock %}

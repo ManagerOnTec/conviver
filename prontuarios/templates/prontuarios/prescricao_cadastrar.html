@@ -1,0 +1,387 @@
+{% extends 'base.html' %} {% load static %} {% load crispy_forms_tags %} {% load
+  templatetags %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
+  <div class="form-group text-left mt-2 m-3">
+    <a
+      href="{% url 'prontuario_detalhe' pk=atendimento.id %}"
+      class="mt-2 list-group-item list-group-item-action custom-link rounded"
+    >
+      <i class="fas fa-notes-medical me-2"></i>Prontuário
+    </a>
+  
+    <a
+      href="{% url 'diagnostico_listar' atendimento_id=atendimento.id %}"
+      class="mt-2 list-group-item list-group-item-action custom-link rounded"
+    >
+      <i class="fas fa-diagnoses me-2"></i>Diagnósticos
+    </a>
+  
+    <a
+      href="{% url 'evolucao_listar' atendimento_id=atendimento.id %}"
+      class="mt-2 list-group-item list-group-item-action custom-link rounded"
+    >
+      <i class="fas fa-file-alt me-2"></i>Evoluções
+    </a>
+  
+    <a
+      href="{% url 'psicoterapia_listar' atendimento_id=atendimento.id %}"
+      class="mt-2 list-group-item list-group-item-action custom-link rounded"
+    >
+      <i class="fas fa-brain me-2"></i>Psicoterapias
+    </a>
+  
+    <a
+      href=""
+      class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded"
+    >
+      <i class="fas fa-capsules me-2"></i>Prescrições
+    </a>
+  
+    <a
+      href="{% url 'prescricao_geral_listar' %}"
+      class="mt-2 list-group-item list-group-item-action custom-link rounded"
+    >
+      <i class="fas fa-pills me-2"></i>Gestão de Prescrições
+    </a>
+  
+    <a
+      href="{% url 'adep_listar' atendimento_id=atendimento.id %}"
+      class="mt-2 list-group-item list-group-item-action custom-link rounded"
+    >
+      <i class="fas fa-syringe me-2"></i>ADEP
+    </a>
+  
+    <a
+      href="{% url 'sinais_vitais_listar' atendimento_id=atendimento.id %}"
+      class="mt-2 list-group-item list-group-item-action custom-link rounded"
+    >
+      <i class="fa fa-heartbeat me-2"></i>Sinais Vitais
+    </a>
+    <a
+      href="{% url 'sae_listar' atendimento_id=atendimento.id %}"
+      class="mt-2 list-group-item list-group-item-action custom-link rounded"
+    >
+      <i class="fas fa-stethoscope me-2"></i>SAE
+    </a>
+    <a
+      href="{% url 'plano_cuidados_listar' atendimento_id=atendimento.id %}"
+      class="mt-2 list-group-item list-group-item-action custom-link rounded"
+    >
+      <i class="fas fa-procedures me-2"></i>Plano de Cuidados
+    </a>
+    <a
+      href="{% url 'perdas_ganhos_listar' atendimento_id=atendimento_id %}"
+      class="mt-2 list-group-item list-group-item-action custom-link rounded"
+    >
+      <i class="fa fa-weight me-2"></i>Perdas e Ganhos
+    </a>
+  </div>
+  <!-- FIM MENU LATERAL -->
+  {% endblock %} {% block cabdados %}
+  <div class="text-nowrap p-2" style="max-width: 150px">
+    Prontuário:{{ atendimento_id }}
+  </div>
+  
+  <div class="text-nowrap p-2" style="max-width: 400px">
+    {{ pessoa_form.nome.value }}
+  </div>
+  
+  {% if pessoa_form.alergico.value == 'S' %}
+  
+  <button class="btn btn-danger" type="button" disabled>
+    <span>Alergia(s):</span>
+    <span
+      class="spinner-grow spinner-grow-sm"
+      role="status"
+      aria-hidden="true"
+    ></span>
+    {{ pessoa_form.alergias.value }}
+  </button>
+  {% endif %}
+  
+  <div class="text-nowrap p-2" style="max-width: 200px">
+    D.N:{{ pessoa_form.dt_nascimento.value }}
+  </div>
+  
+  <div class="p-2 text-nowrap" style="max-width: 190px">
+    Cidade: {{ pessoa_form.instance.cidade }}
+  </div>
+  
+  <div class="p-2 text-nowrap" style="max-width: 120px">Idade:{{ idade }}</div>
+  <div class="text-nowrap p-2" style="max-width: 120px">
+    Sexo:{{ pessoa_form.sexo.value }}
+  </div>
+  
+  <div class="text-nowrap p-2" style="max-width: 150px">
+    Cor/Raça:{{ pessoa_form.cor_raca.value }}
+  </div>
+  
+  <div class="text-nowrap p-2" style="max-width: 180px">
+    Religião:{{ pessoa_form.religiao.value }}
+  </div>
+  
+  <div class="text-nowrap p-2" style="max-width: 300px">
+    Filiação:{{ pessoa_form.pai.value }}, {{ pessoa_form.mae.value }}
+  </div>
+  
+  <!-- FIM DADOS DO OBJETO -->
+  {% endblock %} {% block lista %}
+  <div class="container">
+    <form
+      id="form-prescricao-cadastrar"
+      method="post"
+      enctype="multipart/form-data"
+      class="form-control mt-2"
+    >
+      <div class="row">
+        <div class="col-lg-9 col-md-9 col-sm-9 col-xs-9 container">
+          {% csrf_token %} {{ form.media }}
+          <div id="table-container">
+            <div class="container">
+              <div class="bg-light mt-2 form-control rounded">
+                <h5>Nova Prescrição</h5>
+                {{ form.as_p }}
+              </div>
+  
+              {{ formset.management_form }}
+  
+              <!-- Template para itens clonados -->
+              <div id="{{ formset.prefix }}-empty" style="display: none">
+                <div class="form-control mt-2 p-2 bg-light rounded shadow">
+                  <div class="row">
+                    <!-- Campos do formulário para itens clonados -->
+                    <div class="col-lg-9 col-md-9 col-sm-9 col-xs-9">
+                      {{ formset.empty_form.produto|as_crispy_field }}
+                    </div>
+                    <div class="col-lg-4 col-md-6 col-sm-12 col-xs-4">
+                      {{ formset.empty_form.intervalo_horas|as_crispy_field }}
+                    </div>
+  
+                    <div class="col-lg-4 col-md-6 col-sm-12 col-xs-4">
+                      {{ formset.empty_form.hora_inicio_produto|as_crispy_field }}
+                    </div>
+  
+                    <div class="col-lg-4 col-md-6 col-sm-12 col-xs-4 mt-4">
+                      {{ formset.empty_form.se_necessario|as_crispy_field }}
+                    </div>
+                    <div class="col-lg-4 col-md-6 col-sm-12 col-xs-4 mt-4">
+                      {{ formset.empty_form.dose_unica|as_crispy_field }}
+                    </div>
+                    <div class="col-lg-9 col-md-9 col-sm-9 col-xs-9">
+                      {{ formset.empty_form.observacao|as_crispy_field }}
+                    </div>
+                    <div
+                      class="col-lg-1 col-md-1 col-sm-1 col-xs-1 d-flex align-items-center justify-content-end"
+                    >
+                      <button
+                        type="button"
+                        class="btn btn-outline-danger btn-sm btn-remover-item mt-4"
+                      >
+                        <i class="fas fa-trash"></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+  
+              <!-- Itens de prescrição -->
+              <div id="itens-prescricao">
+                {% for form in formset %}
+                <div class="form-control mt-2 p-2 bg-light rounded shadow">
+                  <div class="row" id="{{ form.prefix }}">
+                    <!-- Campos do formulário para itens de prescrição -->
+                    <div class="col-lg-9 col-md-9 col-sm-9 col-xs-9">
+                      {{ form.produto|as_crispy_field }}
+                    </div>
+                    <div class="col-lg-4 col-md-6 col-sm-12 col-xs-4">
+                      {{ form.intervalo_horas|as_crispy_field }}
+                    </div>
+  
+                    <div class="col-lg-4 col-md-6 col-sm-12 col-xs-4">
+                      {{ form.hora_inicio_produto|as_crispy_field }}
+                    </div>
+  
+                    <div class="col-lg-4 col-md-6 col-sm-12 col-xs-4 mt-4">
+                      {{ form.se_necessario|as_crispy_field }}
+                    </div>
+                    <div class="col-lg-4 col-md-6 col-sm-12 col-xs-4 mt-4">
+                      {{ form.dose_unica|as_crispy_field }}
+                    </div>
+                    <div class="col-lg-9 col-md-9 col-sm-9 col-xs-9">
+                      {{ form.observacao|as_crispy_field }}
+                    </div>
+                    <div
+                      class="col-lg-1 col-md-1 col-sm-1 col-xs-1 d-flex align-items-center justify-content-end"
+                    >
+                      {% if forloop.first %}
+                      <button
+                        type="button"
+                        class="btn btn-outline-danger btn-sm btn-remover-item mt-4"
+                        disabled
+                      >
+                        <i class="fas fa-trash"></i>
+                      </button>
+                      {% else %}
+                      <button
+                        type="button"
+                        class="btn btn-outline-danger btn-sm btn-remover-item mt-4"
+                      >
+                        <i class="fas fa-trash"></i>
+                      </button>
+                      {% endif %}
+                    </div>
+                  </div>
+                </div>
+                {% endfor %}
+              </div>
+  
+              <!-- Botão para adicionar itens -->
+              <div class="mt-2">
+                <button
+                  id="btn-adicionar-item"
+                  type="button"
+                  class="btn btn-sm btn-success rounded"
+                >
+                  <i class="fas fa-plus"></i> Adicionar Item
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+  
+        <!-- Coluna dos botões -->
+        <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
+          <div class="d-flex justify-content-end">
+            <a
+              title="Clique aqui para fechar"
+              href="{% url 'prescricao_listar' atendimento_id=atendimento.id %}"
+              class="btn btn-outline-dark mx-2 ml-2"
+            >
+              <i class="fas fa-times-circle">Fechar</i>
+            </a>
+          </div>
+          <div class="d-flex justify-content-end mt-2">
+            <button
+              id="btn-prescricao-cadastrar"
+              type="submit"
+              title="Salvar"
+              class="btn btn-success btn-outline-light border border-black mx-2 ml-2"
+            >
+              <i class="fas fa-save">Salvar</i>
+            </button>
+          </div>
+  
+          <div class="d-flex justify-content-end mt-2">
+            <div class="form-group text-center m-2">
+              <div class="spinner-border text-success mb-3" role="status">
+                <span class="visually-hidden">Loading...</span>
+              </div>
+              <div class="col-md-12 p-2">
+                <label class="text-success"
+                  ><strong>Cadastrando...</strong></label
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </form>
+  </div>
+  {% endblock %} {% block scriptcustom %}
+  <script>
+    $(document).ready(function () {
+      var formsetPrefix = "{{ formset.prefix }}"; // Prefixo do formset
+      var emptyFormHTML = $("#" + formsetPrefix + "-empty").html(); // HTML para um form vazio
+      var totalForms = $("#id_" + formsetPrefix + "-TOTAL_FORMS"); // Campo que armazena o total de forms
+      var maxItems = 20; // Número máximo de itens que podem ser adicionados
+  
+      // Atualiza o índice de um elemento do formulário (usado ao adicionar ou remover um item)
+      function updateElementIndex(el, prefix, index) {
+        var idRegex = new RegExp(prefix + "-\\d+-");
+        var replacement = prefix + "-" + index + "-";
+        if ($(el).attr("for"))
+          $(el).attr("for", $(el).attr("for").replace(idRegex, replacement));
+        if (el.id) el.id = el.id.replace(idRegex, replacement);
+        if (el.name) el.name = el.name.replace(idRegex, replacement);
+      }
+  
+      // Aplica classes de estilo aos elementos do formulário (usado ao adicionar um novo item)
+      function applyClasses(elem) {
+        elem
+          .find("input, select, textarea")
+          .not("[type='hidden']")
+          .addClass("form-control");
+        elem.find("label").addClass("control-label");
+      }
+  
+      // Inicializa qualquer plugin necessário, como o Select2 (usado ao adicionar um novo item)
+      function initializeSelect2() {
+        $("select").select2();
+      }
+  
+      // Valida o formulário antes do envio (verifica se pelo menos um produto foi selecionado)
+      function validateForm() {
+        var formCount = parseInt(totalForms.val());
+        var hasProduct = true;
+  
+        for (var i = 0; i < formCount; i++) {
+          var produtoField = $("#id_" + formsetPrefix + "-" + i + "-produto");
+          if (produtoField.val() === "") {
+            hasProduct = false;
+            alert(
+              "Selecione um produto ou exclua o item de prescrição adicionado."
+            );
+            break;
+          }
+        }
+  
+        return hasProduct;
+      }
+  
+      // Adiciona um novo item ao formulário
+      $(document).on("click", "#btn-adicionar-item", function (e) {
+        e.preventDefault();
+  
+        var formCount = parseInt(totalForms.val());
+        if (formCount >= maxItems) {
+          alert("Você atingiu o número máximo de itens permitidos.");
+          return false;
+        }
+  
+        var newFormHTML = emptyFormHTML.replace(/__prefix__/g, formCount);
+        var newItem = $(newFormHTML);
+  
+        applyClasses(newItem);
+        newItem.find(".btn-remover-item").removeClass("disabled");
+        $("#itens-prescricao").append(newItem);
+        totalForms.val(formCount + 1); // Incrementa o contador de formulários
+        initializeSelect2(); // Inicializa Select2 para os novos elementos select
+      });
+  
+      // Remove um item e atualiza os índices dos formulários restantes
+      $(document).on("click", ".btn-remover-item", function (e) {
+        e.preventDefault();
+  
+        $(this).closest(".row").remove();
+  
+        var formCount = parseInt(totalForms.val()) - 1;
+        totalForms.val(formCount); // Decrementa o contador de formulários
+  
+        // Atualiza o índice para todos os elementos do formulário restantes após a remoção
+        $("#itens-prescricao .row").each(function (index) {
+          $(this)
+            .find(":input")
+            .each(function () {
+              updateElementIndex(this, formsetPrefix, index);
+            });
+        });
+      });
+  
+      // Validação do formulário antes do envio
+      $("#form-prescricao-cadastrar").submit(function () {
+        return validateForm();
+      });
+  
+      initializeSelect2(); // Inicializa Select2 para elementos select existentes
+    });
+  </script>
+  {% endblock %}

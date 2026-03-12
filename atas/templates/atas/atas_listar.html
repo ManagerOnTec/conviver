@@ -1,0 +1,217 @@
+{% extends 'base.html' %} {% load static %} {% load crispy_forms_tags %} {% load
+templatetags %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
+<!-- LINKS DO MENU LATERAL -->
+<div class="form-group text-left m-3 mt-2">
+  <form class="mt-2 text-white text-left" method="GET">
+    <div class="item-left">
+      <h5>Filtros</h5>
+    </div>
+
+    <div class="item-left">{{ filter.form|crispy }}</div>
+
+    <div class="mt-2" style="display: flex; flex-direction: row">
+      <div class="row">
+        <div class="col-md-12">
+          <div class="justify-content-center mt-2">
+            <button
+              class="col-md-12 btn btn-primary btn-outline-light justify-content-center"
+              title="Filtrar"
+              type="submit"
+            >
+              <i class="fas fa-check" style="transition: color 0.3s"></i>
+              Filtrar
+            </button>
+          </div>
+        </div>
+
+        <div class="col-md-12">
+          <div class="justify-content-center mt-2">
+            <button
+              class="col-md-12 btn btn-outline-danger justify-content-center"
+              name="limpar"
+              value="1"
+            >
+              <i class="fas fa-times-circle" style="transition: color 0.3s"></i>
+              Limpar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+<!-- FIM MENU LATERAL -->
+{% endblock %} {% block cabdados %}
+<div class="p-2 text-nowrap" style="max-width: 150px">
+  <i class="fas fa-list p-2"></i> Lista de Atas
+</div>
+
+<div class="p-2 text-nowrap" style="max-width: 400px">{{ atas_assunto }}</div>
+<!-- FIM DADOS DO OBJETO -->
+{% endblock %} {% block lista %}
+
+<div id="table-container">
+  <table class="table">
+    <thead class="sticky-lista bg-success text-white">
+      <tr>
+        <th>
+          <a
+            title="Novo"
+            href="{% url 'atas_cadastrar' %}"
+            class="btn btn-sm btn-success btn-outline-light"
+            id="btn-novo"
+          >
+            <i class="fas fa-plus" style="transition: color 0.3s">NOVO</i>
+          </a>
+        </th>
+        <th>ID</th>
+        <th>Assunto</th>
+        <th>Dt.Registro</th>
+        <th>Us.Registro</th>
+        <th>Dt.Atualização</th>
+        <th>Us.Atualização</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+
+    <tbody id="tableBody">
+      {% for atas in object_list %}
+      <tr class="data-row">
+        <td>
+          <div style="display: flex; flex-direction: row">
+            <a
+              href="{% url 'atas_editar' pk=atas.pk %}"
+              title="Editar"
+              type="button"
+              class="btn btn-outline-warning btn-sm edit-evolucao-btn"
+              id="btn-edit"
+            >
+              <i class="fas fa-edit"></i>
+            </a>
+
+            <form
+              method="post"
+              action="{% url 'atas_excluir' pk=atas.pk %}"
+              onsubmit="return confirm('Tem certeza que deseja excluir a Ata?');"
+              style="display: inline-block"
+            >
+              {% csrf_token %}
+              <button
+                type="submit"
+                title="Excluir"
+                class="btn btn-outline-danger btn-sm"
+              >
+                <i class="fas fa-trash"></i>
+              </button>
+            </form>
+
+            {% if atas.anexo %}
+            <!-- BOTÃO PARA VISUALIZAR ANEXO -->
+            <a
+              href="{{ atas.anexo.url }}"
+              title="Visualizar Anexo"
+              class="btn btn-outline-info btn-sm"
+              target="_blank"
+            >
+              <i class="fas fa-paperclip"></i>
+            </a>
+            {% endif %} {% if atas.status == 'A' %}
+            <!--CONCATENAR E ABRIR OS PDFS-->
+            <a
+              href="{% url 'combine_pdfs_specific' object_id=atas.pk tipo='atas' %}"
+              class="btn btn-outline-success btn-sm"
+              target="_blank"
+            >
+              <i class="fas fa-print"></i>
+            </a>
+            {% else %} {% endif %}
+          </div>
+        </td>
+
+        <td>{{ atas.pk }}</td>
+        <td class="cor-e" data-cor="{{ evolucao.tipo_evolucao.cor }}">
+          {{ atas.assunto }}
+        </td>
+        <td>{{ atas.dt_registro|date:"d/m/Y H:i" }}</td>
+        <td>{{ atas.us_registro }}</td>
+        <td>{{ atas.dt_atualizacao|date:"d/m/Y H:i" }}</td>
+
+        {% if atas.us_atualizacao %}
+        <td>{{ atas.us_atualizacao }}</td>
+        {% else %}
+        <td></td>
+        {% endif %}
+
+        <td>{{ atas.get_status_display }}</td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="8">Nenhum registro</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %} {% block paginate %}
+<!--PAGINACAO-->
+{% if is_paginated %}
+<div id="pages" class="pagination justify-content-start p-2">
+  <ul class="pagination btn-sm">
+    {% if page_obj.has_previous %}
+    <li class="page-item">
+      <a
+        href="?{% with filters=request.session.atas_filters|urlencode %}{{ filters }}{% endwith %}&page=1"
+        class="page-link"
+        ><i class="fas fa-step-backward"></i
+      ></a>
+    </li>
+    <li class="page-item">
+      <a
+        href="?{% with filters=request.session.atas_filters|urlencode %}{{ filters }}{% endwith %}&page={{ page_obj.previous_page_number }}"
+        class="page-link"
+        ><i class="fas fa-arrow-left"></i
+      ></a>
+    </li>
+    <!-- prettier-ignore -->
+    {% endif %} {% for i in page_obj.paginator.page_range %} {% if page_obj.number == i %}
+    <li class="page-item active">
+      <span class="page-link">{{ i }}</span>
+    </li>
+    {% elif i > page_obj.number|add:"-3" and i < page_obj.number|add:"3" %}
+    <li class="page-item">
+      <a
+        href="?{% with filters=request.session.atas_filters|urlencode %}{{ filters }}{% endwith %}&page={{ i }}"
+        class="page-link"
+        >{{ i }}
+      </a>
+    </li>
+    {% endif %} {% endfor %} {% if page_obj.has_next %}
+    <li class="page-item">
+      <a
+        href="?{% with filters=request.session.atas_filters|urlencode %}{{ filters }}{% endwith %}&page={{ page_obj.next_page_number }}"
+        class="page-link"
+        ><i class="fas fa-arrow-right"></i
+      ></a>
+    </li>
+    <li class="page-item">
+      <a
+        href="?{% with filters=request.session.atas_filters|urlencode %}{{ filters }}{% endwith %}&page={{ page_obj.paginator.num_pages }}"
+        class="page-link"
+        ><i class="fas fa-step-forward"></i
+      ></a>
+    </li>
+    {% endif %}
+  </ul>
+</div>
+{% endif %}
+<!--FIM PAGINAÇÃO-->
+{% endblock %} {% block scriptcustom %}
+<script>
+  window.addEventListener("DOMContentLoaded", (event) => {
+    document.querySelectorAll(".cor-e").forEach((el) => {
+      const cor = el.getAttribute("data-cor");
+      el.style.backgroundColor = cor;
+    });
+  });
+</script>
+{% endblock %}

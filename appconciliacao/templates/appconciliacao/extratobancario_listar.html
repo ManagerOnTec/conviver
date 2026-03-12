@@ -1,0 +1,11 @@
+{% extends 'appconciliacao/base_conciliacao.html' %}
+{% block app_content %}
+<div class="container-fluid px-3">
+    <div class="row mb-4">
+        <div class="col-12">
+            <a href="{% url 'appconciliacao:conciliacao_index' %}" class="btn btn-secondary btn-sm">Voltar</a>
+        </div>
+    </div>
+    <p class="text-white">Listagem de extratos bancários</p>
+</div>
+{% endblock %}

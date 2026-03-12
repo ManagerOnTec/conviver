@@ -1,0 +1,26 @@
+{% load static %}
+{% if messages %}
+<div id="message-container" style="display: none;"> <!-- Container oculto inicialmente -->
+    {% for message in messages %}
+    <div class="alert {{ message.tags }} alert-dismissible fade show mb-0 d-flex justify-content-center align-items-center"
+        style="font-size: 14px;">
+        <span>Resposta: {{ message }}</span>
+    </div>
+    {% endfor %}
+</div>
+
+<script>
+    // Use setTimeout para exibir as mensagens depois de meio segundo
+    setTimeout(function () {
+        // Exibir o container de mensagens
+        $('#message-container').fadeIn('fast');
+        // Depois de 3 segundos, esconda o container de mensagens
+        setTimeout(function () {
+            $('#message-container').fadeOut('slow', function () {
+                // Após desaparecer, remova-o do DOM
+                $(this).remove();
+            });
+        }, 5000); // Define que as mensagens ficarão visíveis por 3 segundos
+    }, 500); // Mensagens aparecem após meio segundo
+</script>
+{% endif %}

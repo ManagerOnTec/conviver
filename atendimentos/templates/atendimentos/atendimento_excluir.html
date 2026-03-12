@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+{% load tz %}
+
+
+{% block titulos %}{{title}}|{% endblock %}
+{% block content %}
+
+
+
+<form method="post" action="{% url 'atendimento_excluir' object.pk %}">
+    {% csrf_token %}
+
+
+    <div class="row">
+
+
+
+
+
+        <div class="d-flex justify-content-end mt-4">
+
+
+
+            <a title="Cancelar" href="{% url 'atendimento_listar' %}" class="btn btn-outline-dark mx-2 ml-2 btn-fechar">
+                <i class="fas fa-times-circle" style="transition: color 0.3s;">Cancelar</i>
+            </a>
+
+
+            <div class="spinner-border text-danger justify-content-end" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+
+
+            <button id="btn-atendimento-excluir" type="submit" title="Excluir"
+                class="btn btn-outline-dark mx-2 ml-2 btn-excluir">
+                <i class="fas fa-trash" style="transition: color 0.3s;">Excluir</i>
+            </button>
+
+        </div>
+
+</form>
+
+
+{% endblock %}

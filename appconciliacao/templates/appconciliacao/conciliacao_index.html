@@ -1,0 +1,77 @@
+{% extends 'appconciliacao/base_conciliacao.html' %}
+{% load static %}
+
+{% block app_content %}
+<div class="container-fluid px-3">
+    <div class="row mb-4">
+        <div class="col-12">
+            <a href="{% url 'cadastros_index' %}" class="btn btn-secondary btn-sm">
+                <i class="fas fa-arrow-left me-2"></i>Voltar
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <!-- Dashboard Cards -->
+        <div class="col-lg-3 col-md-6 col-sm-12">
+            <div class="card bg-dark border-success text-white">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="fas fa-file-csv me-2"></i>Extratos</h5>
+                    <p class="card-text text-muted">Gerencie extratos bancários.</p>
+                    <a href="{% url 'appconciliacao:extratobancario_listar' %}" class="btn btn-success btn-sm">
+                        <i class="fas fa-list me-1"></i>Listar
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 col-sm-12">
+            <div class="card bg-dark border-success text-white">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="fas fa-upload me-2"></i>Importar Extrato</h5>
+                    <p class="card-text text-muted">Importe novo extrato.</p>
+                    <a href="{% url 'appconciliacao:extratobancario_criar' %}" class="btn btn-success btn-sm">
+                        <i class="fas fa-plus me-1"></i>Importar
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 col-sm-12">
+            <div class="card bg-dark border-info text-white">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="fas fa-check-circle me-2"></i>Conciliações</h5>
+                    <p class="card-text text-muted">Veja conciliações realizadas.</p>
+                    <a href="{% url 'appconciliacao:conciliacao_listar' %}" class="btn btn-info btn-sm">
+                        <i class="fas fa-list me-1"></i>Listar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-12">
+            <h3 class="text-white mb-3">Últimos Extratos</h3>
+            <div class="table-responsive">
+                <table class="table table-dark table-striped">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Banco</th>
+                            <th>Período</th>
+                            <th>Saldo</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="5" class="text-center text-muted">Nenhum extrato registrado</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

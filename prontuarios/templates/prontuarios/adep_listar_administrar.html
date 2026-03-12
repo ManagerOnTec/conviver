@@ -1,0 +1,235 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+{% load templatetags %}
+
+{% block titulos %}{{title}}{% endblock %}
+
+{% block menul %}
+<!-- LINKS DO MENU LATERAL -->
+
+<div class="form-group text-left m-3 mt-2">
+
+
+    <form class="mt-2 text-white text-left" method="GET">
+
+        <div class="item-left">
+            <h5>Filtros</h5>
+        </div>
+
+        <div class="item-left">
+            {{ filter.form|crispy }}
+        </div>
+
+        <div class="mt-2" style="display: flex; flex-direction: row;">
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="justify-content-center mt-2">
+                        <button class="col-md-12 btn btn-primary btn-outline-light justify-content-center"
+                            title="Filtrar" type="submit">
+                            <i class="fas fa-check" style="transition: color 0.3s;"></i>
+                            Filtrar
+                        </button>
+                    </div>
+                </div>
+                <div class="justify-content-center mt-2">
+                    <button class="col-md-12 btn btn-outline-danger justify-content-center" name="limpar" value="1">
+                        <i class="fas fa-times-circle" style="transition: color 0.3s;"></i>
+                        Limpar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </form>
+
+
+</div>
+<!-- FIM MENU LATERAL -->
+{% endblock %}
+
+{% block cabdados %}
+
+<div class="p-2" data-bs-toggle="tooltip" data-bs-placement="top"
+    title="Esta função lista todos os horários de ADEPs para gerar a administração de enfermagem!">
+    <i class="fas fa-syringe me-2"></i>
+    <span>Lista de ADEPs para administrar</span>
+    <i class="fas fa-pencil-alt text-warning me-2"></i>
+</div>
+<!-- FIM DADOS DO OBJETO -->
+{% endblock %}
+
+{% block lista %}
+
+<style>
+    /* Aumentar o tamanho dos checkboxes */
+    .adep-checkbox,
+    #select-all {
+        /* Ajusta o tamanho do checkbox */
+        transform: scale(1.5);
+        /* Opcional: ajusta a posição do checkbox para alinhá-lo verticalmente */
+        margin: 0;
+        vertical-align: middle;
+    }
+</style>
+
+
+<div id="table-container">
+    <table class="table">
+        <!-- Início do formulário de ações de Adep -->
+        <form method="post">
+            {% csrf_token %}
+            <div class="d-flex justify-content-between mb-3">
+                <!-- Botões para marcar como Administrado ou Não Administrado -->
+                <button type="submit" name="acao" value="administrar" class="btn btn-success">
+                    <i class="fas fa-check"></i> Marcar como Administrado
+                </button>
+                <button type="submit" name="acao" value="nao_administrar" class="btn btn-danger">
+                    <i class="fas fa-times"></i> Marcar como Não Administrado
+                </button>
+            </div>
+
+
+
+            <thead class="sticky-lista bg-success text-white">
+                <tr>
+                    <th>
+                        <input type="checkbox" id="select-all">
+                        <label for="select-all">Selecionar Todos</label>
+                    </th>
+                    <th>Nome do Paciente</th>
+                    <th>Prescrição</th>
+                    <th>Adep</th>
+                    <th>Item</th>
+                    <th>Data/Hora Prescrição</th>
+
+
+                    <th>SN</th>
+                    <th>DoseÚnica</th>
+                    <th>Us.Prescrição</th>
+                    <th>Observação</th>
+
+
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for adep in adeps %}
+                <tr>
+                    <td>
+                        <input type="checkbox" name="adep_ids" value="{{ adep.id }}" class="adep-checkbox"
+                            id="adep_{{ adep.id }}">
+                    </td>
+                    <td>{{ adep.atendimento.pessoa }}</td>
+                    <td>{{ adep.prescricao }}</td>
+                    <td>{{ adep.id }}</td>
+                    <td>{{ adep.produto_prescricao }}</td>
+                    <td>{{ adep.data_hora|date:"d/m/Y H:i" }}</td>
+
+                    {% if adep.se_necessario %}
+                    <td>SN</td>
+                    {% else %}
+                    <td></td>
+                    {% endif %}
+
+
+
+                    {% if adep.dose_unica %}
+                    <td>Sim</td>
+                    {% else %}
+                    <td></td>
+                    {% endif %}
+
+                    <td>{{ adep.prescricao.us_registro }}</td>
+
+
+                    {% if adep.observacao %}
+                    <td>{{ adep.observacao }}</td>
+                    {% else %}
+                    <td></td>
+                    {% endif %}
+
+
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6">Nenhum registro encontrado.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </form>
+        <!-- Fim do formulário de ações de Adep -->
+
+    </table>
+</div>
+
+{% endblock %}
+
+{% block paginate %}
+<!--PAGINACAO-->
+{% if is_paginated %}
+<div id="pages" class="pagination justify-content-start p-2">
+    <ul class="pagination btn-sm">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+            <a href="{% url 'adep_listar_administrar' %}?{{ request.GET.urlencode }}&page=1" class="page-link"><i
+                    class="fas fa-step-backward"></i></a>
+        </li>
+        <li class="page-item">
+            <a href="{% url 'adep_listar_administrar' %}?{{ request.GET.urlencode }}&page={{ page_obj.previous_page_number }}"
+                class="page-link"><i class="fas fa-arrow-left"></i></a>
+        </li>
+        {% endif %}
+
+        {% for i in page_obj.paginator.page_range %}
+        {% if page_obj.number == i %}
+        <li class="page-item active">
+            <span class="page-link">{{ i }}</span>
+        </li>
+        {% elif i > page_obj.number|add:"-3" and i < page_obj.number|add:"3" %} <li class="page-item">
+            <a href="{% url 'adep_listar_administrar' %}?{{ request.GET.urlencode }}&page={{ i }}"
+                class="page-link">{{i}}</a>
+            </li>
+            {% endif %}
+            {% endfor %}
+
+            {% if page_obj.has_next %}
+            <li class="page-item">
+                <a href="{% url 'adep_listar_administrar' %}?{{ request.GET.urlencode }}&page={{ page_obj.next_page_number }}"
+                    class="page-link"><i class="fas fa-arrow-right"></i></a>
+            </li>
+            <li class="page-item">
+                <a href="{% url 'adep_listar_administrar' %}?{{ request.GET.urlencode }}&page={{ page_obj.paginator.num_pages }}"
+                    class="page-link"><i class="fas fa-step-forward"></i></a>
+            </li>
+            {% endif %}
+    </ul>
+</div>
+{% endif %}
+<!--FIM PAGINAÇÃO-->
+{% endblock %}
+
+
+{% block scriptcustom %}
+<script>
+    // JavaScript para manipular a seleção dos checkboxes
+    document.addEventListener('DOMContentLoaded', function () {
+        var selectAllCheckbox = document.getElementById('select-all');
+        var adepCheckboxes = document.querySelectorAll('.adep-checkbox');
+
+        selectAllCheckbox.addEventListener('change', function () {
+            for (var checkbox of adepCheckboxes) {
+                checkbox.checked = this.checked;
+            }
+        });
+    });
+</script>
+
+<script>
+    // Ativar todos os tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl)
+    })
+</script>
+
+{% endblock %}

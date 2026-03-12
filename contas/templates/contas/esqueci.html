@@ -1,0 +1,59 @@
+{% extends 'base_sem.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+
+{% block titulos %}{{title}}|{% endblock %}
+{% block content %}
+{% block extracss %}
+<link rel="stylesheet" href="{% static 'css/auth_style.css' %}">
+{% endblock %}
+
+<div class="row min-vh-100 rounded">
+
+
+
+
+
+    <div class="col-md-12 p-2">
+
+
+        {% block add %}
+        <div class="d-flex justify-content-center mt-4">
+            {% include 'parciais/_messages.html' %}
+        </div>
+        {% endblock %}
+
+        <div class="auth-container p-2">
+            <div class="auth-box bg-dark rounded">
+
+                <div class="col-md-12 p-4">
+                    <h1 class="text-white text-center">ManagerONTEC</h1>
+                </div>
+                <form method="POST" action="{% url 'esqueci' %}">
+                    {% csrf_token %}
+                    <div class="form-group">
+                        <label for="email" class="form-label"><i class="fas fa-envelope"></i> E-mail</label>
+                        <input type="email" name="email" class="form-control" id="email" autocomplete="off">
+                    </div>
+                    <div class="d-flex justify-content-between">
+
+
+
+                        <a href="{% url 'login' %}" class="btn btn-outline-light">
+                            <i class="fas fa-times"></i> Fechar
+                        </a>
+
+
+                        <button title="Clique aqui para enviar e-mail" type="submit" class="btn btn-outline-light">
+                            <i class="fas fa-envelope-square"></i> Enviar
+                        </button>
+
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+{% endblock %}

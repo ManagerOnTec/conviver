@@ -1,0 +1,138 @@
+{% extends 'base_sem.html' %}
+{% load static %}
+
+{% block titulos %}{{ title }}|{% endblock %}
+
+{% block content %}
+<div class="container-fluid bg-dark min-vh-90 rounded p-4">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h1 class="text-white mb-4">
+                <i class="fas fa-credit-card me-2"></i>Cartão de Pagamento
+            </h1>
+        </div>
+    </div>
+
+    <!-- Estatísticas -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-secondary text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Cartões Ativos</h6>
+                    <h3>{{ cartoes.count }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-secondary text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Faturas Abertas</h6>
+                    <h3>{{ faturas_abertas.count }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-secondary text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Total Transações (Mês)</h6>
+                    <h3>R$ {{ totais.total_transacoes|floatformat:2 }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-secondary text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Estabelecimento</h6>
+                    <p class="mb-0">{{ estabelecimento.nome_fantasia }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ações Rápidas -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="btn-group" role="group">
+                {% if user|has_perm:'admin_pagamentos.add_cartaopagamento' %}
+                <a href="{% url 'admin_pagamentos:cartao_criar' %}" class="btn btn-primary">
+                    <i class="fas fa-plus me-2"></i>Novo Cartão
+                </a>
+                {% endif %}
+                {% if user|has_perm:'admin_pagamentos.view_cartaopagamento' %}
+                <a href="{% url 'admin_pagamentos:cartao_listar' %}" class="btn btn-info">
+                    <i class="fas fa-list me-2"></i>Listar Cartões
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Cartões -->
+    {% if cartoes %}
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h5 class="text-white mb-3">Cartões Ativos</h5>
+            <div class="table-responsive">
+                <table class="table table-dark table-hover">
+                    <thead>
+                        <tr>
+                            <th>Número</th>
+                            <th>Titular</th>
+                            <th>Bandeira</th>
+                            <th>Limite</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cartao in cartoes %}
+                        <tr>
+                            <td>{{ cartao.numero_cartao }}</td>
+                            <td>{{ cartao.titular }}</td>
+                            <td>{{ cartao.bandeira }}</td>
+                            <td>R$ {{ cartao.limite_credito|floatformat:2 }}</td>
+                            <td>
+                                <a href="{% url 'admin_pagamentos:cartao_detalhe' cartao.pk %}" class="btn btn-sm btn-info">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Transações Recentes -->
+    {% if transacoes_mes %}
+    <div class="row">
+        <div class="col-md-12">
+            <h5 class="text-white mb-3">Transações do Mês</h5>
+            <div class="table-responsive">
+                <table class="table table-dark table-hover">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Descrição</th>
+                            <th>Cartão</th>
+                            <th>Valor</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for transacao in transacoes_mes %}
+                        <tr>
+                            <td>{{ transacao.data_transacao|date:"d/m/Y" }}</td>
+                            <td>{{ transacao.descricao }}</td>
+                            <td>{{ transacao.cartao.numero_cartao }}</td>
+                            <td>R$ {{ transacao.valor|floatformat:2 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

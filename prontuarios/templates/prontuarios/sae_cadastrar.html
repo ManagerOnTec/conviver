@@ -1,0 +1,357 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+{% load tz %}
+
+{% block titulos %}{{title}}|{% endblock %}
+
+
+{% block menul %}
+<div class="form-group text-left mt-2 m-3">
+
+
+    <a href="{% url 'prontuario_detalhe' pk=atendimento_id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-notes-medical me-2"></i>Prontuário
+    </a>
+
+    <a href="{% url 'diagnostico_listar' atendimento_id=atendimento_id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-diagnoses me-2"></i>Diagnósticos
+    </a>
+
+
+    <a href="{% url 'evolucao_listar' atendimento_id=atendimento_id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-file-alt me-2"></i>Evoluções
+    </a>
+
+    <a href="{% url 'psicoterapia_listar' atendimento_id=atendimento_id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-brain me-2"></i>Psicoterapias
+    </a>
+    <a href="{% url 'prescricao_listar' atendimento_id=atendimento_id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-capsules me-2"></i>Prescrições
+    </a>
+
+
+    <a href="{% url 'adep_listar' atendimento_id=atendimento_id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-syringe me-2"></i>ADEP
+    </a>
+
+
+    <a href="{% url 'sinais_vitais_listar' atendimento_id=atendimento_id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fa fa-heartbeat me-2"></i>Sinais Vitais
+    </a>
+    <a href="" class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded">
+        <i class="fas fa-stethoscope me-2"></i>SAE
+    </a>
+    <a href="{% url 'plano_cuidados_listar' atendimento_id=atendimento_id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-procedures me-2"></i>Plano de Cuidados
+    </a>
+
+    <a href="{% url 'perdas_ganhos_listar' atendimento_id=atendimento_id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fa fa-weight me-2"></i>Perdas e Ganhos
+    </a>
+</div>
+
+<!-- FIM MENU LATERAL -->
+{% endblock %}
+
+
+{% block cabdados %}
+
+<div class="text-nowrap p-2" style="max-width: 150px;">
+    Prontuário:{{ atendimento_id }}
+</div>
+
+<div class="text-nowrap p-2" style="max-width: 400px;">
+    {{ pessoa_form.nome.value }}
+</div>
+
+
+
+{% if pessoa_form.alergico.value == 'S' %}
+
+<button class="btn btn-danger" type="button" disabled>
+    <span>Alergia(s):</span>
+    <span class="spinner-grow spinner-grow-sm" role="status" aria-hidden="true"></span>
+    {{ pessoa_form.alergias.value }}
+</button>
+{% endif %}
+
+<div class="text-nowrap p-2" style="max-width: 200px;">
+    D.N:{{ pessoa_form.dt_nascimento.value }}
+</div>
+
+
+<div class="p-2 text-nowrap" style="max-width: 190px;">
+    Cidade: {{ pessoa_form.instance.cidade }}
+</div>
+
+<div class="p-2 text-nowrap" style="max-width: 120px;">
+    Idade:{{ idade }}
+</div>
+<div class="text-nowrap p-2" style="max-width: 120px;">
+    Sexo:{{ pessoa_form.sexo.value }}
+</div>
+
+<div class="text-nowrap p-2" style="max-width: 150px;">
+    Cor/Raça:{{ pessoa_form.cor_raca.value }}
+</div>
+
+<div class="text-nowrap p-2" style="max-width: 180px;">
+    Religião:{{ pessoa_form.religiao.value }}
+</div>
+
+<div class="text-nowrap p-2" style="max-width: 300px;">
+    Filiação:{{ pessoa_form.pai.value }}, {{ pessoa_form.mae.value }}
+</div>
+
+<!-- FIM DADOS DO OBJETO -->
+{% endblock %}
+
+
+{% block lista %}
+<div class="container">
+    <form id='sae-cadastrar' method="post" enctype="multipart/form-data" class="form-control mt-2">
+        {% csrf_token %}
+        {{ sae_form.media }}
+
+        <div class="row">
+
+
+            <div class="col-lg-9 col-md-9 col-sm-9 col-xs-9">
+
+                <div id="table-container">
+                    <div class="container">
+                        <div class="row">
+                            <div class="col-lg-12 col-md-12 col-sm-12">
+
+
+                                <div class="form-group"
+                                    title="Pressione control + click do mouse para selecionar vários campos nas opções de Evidências, Fatores Relacionados e Intervenções! Ao selecionar as evidências o SAE apresentará possíveis Diagnósticos de Enfermagem, que pode ser selecionado e comparado com os fatores relacionados. Ao selecionar outro Diagnóstico de Enfermagem os fatores relacionados serão atualizados, e havendo concordância com o Diagnóstico o mesmo é confirmado com as escolhas dos fatores relacionados e intervenções!">
+                                    {{ sae_form|crispy }}
+                                </div>
+
+                                <div class="col-lg-12 col-md-12 col-sm-12 d-none">
+                                    {{ sae_form.atendimento_id }}
+                                </div>
+                                <div class="col-lg-12 col-md-12 col-sm-12 d-none">
+                                    {{ sae_form.estabelecimento }}
+                                </div>
+
+
+                            </div>
+
+
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+            <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
+
+                <div class="d-flex justify-content-end">
+
+                    <a title="Clique aqui para fechar" href="{% url 'sae_listar' atendimento_id=atendimento_id %}"
+                        class="btn btn-outline-dark mx-2 ml-2">
+                        <i class="fas fa-times-circle" style="transition: color 0.3s;">Fechar</i>
+                    </a>
+                </div>
+
+
+                <div class="d-flex justify-content-end mt-2">
+
+                    <button id="btn-dae-cadastrar" type="submit" title="Salvar"
+                        class="btn btn-success btn-outline-light border border-black mx-2 ml-2">
+                        <i class="fas fa-save" style="transition: color 0.3s;">Salvar</i>
+                    </button>
+                </div>
+
+                <div class="d-flex justify-content-end mt-2">
+                    <div class="form-group text-center m-2">
+                        <!-- LOADING -->
+                        <div class="spinner-border text-success mb-3" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+
+                        <!-- DETALHES E LINKS -->
+                        <div class="col-md-12 p-2">
+                            <label class="text-success"><strong>Cadastrando...</strong></label>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+
+
+        </div>
+
+
+    </form>
+</div>
+{% endblock %}
+
+{% block scriptcustom %}
+
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var selectIds = ["id_evidencia", "id_fator_relacionado", "id_intervencao"];
+
+        selectIds.forEach(function (id) {
+            var select = document.getElementById(id);
+            if (select) {
+                var icon = document.createElement('i');
+                icon.className = "fas fa-chevron-down toggleIcon";
+                icon.style.cursor = "pointer";
+                icon.style.marginLeft = "10px";
+
+                icon.addEventListener('click', function () {
+                    if (select.style.height === "400px") {
+                        select.style.height = "initial";
+                        icon.classList.remove('fa-chevron-up');
+                        icon.classList.add('fa-chevron-down');
+                    } else {
+                        select.style.height = "400px";
+                        icon.classList.remove('fa-chevron-down');
+                        icon.classList.add('fa-chevron-up');
+                    }
+                });
+
+                select.parentNode.insertBefore(icon, select.nextSibling);
+            }
+        });
+    });
+
+    function clearSelectOptions(selectElement) {
+        selectElement.innerHTML = '';
+        var defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.innerHTML = 'Selecione...';
+        selectElement.appendChild(defaultOption);
+    }
+
+    function handleSelectChange(selectElement, subsequentSelectElements) {
+        selectElement.addEventListener('change', function () {
+            subsequentSelectElements.forEach(clearSelectOptions);
+        });
+    }
+
+    function fetchDataAndUpdateSelect(url, selectElement, valueGetter, labelGetter) {
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', url);
+        xhr.responseType = 'json';
+        xhr.onload = function () {
+            var newOptions = xhr.response;
+            clearSelectOptions(selectElement);
+            newOptions.forEach(function (option) {
+                var opt = document.createElement('option');
+                opt.value = valueGetter(option);
+                opt.innerHTML = labelGetter(option);
+                selectElement.appendChild(opt);
+            });
+        };
+        xhr.send();
+    }
+
+    var aspectoField = document.getElementById('id_aspecto');
+    var aspectoAnalisadoField = document.getElementById('id_aspecto_analisado');
+    var evidenciaField = document.getElementById('id_evidencia');
+    var diagnosticoEnfermagemField = document.getElementById('id_diagnostico_enfermagem');
+    var fatorRelacionadoField = document.getElementById('id_fator_relacionado');
+    var intervencaoField = document.getElementById('id_intervencao');
+
+    clearSelectOptions(aspectoAnalisadoField);
+    clearSelectOptions(evidenciaField);
+    clearSelectOptions(diagnosticoEnfermagemField);
+    clearSelectOptions(fatorRelacionadoField);
+    clearSelectOptions(intervencaoField);
+
+    handleSelectChange(aspectoField, [aspectoAnalisadoField, evidenciaField, diagnosticoEnfermagemField, fatorRelacionadoField, intervencaoField]);
+    handleSelectChange(aspectoAnalisadoField, [evidenciaField, diagnosticoEnfermagemField, fatorRelacionadoField, intervencaoField]);
+    handleSelectChange(evidenciaField, [diagnosticoEnfermagemField, fatorRelacionadoField, intervencaoField]);
+    handleSelectChange(diagnosticoEnfermagemField, [fatorRelacionadoField, intervencaoField]);
+
+    aspectoField.addEventListener('change', function () {
+        var url = "{% url 'get_aspecto_analisado' %}?aspecto_id=" + aspectoField.value;
+        fetchDataAndUpdateSelect(url, aspectoAnalisadoField, function (option) { return option.id; }, function (option) { return option.descricao; });
+    });
+
+    aspectoAnalisadoField.addEventListener('change', function () {
+        var url = "{% url 'get_evidencia' %}?aspecto_analisado_id=" + aspectoAnalisadoField.value;
+        fetchDataAndUpdateSelect(url, evidenciaField, function (option) { return option.id; }, function (option) { return option.descricao; });
+    });
+
+    evidenciaField.addEventListener('change', function () {
+        var url = "{% url 'get_diagnostico_enfermagem' %}?evidencia_id=" + Array.from(evidenciaField.selectedOptions).map(function (option) { return option.value; }).join(',');
+        fetchDataAndUpdateSelect(url, diagnosticoEnfermagemField, function (option) { return option.id; }, function (option) { return option.descricao; });
+    });
+
+    diagnosticoEnfermagemField.addEventListener('change', function () {
+        var diagnosticoId = diagnosticoEnfermagemField.value;
+        var evidenciaUrl = "{% url 'get_evidencia_by_diagnostico' %}?diagnostico_id=" + diagnosticoId;
+
+        // Guardar as evidências selecionadas antes da atualização
+        var selectedEvidencias = Array.from(evidenciaField.selectedOptions).map(function (option) { return option.value; });
+
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', evidenciaUrl);
+        xhr.responseType = 'json';
+        xhr.onload = function () {
+            var newOptions = xhr.response;
+            clearSelectOptions(evidenciaField);
+            newOptions.forEach(function (option) {
+                var opt = document.createElement('option');
+                opt.value = option.id;
+                opt.innerHTML = option.descricao;
+
+                // Re-selecionar apenas as evidências que correspondem e estavam selecionadas previamente
+                if (selectedEvidencias.includes(option.id.toString())) {
+                    opt.selected = true;
+                }
+
+                evidenciaField.appendChild(opt);
+            });
+        };
+        xhr.send();
+
+        // Parte relacionada ao fatorUrl, mantenha isso no seu código
+        var fatorUrl = "{% url 'get_fator_relacionado' %}?diagnostico_id=" + diagnosticoId;
+        fetchDataAndUpdateSelect(fatorUrl, fatorRelacionadoField, function (option) { return option.id; }, function (option) { return option.descricao; });
+    });
+
+
+    fatorRelacionadoField.addEventListener('change', function () {
+        var url = "{% url 'get_intervencao' %}?fator_id=" + Array.from(fatorRelacionadoField.selectedOptions).map(function (option) { return option.value; }).join(',');
+
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', url);
+        xhr.responseType = 'json';
+        xhr.onload = function () {
+            var newOptions = xhr.response;
+            clearSelectOptions(intervencaoField);
+            newOptions.forEach(function (option) {
+                var opt = document.createElement('option');
+                opt.value = option.id;
+                opt.innerHTML = option.descricao;
+                opt.selected = true;
+                intervencaoField.appendChild(opt);
+            });
+        };
+        xhr.send();
+    });
+
+
+</script>
+
+{% endblock %}

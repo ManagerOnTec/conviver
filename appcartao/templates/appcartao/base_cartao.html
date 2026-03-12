@@ -1,0 +1,31 @@
+{% extends 'base_sem.html' %}
+{% load static %}
+
+{% block titulos %}{{ title }} | Cartão{% endblock %}
+
+{% block content %}
+<div class="container-fluid bg-dark min-vh-90 rounded">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="text-white text-center mt-4 p-3 mb-4">
+                <i class="fas fa-credit-card me-2"></i>{{ title }}
+            </h1>
+        </div>
+    </div>
+
+    {% if messages %}
+    <div class="row">
+        <div class="col-12">
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% block app_content %}{% endblock %}
+</div>
+{% endblock %}

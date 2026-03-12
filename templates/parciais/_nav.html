@@ -1,0 +1,73 @@
+{% load static %}
+{% if titulo and cad_index %}
+<div id="func-menu" class="fixed-top bg-primary d-flex justify-content-between align-items-center">
+    <a title="Clique aqui para função" href="{{ list_index }}">
+        <i class="p-2 fas fa-paste bg-white color-white rounded" style="transition: color 0.3s;"></i>
+    </a>
+    <h5 class="text-white text-left p-2">{{ titulo }}</h5>
+    <div class="d-flex">
+        <a title="Clique aqui para fechar" href="{{ cad_index }}" class="btn btn-outline-white btn-sm rounded-circle">
+            <i class="p-2 fas fa-times bg-white rounded" style="transition: color 0.3s;"></i>
+        </a>
+    </div>
+</div>
+{% else %}
+<div style="width: 225px;" class="bg-primary d-flex justify-content-between align-items-center">
+    <h5 class="text-white text-left p-2">{{ titulo }}</h5>
+</div>
+{% endif %}
+<div id="nav-div" class="fixed-top" style="margin-left: 225px; width: calc(100% - 225px);">
+    <nav id="nav-bar" class="navbar bg-dark">
+        <div class="d-flex justify-content-between" style="width: 100%;">
+            <div style="margin-left: 25px;">
+                <button id="toggle-button" class="btn btn-sm btn-dark">
+                    <i class="fas fa-bars text-light"></i>
+                </button>
+                <a href="{% url 'select_estabelecimento' %}" class="btn btn-sm btn-dark buttonnav">
+                    Home
+                </a>
+                <a class="btn btn-sm btn-dark buttonnav" type="button" href="{% url 'logout' %}">Encerrar sessão</a>
+            </div>
+
+            <button style="margin-right: 270px" class="btn btn-sm btn-dark buttonnav" type="button"
+                data-bs-toggle="offcanvas" data-bs-target="#offcanvasDarkNavbar" aria-controls="offcanvasDarkNavbar">
+                <i class="fas fa-user text-light"></i>
+            </button>
+
+
+        </div>
+
+
+        <div class="offcanvas offcanvas-end bg-dark text-white" tabindex="-1" id="offcanvasDarkNavbar"
+            aria-labelledby="offcanvasDarkNavbarLabel" style="z-index: 1050;">
+            <div class="offcanvas-header">
+                <button type="button" class="btn-close btn-close-white text-reset" data-bs-dismiss="offcanvas"
+                    aria-label="Fechar"></button>
+            </div>
+            <div class="offcanvas-body">
+                <ul class="navbar-nav justify-content-end flex-grow-1 pe-3">
+                    <li class="nav-item">
+                        <a class="rounded nav-link text-white" href="{% url 'select_estabelecimento' %}"
+                            onmouseover="this.style.backgroundColor='#000000';"
+                            onmouseout="this.style.backgroundColor='';">
+                            <i class="fas fa-building me-2"></i>Estabelecimentos
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="rounded nav-link text-white" href="{% url 'alterar' %}"
+                            onmouseover="this.style.backgroundColor='#000000';"
+                            onmouseout="this.style.backgroundColor='';"><i class="fas fa-key me-2"></i>Alterar
+                            senha</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="rounded nav-link text-white" href="{% url 'logout' %}"
+                            onmouseover="this.style.backgroundColor='#000000';"
+                            onmouseout="this.style.backgroundColor='';"><i class="fas fa-sign-out-alt me-2"></i>Encerrar
+                            sessão</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+    </nav>
+</div>

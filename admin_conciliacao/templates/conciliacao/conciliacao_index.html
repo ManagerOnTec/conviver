@@ -1,0 +1,134 @@
+{% extends 'conciliacao/base_conciliacao.html' %}
+{% load static %}
+
+{% block conciliacao_content %}
+<div class="container-fluid">
+    <!-- Cabeçalho com estatísticas -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary">
+                <div class="card-body">
+                    <h6 class="card-title text-light">Extratos</h6>
+                    <h4 class="text-info">{{ total_extratos }}</h4>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary">
+                <div class="card-body">
+                    <h6 class="card-title text-light">Transações Pendentes</h6>
+                    <h4 class="text-warning">{{ total_transacoes }}</h4>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary">
+                <div class="card-body">
+                    <h6 class="card-title text-light">Conciliadas</h6>
+                    <h4 class="text-success">{{ total_conciliadas }}</h4>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary">
+                <div class="card-body">
+                    <h6 class="card-title text-light">Divergências</h6>
+                    <h4 class="text-danger">{{ total_divergencias }}</h4>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ações rápidas -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header bg-dark border-secondary">
+                    <h5 class="text-light mb-0">Ações Rápidas</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <a href="{% url 'admin_conciliacao:criar_extrato' %}" class="btn btn-primary w-100">
+                                <i class="fas fa-upload me-2"></i>Importar Extrato
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="{% url 'admin_conciliacao:conciliar_transacoes' %}" class="btn btn-success w-100">
+                                <i class="fas fa-check-circle me-2"></i>Conciliar
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="{% url 'admin_conciliacao:listar_divergencias' %}" class="btn btn-warning w-100">
+                                <i class="fas fa-exclamation-triangle me-2"></i>Divergências
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="{% url 'admin_conciliacao:listar_extratos' %}" class="btn btn-info w-100">
+                                <i class="fas fa-list me-2"></i>Ver Extratos
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Conciliações recentes -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header bg-dark border-secondary">
+                    <h5 class="text-light mb-0">
+                        <i class="fas fa-history me-2"></i>Conciliações Recentes
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if conciliacoes_recentes %}
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Transação</th>
+                                    <th>Valor</th>
+                                    <th>Status</th>
+                                    <th>Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for conc in conciliacoes_recentes %}
+                                <tr>
+                                    <td>{{ conc.dt_registro|date:"d/m/Y H:i" }}</td>
+                                    <td>{{ conc.transacao_extrato.descricao|truncatewords:5 }}</td>
+                                    <td>R$ {{ conc.valor_conciliado|floatformat:2 }}</td>
+                                    <td>
+                                        {% if conc.status == 'C' %}
+                                        <span class="badge bg-success">Conciliado</span>
+                                        {% elif conc.status == 'D' %}
+                                        <span class="badge bg-danger">Divergente</span>
+                                        {% elif conc.status == 'P' %}
+                                        <span class="badge bg-warning">Pendente</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">{{ conc.get_status_display }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'admin_conciliacao:detalhar_conciliacao' conc.pk %}" class="btn btn-sm btn-info">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-muted">Nenhuma conciliação registrada.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,66 @@
+<!-- prettier-ignore -->
+{% extends 'base_sem.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+
+{% block titulos %}
+  {{ title }}|
+{% endblock %}
+
+{% block content %}
+  {% block extracss %}
+<link rel="stylesheet" href="{% static 'css/auth_style.css' %}" />
+{% endblock %}
+
+<div class="row min-vh-100 rounded">
+  <div class="col-md-12 p-2">
+    {% block add %}
+    <div class="d-flex justify-content-center mt-4">
+      {% include 'parciais/_messages.html' %}
+    </div>
+    {% endblock %}
+
+    <div class="auth-container p-2">
+      <div class="auth-box bg-dark rounded">
+        <div class="col-md-12 p-4">
+          <h1 class="text-white text-center">ManagerONTEC</h1>
+        </div>
+
+        <form method="POST" action="{% url 'login' %}">
+          {% csrf_token %}
+
+          <div class="form-group">
+            <i class="fas fa-user"></i> Usuário
+            <input
+              type="text"
+              name="usuario"
+              value="{{ request.POST.user }}"
+              class="form-control"
+              autocomplete="off"
+            />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label"><i class="fas fa-lock"></i> Senha</label>
+            <input
+              type="password"
+              name="senha"
+              class="form-control"
+              autocomplete="off"
+            />
+          </div>
+
+          <div class="d-flex justify-content-between">
+            <a href="{% url 'esqueci' %}" class="btn btn-outline-light">
+              <i class="fas fa-key"></i> Esqueci
+            </a>
+            <button type="submit" class="btn btn-outline-light">
+              <i class="fas fa-home"></i> Entrar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
