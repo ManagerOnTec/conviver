@@ -273,16 +273,16 @@ heroku config:set SESSION_COOKIE_AGE_SECONDS=3600 -a managerontec
 heroku config:set NOME_VAR=VALOR -a managerontec
 
 # Exemplo:
-ALLOWED_HOSTS:              managerontec-cd034aa7f2cd.herokuapp.com
-DATABASE_URL:               postgres://u5at0f7mc4ok6c:p883************naws.com:5432/d9jmbgcaefge7r
+ALLOWED_HOSTS:              
+DATABASE_URL:               
 DEBUG:                      False
 DISABLE_COLLECTSTATIC:      0
 DJANGO_SETTINGS_MODULE:     managerontec.settings
-SECRET_KEY:                 django-insecure-kk@8ljis4**********1*n38_u874h=
-FERNET_KEY:                 kByG-q7Cpw******************************D8EYKVg=
+SECRET_KEY:                 
+FERNET_KEY:                 
 GUNICORN_CMD_ARGS:          --timeout 300
 PYTHONUNBUFFERED:           1
-REDIS_URL:                  rediss://:p2b26***********1e-1.amazonaws.com:15440
+REDIS_URL:                  
 SESSION_COOKIE_AGE_SECONDS: 3600
 
 
@@ -293,8 +293,8 @@ libssl-dev
 -------------------------------
 .env
 DEBUG=True
-SECRET_KEY = 'django-insecure-kk@8ljis4xung2k6ld8!d=^80+35j5o7*n1*n38_u874h=^'
-FERNET_KEY = b'kByG-q7CpwWP5WeCuVfNXsQHhcNhi-r1SnmYD8EYKVg='
+SECRET_KEY = 
+FERNET_KEY = 
 REDIS_URL=redis://localhost:6379
 SESSION_COOKIE_AGE_SECONDS = 3600
 -------------------------------
