@@ -146,15 +146,7 @@
 
 
                             <div class="col-md-12 mt-2">
-
-                                <label>{{ form.anexo_evolucao.label }}</label>
-                                <input type="file" name="{{ form.anexo_evolucao.name }}"
-                                    id="{{ form.anexo_evolucao.auto_id }}" class="form-control">
-                                {% if object.anexo_evolucao %}
-                                <div class="mt-2">
-                                    <span>{{ object.anexo_evolucao.url }}</span>
-                                </div>
-                                {% endif %}
+                                {% include 'parciais/_attachment_input_preview.html' with field=form.anexo_evolucao current_file=form.instance.anexo_evolucao preview_id='preview-anexo-evolucao-editar' title='Imagem da Evolução' accept='image/png,image/jpeg' data_allowed_extensions='jpg,jpeg,png' data_max_file_size_mb='5' %}
                             </div>
 
 
@@ -164,28 +156,7 @@
             </div>
 
             <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
-                <div class="d-flex justify-content-end mt-2">
-
-
-                    <button id="btn-evolucao-editar" type="submit" title="Salvar"
-                        class="btn btn-success btn-outline-light border border-black mx-2 ml-2">
-                        <i class="fas fa-save" style="transition: color 0.3s;">Salvar</i>
-                    </button>
-                </div>
-
-                <div class="d-flex justify-content-end mt-2">
-                    <div class="form-group text-center m-2">
-                        <!-- LOADING -->
-                        <div class="spinner-border text-warning mb-3" role="status">
-                            <span class="visually-hidden">Loading...</span>
-                        </div>
-
-                        <!-- DETALHES E LINKS -->
-                        <div class="col-md-12 p-2">
-                            <label class="text-warning"><strong>Editando...</strong></label>
-                        </div>
-                    </div>
-                </div>
+                {% include 'parciais/_workflow_submit_sidebar.html' with button_id='btn-evolucao-editar' submit_label='Salvar' status_title='Editando...' status_spinner_class='text-warning' status_text_class='text-warning' %}
 
 
 
@@ -203,6 +174,7 @@
 <script type="text/javascript" src="{% static 'js/evolucao_cadastrar_textos.js' %}"></script>
 
 <script src="{% static 'js/anexoevolucao.js' %}"></script>
+<script src="{% static 'js/workflow_attachment_preview.js' %}"></script>
 
 
 

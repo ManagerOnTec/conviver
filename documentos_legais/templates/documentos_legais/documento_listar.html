@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load crispy_forms_tags %}
 {% block titulos %}{{ title }}|{% endblock %}
 
 {% block menul %}
@@ -10,6 +11,49 @@
   <a href="{{ detalhe_atendimento_url }}" class="mt-2 list-group-item list-group-item-action custom-link rounded">
     <i class="fas fa-times-circle me-2"></i>Voltar para Atendimento
   </a>
+
+  <form class="mt-2 text-white text-left" method="GET">
+    <div class="item-left">
+      <h5>Filtros</h5>
+    </div>
+
+    <div class="item-left">
+      {{ filter.form|crispy }}
+    </div>
+
+    <div class="mt-2" style="display: flex; flex-direction: row;">
+      <div class="row">
+        <div class="col-md-12">
+          <div class="justify-content-center mt-2">
+            <button class="col-md-12 btn btn-primary btn-outline-light justify-content-center" title="Filtrar" type="submit">
+              <i class="fas fa-check" style="transition: color 0.3s;"></i>
+              Filtrar
+            </button>
+          </div>
+        </div>
+
+        <div class="col-md-12">
+          <div class="justify-content-center mt-2">
+            <button class="col-md-12 btn btn-outline-danger justify-content-center" name="limpar" value="1">
+              <i class="fas fa-times-circle" style="transition: color 0.3s;"></i>
+              Limpar
+            </button>
+          </div>
+        </div>
+
+        {% if has_filtered_pdfs %}
+        <div class="col-md-12">
+          <div class="justify-content-center mt-2">
+            <a href="{% url 'documentos_legais_download_filtrados' atendimento_id=atendimento.pk %}" title="Download" type="button" class="col-md-12 btn btn-outline-success justify-content-center">
+              <i class="fas fa-print" style="transition: color 0.3s;"></i>
+              Download
+            </a>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </form>
 </div>
 {% endblock %}
 

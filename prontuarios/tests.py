@@ -1,3 +1,4 @@
+import base64
 from datetime import datetime, timedelta
 from io import BytesIO
 import zipfile
@@ -15,6 +16,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.contrib.contenttypes.models import ContentType
 from django.core.files.base import ContentFile
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.exceptions import ValidationError
 from django.test import RequestFactory, TestCase
 
@@ -22,8 +24,12 @@ from admin_cadastros.models import Estabelecimento, Pessoa, Empresa, TipoAtendim
 from admin_evolucoes.models import TipoEvolucao
 from admin_relatorios.models import GerenciadorRelatorioGeral
 from admin_relatorios.models import Relatorio
+from admin_relatorios.rel_paragrafos import genParagrafosRel
 from atendimentos.models import Atendimento
+from atas.models import Atas
 from contas.models import Perfil
+from oficios.models import Oficios
+from orcamentos.models import Orcamentos
 from prontuarios.forms import EvolucaoCreateForm, EvolucaoUpdateForm
 from prontuarios.models import Evolucao, MAX_EVOLUCAO_TEXT_LENGTH, validate_evolucao_texto
 from prontuarios.relatorios import gerar_pdf_prontuario
@@ -33,6 +39,11 @@ from admin_relatorios.utils import (
     assinar_pdf,
     obter_dados_assinatura_certificado,
     verificar_assinatura_pdf,
+)
+
+
+ONE_PIXEL_PNG = base64.b64decode(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j5JcAAAAASUVORK5CYII='
 )
 
 
@@ -110,6 +121,16 @@ class EvolucaoValidationAndPdfTests(TestCase):
             outros=False,
             status='A',
         )
+
+    def _assert_page_has_embedded_image(self, page):
+        resources = page.get('/Resources')
+        xobjects = resources.get('/XObject').get_object() if resources and resources.get('/XObject') else {}
+        has_image = any(
+            obj.get_object().get('/Subtype') == '/Image'
+            for obj in xobjects.values()
+        )
+
+        self.assertTrue(has_image)
 
     def test_validator_allows_large_html_content_but_respects_limit(self):
         value = '<p>' + ('Linha longa de teste ' * 300) + '</p>'
@@ -220,6 +241,144 @@ class EvolucaoValidationAndPdfTests(TestCase):
         for page_text in page_texts:
             self.assertIn('Evolucao Geral', page_text)
             self.assertIn('Rodape da evolucao', page_text)
+
+    def test_pdf_keeps_single_long_paragraph_from_first_page_to_last(self):
+        text = '<p>MarcadorInicio ' + ('Linha longa de teste ' * 2200) + ' MarcadorFim</p>'
+        evolucao = Evolucao.objects.create(
+            atendimento=self.atendimento,
+            tipo_evolucao=self.tipo_evolucao,
+            evolucao=text,
+            estabelecimento=self.estabelecimento,
+            us_registro=self.user,
+            assinar=True,
+            status='A',
+        )
+
+        buffer = gerar_pdf_prontuario(evolucao, self.user, assinar=True)
+        reader = PyPDF2.PdfReader(BytesIO(buffer.getvalue()))
+        page_texts = [page.extract_text() or '' for page in reader.pages]
+
+        self.assertGreater(len(page_texts), 1)
+        self.assertIn('MarcadorInicio', page_texts[0])
+        self.assertIn('MarcadorFim', page_texts[-1])
+
+    def test_long_text_documents_use_same_readable_line_spacing(self):
+        for tipo in ('evolucao', 'atas', 'oficios', 'orcamentos'):
+            flowables = genParagrafosRel('<p>Linha 1</p><p>Linha 2</p>', 500, 0, None, tipo=tipo)
+            primeiro_paragrafo = next(flowable for flowable in flowables if hasattr(flowable, 'style'))
+
+            self.assertEqual(primeiro_paragrafo.style.leading, 15)
+            self.assertEqual(primeiro_paragrafo.style.spaceAfter, 6)
+
+    def test_long_text_documents_preserve_alignment_bold_and_italic_from_editor_html(self):
+        html = '<p style="text-align: center;"><span style="font-weight: bold; font-style: italic;">texto formatado</span></p>'
+
+        for tipo in ('evolucao', 'atas', 'oficios', 'orcamentos'):
+            flowables = genParagrafosRel(html, 500, 0, None, tipo=tipo)
+            primeiro_paragrafo = next(flowable for flowable in flowables if hasattr(flowable, 'style'))
+
+            self.assertEqual(primeiro_paragrafo.style.alignment, 1)
+            self.assertIn('<b><i>texto formatado</i></b>', getattr(primeiro_paragrafo, 'text', ''))
+
+    def test_pdf_adds_dedicated_photo_page_for_evolution_attachment(self):
+        GerenciadorRelatorioGeral.objects.create(
+            dados_header='Evolucao Geral',
+            dados_right_header='Versao 1',
+            dados_footer='Rodape da evolucao',
+            cidade='Cidade Teste',
+            estabelecimento=self.estabelecimento,
+            us_registro=self.user,
+            status='A',
+        )
+
+        image_file = SimpleUploadedFile('anexo.png', ONE_PIXEL_PNG, content_type='image/png')
+        evolucao = Evolucao.objects.create(
+            atendimento=self.atendimento,
+            tipo_evolucao=self.tipo_evolucao,
+            evolucao='<p>Evolução com foto.</p>',
+            estabelecimento=self.estabelecimento,
+            us_registro=self.user,
+            anexo_evolucao=image_file,
+            assinar=True,
+            status='A',
+        )
+        self.addCleanup(lambda: evolucao.anexo_evolucao.delete(save=False))
+
+        buffer = gerar_pdf_prontuario(evolucao, self.user, assinar=True)
+        reader = PyPDF2.PdfReader(BytesIO(buffer.getvalue()))
+
+        self.assertEqual(len(reader.pages), 2)
+        self.assertIn('Evolucao Geral', reader.pages[1].extract_text() or '')
+        self.assertIn('Rodape da evolucao', reader.pages[1].extract_text() or '')
+
+        resources = reader.pages[1].get('/Resources')
+        xobjects = resources.get('/XObject').get_object() if resources and resources.get('/XObject') else {}
+        has_image = any(
+            obj.get_object().get('/Subtype') == '/Image'
+            for obj in xobjects.values()
+        )
+
+        self.assertTrue(has_image)
+
+    def test_pdf_adds_dedicated_photo_page_for_ata_attachment(self):
+        image_file = SimpleUploadedFile('ata.png', ONE_PIXEL_PNG, content_type='image/png')
+        ata = Atas.objects.create(
+            participantes='Equipe Teste',
+            assunto='Ata com imagem',
+            tipo_ata='ADMINISTRATIVA',
+            observacoes='Observacao teste',
+            ata='<p>Ata com anexo de imagem.</p>',
+            anexo=image_file,
+            estabelecimento=self.estabelecimento,
+            us_registro=self.user,
+            assinar=True,
+            status='A',
+        )
+        self.addCleanup(lambda: ata.anexo.delete(save=False))
+
+        buffer = gerar_pdf_prontuario(ata, self.user, assinar=True)
+        reader = PyPDF2.PdfReader(BytesIO(buffer.getvalue()))
+
+        self.assertEqual(len(reader.pages), 2)
+        self._assert_page_has_embedded_image(reader.pages[1])
+
+    def test_pdf_adds_dedicated_photo_page_for_oficio_attachment(self):
+        image_file = SimpleUploadedFile('oficio.png', ONE_PIXEL_PNG, content_type='image/png')
+        oficio = Oficios.objects.create(
+            observacao='Observacao teste',
+            oficio='<p>Ofício com anexo de imagem.</p>',
+            anexo=image_file,
+            estabelecimento=self.estabelecimento,
+            us_registro=self.user,
+            assinar=True,
+            status='A',
+        )
+        self.addCleanup(lambda: oficio.anexo.delete(save=False))
+
+        buffer = gerar_pdf_prontuario(oficio, self.user, assinar=True)
+        reader = PyPDF2.PdfReader(BytesIO(buffer.getvalue()))
+
+        self.assertEqual(len(reader.pages), 2)
+        self._assert_page_has_embedded_image(reader.pages[1])
+
+    def test_pdf_adds_dedicated_photo_page_for_orcamento_attachment(self):
+        image_file = SimpleUploadedFile('orcamento.png', ONE_PIXEL_PNG, content_type='image/png')
+        orcamento = Orcamentos.objects.create(
+            observacao='Observacao teste',
+            orcamento='<p>Orçamento com anexo de imagem.</p>',
+            anexo=image_file,
+            estabelecimento=self.estabelecimento,
+            us_registro=self.user,
+            assinar=True,
+            status='A',
+        )
+        self.addCleanup(lambda: orcamento.anexo.delete(save=False))
+
+        buffer = gerar_pdf_prontuario(orcamento, self.user, assinar=True)
+        reader = PyPDF2.PdfReader(BytesIO(buffer.getvalue()))
+
+        self.assertEqual(len(reader.pages), 2)
+        self._assert_page_has_embedded_image(reader.pages[1])
 
     def test_pdf_includes_signature_block_when_enabled(self):
         text = '<p>' + ('Linha longa de teste ' * 80) + '</p>'

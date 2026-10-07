@@ -1,21 +1,112 @@
+import zipfile
+from datetime import datetime
+from io import BytesIO
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.files.storage import default_storage
 from django.db import connection
 from django.db import transaction
 from django.db.models import Q
-from django.http import FileResponse, Http404, JsonResponse, HttpResponseRedirect
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse, HttpResponseRedirect, QueryDict
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views import View
 from django.views.generic import CreateView, ListView, UpdateView
+from django import forms
+import django_filters
+from django_filters import rest_framework as filters
 
 from admin_cadastros.forms import PessoaDetailForm
 from atendimentos.models import Atendimento
+from dominios.choices import status_choices
 from dominios.utils import CustomPermissionRequiredMixin, FilterObjectsByEstabelecimentoMixin, calcular_idade
 from .forms import DocumentoLegalInternacaoForm
 from .models import DocumentoLegalInternacao, ModeloDocumentoLegal, TipoDocumentoLegal
 from .services import build_document_context, render_documento_html, atualizar_pdf_documento
+
+
+def _listar_pdfs_para_download(pdf_paths):
+    arquivos = []
+
+    for pdf_path in pdf_paths:
+        if not pdf_path:
+            continue
+
+        if not default_storage.exists(pdf_path) or default_storage.size(pdf_path) <= 0:
+            continue
+
+        with default_storage.open(pdf_path, 'rb') as arquivo_pdf:
+            pdf_bytes = arquivo_pdf.read()
+
+        if not pdf_bytes.startswith(b'%PDF'):
+            continue
+
+        arquivos.append((pdf_path.rsplit('/', 1)[-1], pdf_bytes))
+
+    return arquivos
+
+
+def _montar_resposta_download_pdfs(pdf_paths, download_name):
+    arquivos = _listar_pdfs_para_download(pdf_paths)
+
+    if not arquivos:
+        return HttpResponse('Nenhum PDF valido encontrado para download.', status=404)
+
+    if len(arquivos) == 1:
+        nome_arquivo, pdf_bytes = arquivos[0]
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{nome_arquivo}"'
+        return response
+
+    pacote = BytesIO()
+    nomes_usados = set()
+
+    with zipfile.ZipFile(pacote, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        for nome_arquivo, pdf_bytes in arquivos:
+            nome_final = nome_arquivo
+            contador = 1
+            while nome_final in nomes_usados:
+                base, ext = nome_arquivo.rsplit('.', 1)
+                nome_final = f'{base}_{contador}.{ext}'
+                contador += 1
+
+            nomes_usados.add(nome_final)
+            zip_file.writestr(nome_final, pdf_bytes)
+
+    pacote.seek(0)
+    response = HttpResponse(pacote.getvalue(), content_type='application/zip')
+    response['Content-Disposition'] = f'attachment; filename="{download_name}.zip"'
+    return response
+
+
+class DocumentoLegalFilter(filters.FilterSet):
+    codigo_documento = django_filters.CharFilter(lookup_expr='icontains', label='Código')
+    tipo_documento = django_filters.ModelChoiceFilter(
+        queryset=TipoDocumentoLegal.objects.filter(status='A').order_by('ordem', 'nome'),
+        label='Tipo de Termo',
+    )
+    responsavel_nome = django_filters.CharFilter(lookup_expr='icontains', label='Responsável')
+    dt_assinatura = django_filters.DateFilter(
+        method='filter_by_date',
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'datepicker'}),
+        label='Dt. Assinatura',
+    )
+    status = django_filters.ChoiceFilter(choices=status_choices, label='Status')
+
+    class Meta:
+        model = DocumentoLegalInternacao
+        fields = ['codigo_documento', 'tipo_documento', 'responsavel_nome', 'dt_assinatura', 'status']
+
+    def filter_by_date(self, queryset, name, value):
+        start_day = datetime.combine(value, datetime.min.time())
+        start_day = timezone.make_aware(start_day)
+
+        end_day = datetime.combine(value, datetime.max.time())
+        end_day = timezone.make_aware(end_day)
+
+        return queryset.filter(**{f'{name}__range': (start_day, end_day)})
 
 
 class AtendimentoDocumentoLegalMixin(LoginRequiredMixin, CustomPermissionRequiredMixin, FilterObjectsByEstabelecimentoMixin):
@@ -97,13 +188,47 @@ class DocumentoLegalListView(AtendimentoDocumentoLegalMixin, ListView):
     paginate_by = 15
 
     def get_queryset(self):
-        queryset = super().get_queryset()
-        return queryset.filter(atendimento=self.get_atendimento()).select_related('tipo_documento', 'modelo_documento', 'us_registro')
+        queryset = super().get_queryset().filter(atendimento=self.get_atendimento()).select_related('tipo_documento', 'modelo_documento', 'us_registro')
+        params = self.request.GET.copy()
+
+        if 'limpar' in params:
+            self.request.session.pop('documentos_legais_filters', None)
+            params.clear()
+        elif any(field in params for field in DocumentoLegalFilter.Meta.fields):
+            self.request.session['documentos_legais_filters'] = params
+        elif 'documentos_legais_filters' in self.request.session:
+            params.update(self.request.session['documentos_legais_filters'])
+
+        params.setdefault('status', 'A')
+        self.filter = DocumentoLegalFilter(params, queryset=queryset)
+        return self.filter.qs
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['title'] = 'documentos_legais_listar'
+        context['filter'] = self.filter
+        context['has_filtered_pdfs'] = self.filter.qs.exclude(pdf_gerado='').filter(pdf_gerado__isnull=False).exists()
         return context
+
+
+class DocumentoLegalFilteredPdfDownloadView(AtendimentoDocumentoLegalMixin, View):
+    permission_required = 'documentos_legais.view_documentolegalinternacao'
+
+    def get(self, request, *args, **kwargs):
+        atendimento = self.get_atendimento()
+        session_filters = request.session.get('documentos_legais_filters', {})
+        filters_data = QueryDict('', mutable=True)
+        filters_data.update(session_filters)
+        filters_data['atendimento'] = atendimento.pk
+
+        queryset = DocumentoLegalInternacao.objects.filter(atendimento=atendimento).select_related('tipo_documento', 'modelo_documento')
+        filtered_objects = DocumentoLegalFilter(filters_data, queryset=queryset).qs
+        pdf_paths = [documento.pdf_gerado.name for documento in filtered_objects if documento.pdf_gerado]
+
+        return _montar_resposta_download_pdfs(
+            pdf_paths,
+            f'documentos_legais_atendimento_{atendimento.pk}_filtrados',
+        )
 
 
 class DocumentoLegalCreateView(AtendimentoDocumentoLegalMixin, CreateView):

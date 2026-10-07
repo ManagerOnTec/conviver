@@ -1668,7 +1668,7 @@
               return
             }
 
-            if (/^Download( dos relat[oó]rios filtrados| relat[oó]rios filtrados)?$/i.test(text)) {
+            if (/^Download( dos (relat[oó]rios|pdfs) filtrados| (relat[oó]rios|pdfs) filtrados)?$/i.test(text)) {
               replaceTrailingLabel(element, 'Download')
             }
           })

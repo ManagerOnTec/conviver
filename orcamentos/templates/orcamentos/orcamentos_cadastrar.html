@@ -72,26 +72,8 @@
               <div class="col-md-12">{{ form.assinar|as_crispy_field }}</div>
 
               <!-- ANEXOS -->
-              <div class="form-group mt-4">
-                <h5 class="text-center">Anexos</h5>
-                <div class="row justify-content-center">
-                  <div class="col-lg-12 col-md-12 col-sm-12 mt-4">
-                    <label>{{ form.anexo.label }}</label>
-                    <input
-                      type="file"
-                      name="{{ form.anexo.name }}"
-                      id="{{ form.anexo.auto_id }}"
-                      class="form-control"
-                    />
-                    {% if object.anexo %}
-                    <div class="mt-2">
-                      <a href="{{ object.anexo.url }}" target="_blank"
-                        >{{ object.anexo.name }}</a
-                      >
-                    </div>
-                    {% endif %}
-                  </div>
-                </div>
+              <div class="col-md-12 mt-2">
+                {% include 'parciais/_attachment_input_preview.html' with field=form.anexo current_file=form.instance.anexo preview_id='preview-anexo-orcamentos-cadastrar' title='Anexo do Orçamento' accept='application/pdf,image/png,image/jpeg' %}
               </div>
               <!-- FIM ANEXOS -->
             </div>
@@ -99,16 +81,7 @@
         </div>
       </div>
       <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
-        <div class="d-flex justify-content-end mt-2">
-          <button
-            id="btn-orcamentos-cadastrar"
-            type="submit"
-            title="Salvar"
-            class="btn btn-success btn-outline-light border border-black mx-2 ml-2"
-          >
-            <i class="fas fa-save" style="transition: color 0.3s">Salvar</i>
-          </button>
-        </div>
+        {% include 'parciais/_workflow_submit_sidebar.html' with button_id='btn-orcamentos-cadastrar' submit_label='Salvar' status_title='Cadastrando...' status_spinner_class='text-success' status_text_class='text-success' %}
       </div>
     </div>
   </form>
@@ -119,6 +92,7 @@
 <script src="{% static 'js/selectparadois.js' %}"></script>
 
 <script src="{% static 'js/texto_padrao_filtrado.js' %}"></script>
+<script src="{% static 'js/workflow_attachment_preview.js' %}"></script>
 
 <script>
   $(document).ready(function () {

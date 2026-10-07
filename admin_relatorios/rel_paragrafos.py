@@ -5,7 +5,38 @@ from reportlab.platypus import TableStyle
 from reportlab.lib.units import mm
 from prontuarios.models import Adep
 import re
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString, Tag
+
+
+INLINE_TAGS = {'b', 'strong', 'i', 'em', 'u', 'br'}
+BLOCK_ALIGNMENT_MAP = {
+    'left': 0,
+    'center': 1,
+    'right': 2,
+    'justify': 4,
+}
+
+
+def _style_contains(style_value, css_property, expected_values):
+    if not style_value:
+        return False
+
+    normalized = style_value.lower().replace(' ', '')
+    for expected in expected_values:
+        if f'{css_property}:{expected}' in normalized:
+            return True
+    return False
+
+
+def _extract_text_align(style_value):
+    if not style_value:
+        return None
+
+    match = re.search(r'text-align\s*:\s*(left|center|right|justify)', style_value, re.IGNORECASE)
+    if not match:
+        return None
+
+    return match.group(1).lower()
 
 
 def limpar_html_para_pdf(texto):
@@ -41,6 +72,123 @@ def limpar_html_para_pdf(texto):
     return html_corrigido
 
 
+def _sanitize_inline_html(texto):
+    soup = BeautifulSoup(texto or '', 'html.parser')
+
+    for tag in list(soup.find_all(True)):
+        style_value = tag.attrs.get('style', '')
+
+        if tag.name == 'span':
+            wrapper_names = []
+            if _style_contains(style_value, 'font-weight', {'bold', '700', '800', '900'}):
+                wrapper_names.append('b')
+            if _style_contains(style_value, 'font-style', {'italic', 'oblique'}):
+                wrapper_names.append('i')
+            if _style_contains(style_value, 'text-decoration', {'underline'}):
+                wrapper_names.append('u')
+
+            if wrapper_names:
+                tag.name = wrapper_names[0]
+                current_tag = tag
+                for wrapper_name in wrapper_names[1:]:
+                    wrapper = soup.new_tag(wrapper_name)
+                    while current_tag.contents:
+                        wrapper.append(current_tag.contents[0].extract())
+                    current_tag.append(wrapper)
+                    current_tag = wrapper
+
+        if tag.name not in INLINE_TAGS:
+            tag.unwrap()
+            continue
+
+        if tag.name == 'strong':
+            tag.name = 'b'
+        elif tag.name == 'em':
+            tag.name = 'i'
+
+        tag.attrs = {}
+
+    return str(soup)
+
+
+def _append_html_block(flowables, texto, estilo, prefixo=''):
+    texto_sanitizado = _sanitize_inline_html(texto)
+    texto_limpo = BeautifulSoup(texto_sanitizado, 'html.parser').get_text(' ', strip=True)
+
+    if not texto_limpo and '&nbsp;' not in texto_sanitizado:
+        flowables.append(Spacer(1, 3 * mm))
+        return
+
+    if prefixo:
+        texto_sanitizado = f'{prefixo}{texto_sanitizado}'
+
+    flowables.append(Paragraph(texto_sanitizado, estilo))
+    flowables.append(Spacer(1, 2 * mm))
+
+
+def _resolve_block_style(node, estilo_base, cache):
+    alignment_name = None
+
+    if isinstance(node, Tag):
+        alignment_name = _extract_text_align(node.attrs.get('style', ''))
+        if not alignment_name:
+            align_attr = (node.attrs.get('align') or '').strip().lower()
+            if align_attr in BLOCK_ALIGNMENT_MAP:
+                alignment_name = align_attr
+
+    if not alignment_name:
+        return estilo_base
+
+    alignment_value = BLOCK_ALIGNMENT_MAP[alignment_name]
+    if alignment_value not in cache:
+        cache[alignment_value] = ParagraphStyle(
+            name=f'{estilo_base.name}_{alignment_name}',
+            parent=estilo_base,
+            alignment=alignment_value,
+        )
+
+    return cache[alignment_value]
+
+
+def _build_html_flowables(parag, estilo):
+    soup = BeautifulSoup(parag or '', 'html.parser')
+    flowables = []
+    block_tags = {'p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'}
+    style_cache = {}
+
+    for node in soup.contents:
+        if isinstance(node, NavigableString):
+            texto = str(node).strip()
+            if texto:
+                _append_html_block(flowables, texto, estilo)
+            continue
+
+        if not isinstance(node, Tag):
+            continue
+
+        if node.name in block_tags:
+            _append_html_block(flowables, node.decode_contents(), _resolve_block_style(node, estilo, style_cache))
+            continue
+
+        if node.name in {'ul', 'ol'}:
+            for indice, item in enumerate(node.find_all('li', recursive=False), start=1):
+                prefixo = '• ' if node.name == 'ul' else f'{indice}. '
+                _append_html_block(
+                    flowables,
+                    item.decode_contents(),
+                    _resolve_block_style(item, estilo, style_cache),
+                    prefixo=prefixo,
+                )
+            continue
+
+        _append_html_block(flowables, node.decode_contents(), _resolve_block_style(node, estilo, style_cache))
+
+    if not flowables:
+        flowables.append(Paragraph('Nenhum texto disponível.', estilo))
+
+    return flowables
+
+
 def genParagrafosRel(parag, width, height, p, tipo="evolucao"):
     margem_lateral = width * 5 / 100
 
@@ -50,8 +198,8 @@ def genParagrafosRel(parag, width, height, p, tipo="evolucao"):
         leftIndent=margem_lateral,
         rightIndent=margem_lateral,
         wordWrap=True,
-        leading=12,
-        spaceAfter=5,
+        leading=15,
+        spaceAfter=6,
     )
 
     # Definindo o estilo do cabeçalho
@@ -62,9 +210,12 @@ def genParagrafosRel(parag, width, height, p, tipo="evolucao"):
         leftIndent=margem_lateral,
         rightIndent=margem_lateral,
         wordWrap=True,
-        leading=12,
-        spaceAfter=5,
+        leading=15,
+        spaceAfter=6,
     )
+
+    if tipo in {"evolucao", "atas", "oficios", "orcamentos"}:
+        return _build_html_flowables(parag, estilo_paragrafo)
 
     parag = limpar_html_para_pdf(parag)  # Limpa o HTML antes de processar
 
@@ -248,19 +399,6 @@ def genParagrafosRel(parag, width, height, p, tipo="evolucao"):
         widthList = [width * 5 / 100, width * 90 / 100, width * 5 / 100]
 
     else:
-        # Para evolução e demais textos longos, a sequência de Paragraphs é a forma mais segura
-        # para paginar corretamente sem empilhar tudo em uma única célula que não respeita o espaço da página.
-        if tipo in {"evolucao", "atas", "oficios", "orcamentos"}:
-            chunks = [chunk.strip() for chunk in re.split(r'<br\s*/?>|\n', parag or '') if chunk.strip()]
-            if not chunks:
-                chunks = ["Nenhum texto disponível."]
-
-            flowables = []
-            for chunk in chunks:
-                flowables.append(Paragraph(chunk, estilo_paragrafo))
-                flowables.append(Spacer(1, 3 * mm))
-            return flowables
-
         # Para outros tipos que não são 'prescricao' nem 'adep', usa-se um parágrafo simples
         paragrafo = Paragraph(parag, estilo_paragrafo) if parag else Paragraph(
             "Nenhum texto disponível.", estilo_paragrafo)

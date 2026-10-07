@@ -146,7 +146,15 @@
             <i class="fas fa-save"></i>
             <span>Salvar termo</span>
           </button>
-          <p class="workflow-form-note mt-3 mb-0">O termo será validado com assinatura, anexos e prévia dinâmica antes do uso operacional.</p>
+          <div class="workflow-form-status mt-3">
+            <div class="spinner-border {% if object.pk %}text-warning{% else %}text-success{% endif %}" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>
+            <div>
+              <strong class="d-block {% if object.pk %}text-warning{% else %}text-success{% endif %}">{% if object.pk %}Editando...{% else %}Cadastrando...{% endif %}</strong>
+              <span class="workflow-form-note">O termo será validado com assinatura, anexos e prévia dinâmica antes do uso operacional.</span>
+            </div>
+          </div>
         </div>
 
         <div class="workflow-preview-card" id="preview-termo">

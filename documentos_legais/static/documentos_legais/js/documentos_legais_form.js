@@ -109,6 +109,7 @@ function initCameraCapture() {
     }
 
     let stream = null;
+    let cameraReady = false;
 
     function stopCameraStream() {
         if (stream) {
@@ -117,6 +118,8 @@ function initCameraCapture() {
             });
             stream = null;
         }
+        cameraReady = false;
+        captureButton.disabled = true;
     }
 
     function setFeedback(message, isError = false) {
@@ -134,8 +137,26 @@ function initCameraCapture() {
         setFeedback('Foto reaproveitada após a validação. Capture novamente se quiser substituir.');
     }
 
+    function handleStreamReady() {
+        cameraReady = true;
+        captureButton.disabled = false;
+        setFeedback('Câmera ativa. Capture a foto quando o enquadramento estiver correto.');
+    }
+
+    function bindVideoReadyHandler() {
+        if (video.readyState >= 2 && video.videoWidth > 0) {
+            handleStreamReady();
+            return;
+        }
+
+        video.onloadedmetadata = function () {
+            handleStreamReady();
+        };
+    }
+
     async function startCamera(event) {
         event?.preventDefault();
+        setFeedback('Preparando câmera...');
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             setFeedback('Este navegador não suporta captura de câmera.', true);
             return;
@@ -143,23 +164,57 @@ function initCameraCapture() {
 
         try {
             stopCameraStream();
-            stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-                audio: false,
-            });
+            setFeedback('Solicitando acesso à câmera do notebook...');
+
+            const constraintsList = [
+                {
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        facingMode: { ideal: 'user' },
+                    },
+                    audio: false,
+                },
+                {
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                    },
+                    audio: false,
+                },
+                { video: true, audio: false },
+            ];
+
+            let lastError = null;
+            for (const constraints of constraintsList) {
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia(constraints);
+                    break;
+                } catch (error) {
+                    lastError = error;
+                }
+            }
+
+            if (!stream) {
+                throw lastError || new Error('Nenhuma câmera compatível foi encontrada.');
+            }
+
+            video.setAttribute('autoplay', 'true');
+            video.setAttribute('playsinline', 'true');
+            video.muted = true;
             video.srcObject = stream;
-            await video.play();
             captureButton.disabled = false;
-            setFeedback('Câmera ativa. Capture a foto quando o enquadramento estiver correto.');
+            await video.play();
+            bindVideoReadyHandler();
         } catch (error) {
-            captureButton.disabled = true;
-            setFeedback('Não foi possível acessar a câmera. Verifique a permissão do navegador e tente novamente.', true);
+            stopCameraStream();
+            setFeedback('Não foi possível acessar a câmera. Verifique a permissão do navegador, feche outros apps que estejam usando a webcam e tente novamente.', true);
         }
     }
 
     function capturePhoto(event) {
         event?.preventDefault();
-        if (!video.videoWidth || !video.videoHeight) {
+        if (!cameraReady || !video.videoWidth || !video.videoHeight) {
             setFeedback('Ative a câmera antes de capturar a foto.', true);
             return;
         }
@@ -181,7 +236,7 @@ function initCameraCapture() {
         hiddenInput.value = '';
         preview.src = '';
         preview.classList.add('d-none');
-        captureButton.disabled = !stream;
+        captureButton.disabled = !cameraReady;
         setFeedback('Nenhuma foto capturada ainda.');
     }
 
@@ -201,9 +256,10 @@ function initTemplatePreview() {
     const modeloSelect = document.getElementById('id_modelo_documento');
     const preview = document.getElementById('documento-preview');
 
-    if (!root || !tipoSelect || !modeloSelect || !preview) {
+    if (!root || !tipoSelect || !modeloSelect || !preview || root.dataset.previewInitialized === 'true') {
         return;
     }
+    root.dataset.previewInitialized = 'true';
 
     function populateModelOptions(modelos, selectedId) {
         modeloSelect.innerHTML = '<option value="">---------</option>';
@@ -257,8 +313,18 @@ function initTemplatePreview() {
     }
 }
 
-document.addEventListener('DOMContentLoaded', function () {
+function bootDocumentoLegalForm() {
     initSignaturePad();
     initCameraCapture();
     initTemplatePreview();
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootDocumentoLegalForm, { once: true });
+} else {
+    bootDocumentoLegalForm();
+}
+
+window.addEventListener('pageshow', function () {
+    bootDocumentoLegalForm();
 });

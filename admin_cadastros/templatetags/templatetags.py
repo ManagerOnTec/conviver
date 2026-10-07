@@ -1,3 +1,5 @@
+import os
+
 from django.forms import BooleanField, CharField
 from django import template
 
@@ -32,3 +34,16 @@ def is_textarea(field):
 @register.filter
 def get_boolean_fields(form):
     return [field for field in form if isinstance(field.field, BooleanField)]
+
+
+@register.filter
+def is_image_file(file_field):
+    name = getattr(file_field, 'name', '') or str(file_field or '')
+    extension = os.path.splitext(name.lower())[1]
+    return extension in {'.jpg', '.jpeg', '.png'}
+
+
+@register.filter
+def file_basename(file_field):
+    name = getattr(file_field, 'name', '') or str(file_field or '')
+    return os.path.basename(name)

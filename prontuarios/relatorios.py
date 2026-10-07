@@ -18,7 +18,7 @@ from contas.models import Perfil
 
 from reportlab.lib.units import mm, cm
 from reportlab.lib import colors
-from reportlab.platypus import Table, TableStyle, SimpleDocTemplate, Frame, PageTemplate
+from reportlab.platypus import Table, TableStyle, SimpleDocTemplate, Frame, PageTemplate, Image
 from admin_relatorios.utils import assinar_pdf
 from admin_cadastros.utils import extrair_iniciais
 from admin_cadastros_assistenciais.utils import get_dados_profissional
@@ -32,6 +32,40 @@ from django.utils import timezone
 
 from prontuarios.models import ProdutoPrescricao, Adep
 from django.db.models import Q
+
+
+INLINE_REPORT_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png'}
+REPORT_IMAGE_FIELDS = {
+    'evolucao': 'anexo_evolucao',
+    'atas': 'anexo',
+    'oficios': 'anexo',
+    'orcamentos': 'anexo',
+}
+
+
+def _is_supported_report_image(file_name):
+    if not file_name:
+        return False
+
+    return os.path.splitext(str(file_name).lower())[1] in INLINE_REPORT_IMAGE_EXTENSIONS
+
+
+def _resolve_report_image_path(obj, nome_modelo):
+    field_name = REPORT_IMAGE_FIELDS.get(nome_modelo)
+    if not field_name:
+        return None
+
+    file_field = getattr(obj, field_name, None)
+    if not file_field or not getattr(file_field, 'name', None):
+        return None
+
+    if not _is_supported_report_image(file_field.name):
+        return None
+
+    try:
+        return file_field.path
+    except (AttributeError, NotImplementedError, OSError, ValueError):
+        return None
 
 
 def gerar_pdf_prontuario(obj, user, assinar=False, assinatura_texto=None):
@@ -90,7 +124,7 @@ def gerar_pdf_prontuario(obj, user, assinar=False, assinatura_texto=None):
     # Objeto evolucao - de acordo com o tipo de evolucao e configuração do gerenciador pode obter apenas as iniciais
     if nome_modelo == 'evolucao':
         iniciais = vardin.tipo_evolucao.iniciais_nome
-        texto_parag = html.unescape(re.sub('<[^<]+?>', '', vardin.evolucao))
+        texto_parag = html.unescape(vardin.evolucao or '')
         tipo_evolucao_id = vardin.tipo_evolucao_id
 
         if gerenciador_personalizado and nome_modelo == 'evolucao':
@@ -455,36 +489,18 @@ def gerar_pdf_prontuario(obj, user, assinar=False, assinatura_texto=None):
     # fim dados das variaveis dos gerenciadores para passar aos metodos construtores da tabela
     ################################################################
 
-    def _draw_fixed_sections(canvas, doc):
-        page_top = doc.height - doc.topMargin - 4 * mm
-        fixed = [
-            genHeaderRel(logo_path, header_data, right_data, doc.width, 22 * mm),
-            genDadosPessoaisRel(nome_pessoa, doc.width, 10 * mm),
-            genDadosUsuarioRel(dados, doc.width, 10 * mm),
-            genDadosObjRel(vardinpk, doc.width, 8 * mm),
-        ]
-
-        y = page_top
-        for table in fixed:
-            table.wrapOn(canvas, doc.width, doc.height)
-            table_h = getattr(table, '_height', 0)
-            if not table_h:
-                table_h = 10 * mm
-            table.drawOn(canvas, doc.leftMargin, y - table_h)
-            y -= table_h + 2 * mm
-
-        if footer_data:
-            footer_table = genFooterRel(footer_data, doc.width, 10 * mm)
-            footer_table.wrapOn(canvas, doc.width, doc.height)
-            footer_y = 6 * mm
-            footer_table.drawOn(canvas, doc.leftMargin, footer_y)
-
     left_margin = 12 * mm
     right_margin = 12 * mm
     top_margin = 10 * mm
     bottom_margin = 18 * mm
+    footer_draw_y = 6 * mm
+    footer_gap = 3 * mm
+    signature_bottom = 62
+    signature_height = 50
     page_width, page_height = A4
     content_width = page_width - left_margin - right_margin
+    reserve_signature_space = bool(assinar or getattr(vardin, 'assinar', False))
+    report_image_path = _resolve_report_image_path(vardin, nome_modelo)
 
     body_flowable = genParagrafosRel(texto_parag, content_width, 0, None, tipo=nome_modelo)
     story = []
@@ -493,54 +509,110 @@ def gerar_pdf_prontuario(obj, user, assinar=False, assinatura_texto=None):
     else:
         story.append(body_flowable)
 
-    fixed_block_height = 54 * mm
-    footer_height = 12 * mm if footer_data else 0
-    body_top = page_height - top_margin - fixed_block_height - 8 * mm
-    body_bottom = bottom_margin + footer_height + 10 * mm
-
     canvas_obj = canvas.Canvas(buffer, pagesize=A4)
 
-    def draw_fixed_sections():
-        page_top = page_height - top_margin - 4 * mm
-        fixed = [
+    def build_fixed_tables():
+        return [
             genHeaderRel(logo_path, header_data, right_data, content_width, 22 * mm),
             genDadosPessoaisRel(nome_pessoa, content_width, 10 * mm),
             genDadosUsuarioRel(dados, content_width, 10 * mm),
             genDadosObjRel(vardinpk, content_width, 8 * mm),
         ]
 
+    def draw_fixed_sections():
+        page_top = page_height - top_margin - 4 * mm
         y = page_top
-        for table in fixed:
-            table.wrapOn(canvas_obj, content_width, page_height)
-            table_h = getattr(table, '_height', 10 * mm)
+        for table in build_fixed_tables():
+            _, table_h = table.wrap(content_width, page_height)
             table.drawOn(canvas_obj, left_margin, y - table_h)
             y -= table_h + 2 * mm
 
+        footer_top = 0
         if footer_data:
             footer_table = genFooterRel(footer_data, content_width, 10 * mm)
-            footer_table.wrapOn(canvas_obj, content_width, page_height)
-            footer_table.drawOn(canvas_obj, left_margin, 6 * mm)
+            _, footer_h = footer_table.wrap(content_width, page_height)
+            footer_table.drawOn(canvas_obj, left_margin, footer_draw_y)
+            footer_top = footer_draw_y + footer_h
 
-    draw_fixed_sections()
+        return y, footer_top
 
-    current_y = body_top
-    for flowable in story:
-        if hasattr(flowable, 'wrap'):
-            flowable.wrap(content_width, page_height)
-            flowable_h = getattr(flowable, 'height', 0) or getattr(flowable, '_height', 0) or 0
-        else:
-            flowable_h = 0
+    def get_body_bottom(footer_top):
+        reserved_bottom = max(bottom_margin, footer_top + footer_gap)
+        if reserve_signature_space:
+            reserved_bottom = max(reserved_bottom, signature_bottom + signature_height + footer_gap)
+        return reserved_bottom
 
-        if flowable_h <= 0:
+    current_y, footer_top = draw_fixed_sections()
+    body_bottom = get_body_bottom(footer_top)
+    page_start_y = current_y
+
+    pending = list(story)
+    while pending:
+        flowable = pending.pop(0)
+        available_height = current_y - body_bottom
+
+        if available_height <= 0:
+            canvas_obj.showPage()
+            current_y, footer_top = draw_fixed_sections()
+            body_bottom = get_body_bottom(footer_top)
+            page_start_y = current_y
+            available_height = current_y - body_bottom
+
+        _, flowable_h = flowable.wrap(content_width, available_height)
+
+        if 0 < flowable_h <= available_height:
+            flowable.drawOn(canvas_obj, left_margin, current_y - flowable_h)
+            current_y -= flowable_h
             continue
 
-        if current_y - flowable_h < body_bottom:
-            canvas_obj.showPage()
-            draw_fixed_sections()
-            current_y = body_top
+        pieces = flowable.split(content_width, available_height) if hasattr(flowable, 'split') else []
+        if pieces:
+            first_piece = pieces[0]
+            _, first_piece_h = first_piece.wrap(content_width, available_height)
 
-        flowable.drawOn(canvas_obj, left_margin, current_y - flowable_h)
-        current_y -= flowable_h + 2 * mm
+            if first_piece_h > 0:
+                first_piece.drawOn(canvas_obj, left_margin, current_y - first_piece_h)
+                current_y -= first_piece_h
+
+            pending = pieces[1:] + pending
+            continue
+
+        if current_y < page_start_y:
+            canvas_obj.showPage()
+            current_y, footer_top = draw_fixed_sections()
+            body_bottom = get_body_bottom(footer_top)
+            page_start_y = current_y
+            pending.insert(0, flowable)
+            continue
+
+        if flowable_h > 0:
+            flowable.drawOn(canvas_obj, left_margin, current_y - flowable_h)
+            current_y = body_bottom
+
+    if report_image_path:
+        canvas_obj.showPage()
+        image_top_y, footer_top = draw_fixed_sections()
+        image_bottom_y = get_body_bottom(footer_top)
+        available_height = max(image_top_y - image_bottom_y, 1)
+
+        try:
+            anexo = Image(report_image_path)
+            max_width = min(content_width * 0.55, 90 * mm)
+            max_height = min(available_height * 0.70, 110 * mm)
+            escala = min(
+                max_width / anexo.drawWidth,
+                max_height / anexo.drawHeight,
+                1,
+            )
+
+            anexo.drawWidth *= escala
+            anexo.drawHeight *= escala
+
+            image_x = left_margin + ((content_width - anexo.drawWidth) / 2)
+            image_y = image_bottom_y + ((available_height - anexo.drawHeight) / 2)
+            anexo.drawOn(canvas_obj, image_x, image_y)
+        except Exception:
+            pass
 
     canvas_obj.save()
     buffer.seek(0)
