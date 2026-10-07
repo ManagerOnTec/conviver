@@ -109,13 +109,13 @@ templatetags %} {% block titulos %}{{title}}|{% endblock %}
 
               <div class="col-md-12 mt-2">
                 {% if object.anexo_evolucao %}
-                <div class="mt-2">
-                  <!-- Modificação aqui para usar a tag <img> -->
+                <div class="mt-2 text-center">
+                  <!-- Imagem reduzida proporcionalmente, similar à evolução em PDF -->
                   <img
                     src="{{ object.anexo_evolucao.url }}"
-                    width="800"
-                    height="400"
                     alt="Imagem de Evolução"
+                    class="img-fluid img-thumbnail shadow-sm"
+                    style="max-width: 55%; max-height: 480px; width: auto; height: auto; object-fit: contain;"
                   />
                 </div>
                 {% endif %}
