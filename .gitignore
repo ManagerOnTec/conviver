@@ -57,7 +57,6 @@ coverage.xml
 # Django stuff:
 *.log
 managerontec/settings_local.py
-static/
 media/
 db.sqlite3
 db.sqlite3-journal
@@ -130,3 +129,7 @@ credenciais/
 # Arquivo json credencial GCP convertido em base64 ele deve ser copiado para var de ambiente de PRODUCAO
 chave_base64.txt
 chave_base64
+
+# Agentes IA e documentação de engenharia (não fazem parte do código Django)
+.agents/
+docs/

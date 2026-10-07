@@ -10,6 +10,10 @@
 {% block menul %}
 <!--MENU LATERAL-->
 <div class="form-group text-left m-3 mt-2">
+    <a title="Novo" href="{% url 'atendimento_cadastrar' %}"
+        class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded" id="btn-novo-atd">
+        <i class="fas fa-plus me-2" style="transition: color 0.3s;"></i>Novo
+    </a>
 
     <form class="mt-2 text-white text-left" method="GET">
 
@@ -35,11 +39,13 @@
                         </button>
                     </div>
                 </div>
-                <div class="justify-content-center mt-2">
-                    <button class="col-md-12 btn btn-outline-danger justify-content-center" name="limpar" value="1">
-                        <i class="fas fa-times-circle" style="transition: color 0.3s;"></i>
-                        Limpar
-                    </button>
+                <div class="col-md-12">
+                    <div class="justify-content-center mt-2">
+                        <button class="col-md-12 btn btn-outline-danger justify-content-center" name="limpar" value="1">
+                            <i class="fas fa-times-circle" style="transition: color 0.3s;"></i>
+                            Limpar
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -52,28 +58,19 @@
 
 
 {% block cabdados %}
-
-<div class="p-2">
-    <i class="fas fa-hospital me-2"></i>
-    <span>Lista de Atendimentos</span>
-</div>
+{% include 'parciais/_list_header.html' with icon_class='fas fa-hospital' title='Lista de Atendimentos' subtitle='Painel responsivo com busca, leitura rápida e navegação visual.' context_label='Estabelecimento' context_value=estabelecimento %}
 
 {% endblock %}
 
 {% block lista %}
 <!--TABELA CONT DIREITA-->
-<div id="table-container">
-    <table class="table">
+<div id="table-container" class="listing-table-shell">
+    <table class="table listing-table align-middle mb-0">
 
 
-        <thead class="sticky-lista bg-success text-white">
+        <thead class="sticky-lista listing-table-head text-white">
             <tr>
-                <th>Opções:
-                    <a title="Novo" href="{% url 'atendimento_cadastrar' %}"
-                        class="btn btn-sm btn-success btn-outline-light" id="btn-novo-atd">
-                        <i class="fas fa-plus" style="transition: color 0.3s;"></i> NOVO
-                    </a>
-                </th>
+                <th>Opções</th>
                 <th>ID</th>
                 <th>Nome</th>
                 <th>Dt.Nascimento</th>
@@ -101,14 +98,14 @@
             <tr class="data-row">
 
                 <td>
-                    <div style="display: flex; flex-direction: row;">
+                    <div class="listing-action-bar">
                         <a href="{% url 'atendimento_detalhe' pk=atendimento.pk %}" title="Ver" type="button"
-                            class="btn btn-outline-primary btn-sm">
+                            class="btn btn-outline-primary btn-sm listing-action-btn">
                             <i class="fas fa-folder-open"></i>
                         </a>
 
                         <a href="{% url 'atendimento_editar' pk=atendimento.pk %}" title="Editar" type="button"
-                            class="btn btn-outline-warning btn-sm edit-atendimento-btn">
+                            class="btn btn-outline-warning btn-sm edit-atendimento-btn listing-action-btn">
                             <i class="fas fa-edit"></i>
                         </a>
 
@@ -116,7 +113,7 @@
                             onsubmit="return confirm('Tem certeza que deseja excluir o atendimento?');"
                             style="display: inline-block;">
                             {% csrf_token %}
-                            <button type="submit" title="Excluir" class="btn btn-outline-danger btn-sm">
+                            <button type="submit" title="Excluir" class="btn btn-outline-danger btn-sm listing-action-btn">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </form>
@@ -198,8 +195,12 @@
 {% block paginate %}
 <!--PAGINACAO-->
 {% if is_paginated %}
-<div id="pages" class="pagination justify-content-start p-2">
-    <ul class="pagination btn-sm">
+<div id="pages" class="listing-pagination-panel">
+    <div class="listing-pagination-meta">
+        <span>Exibindo {% if page_obj %}{{ page_obj.start_index }}-{{ page_obj.end_index }}{% else %}1-{{ object_list|length }}{% endif %}</span>
+        <strong>de {% if page_obj %}{{ page_obj.paginator.count }}{% else %}{{ object_list|length }}{% endif %} registros</strong>
+    </div>
+    <ul class="pagination listing-pagination btn-sm mb-0">
         {% if page_obj.has_previous %}
         <li class="page-item">
             <a href="{% url 'atendimento_listar' %}?{% with request.session.atendimento_filters as params %}{{ params|urlencode }}{% endwith %}&page=1"

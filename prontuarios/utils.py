@@ -2,7 +2,7 @@ from .models import Diagnostico
 from django.http import JsonResponse
 from django.contrib.contenttypes.fields import ContentType
 from PyPDF2 import PdfReader, PdfWriter
-from admin_relatorios.utils import assinar_pdf
+from admin_relatorios.utils import assinar_pdf, obter_dados_assinatura_certificado, verificar_assinatura_pdf
 from contas.models import Perfil
 from prontuarios.models import Adep
 from prontuarios.relatorios import gerar_pdf_prontuario
@@ -24,6 +24,20 @@ from django.utils.timezone import now
 ##################
 
 
+def _pdf_bytes_validos(pdf_bytes):
+    if not pdf_bytes:
+        return False
+    if not isinstance(pdf_bytes, (bytes, bytearray)):
+        return False
+    if not pdf_bytes.startswith(b'%PDF'):
+        return False
+    try:
+        PdfReader(BytesIO(pdf_bytes))
+        return True
+    except Exception:
+        return False
+
+
 def salvar_pdf_prontuario(user, obj, assinar=False):
     perfil_usuario = Perfil.objects.get(user=user)
     certificado_field = perfil_usuario.certificado_digital
@@ -43,6 +57,7 @@ def salvar_pdf_prontuario(user, obj, assinar=False):
             nome_modelo = 'adep'
 
     buffer = gerar_pdf_prontuario(obj, user)
+    pdf_base_bytes = buffer.getvalue()
     assinado = False
 
     # Tratamento de `atendimento` e `pessoa` conforme os atributos do modelo
@@ -60,7 +75,7 @@ def salvar_pdf_prontuario(user, obj, assinar=False):
             datau, datas, assinado = assinar_pdf(
                 contrasena,
                 certificado,
-                buffer,
+                BytesIO(pdf_base_bytes),
                 posicao
             )
 
@@ -70,14 +85,37 @@ def salvar_pdf_prontuario(user, obj, assinar=False):
                 pdf_completo.write(datas)
             pdf_completo.seek(0)
 
+            pdf_resultado_bytes = pdf_completo.read() if assinado else pdf_base_bytes
+            if assinado and (
+                not _pdf_bytes_validos(pdf_resultado_bytes)
+                or b'/ByteRange' not in pdf_resultado_bytes
+                or b'/Contents' not in pdf_resultado_bytes
+            ):
+                assinado = False
+                pdf_resultado_bytes = pdf_base_bytes
+
+            if assinado and not verificar_assinatura_pdf(
+                pdf_resultado_bytes,
+                certificado,
+                contrasena,
+            ):
+                assinado = False
+                pdf_resultado_bytes = pdf_base_bytes
+
             nome_arquivo = f'{nome_modelo}_{"dig" if assinado else "imp"}_{obj.id}.pdf'
             content_type = ContentType.objects.get_for_model(obj)
+
+            Relatorio.objects.filter(
+                content_type=content_type,
+                object_id=obj.id,
+                tipo=nome_modelo,
+                status='A',
+            ).update(status='I')
 
             relatorio = Relatorio(content_type=content_type, object_id=obj.id,
                                   tipo=nome_modelo, atendimento_id=atendimento_id, pessoa_id=pessoa_id)
             # Salvar o PDF assinado no Relatório
-            relatorio.relatorio.save(nome_arquivo, ContentFile(
-                pdf_completo.read() if assinado else buffer.getvalue()))
+            relatorio.relatorio.save(nome_arquivo, ContentFile(pdf_resultado_bytes))
             return assinado
         except Exception as e:
             assinado = False
@@ -87,10 +125,17 @@ def salvar_pdf_prontuario(user, obj, assinar=False):
         nome_arquivo = f'{nome_modelo}_imp_{obj.id}.pdf'
         content_type = ContentType.objects.get_for_model(obj)
 
+        Relatorio.objects.filter(
+            content_type=content_type,
+            object_id=obj.id,
+            tipo=nome_modelo,
+            status='A',
+        ).update(status='I')
+
         relatorio = Relatorio(content_type=content_type,
                               object_id=obj.id, tipo=nome_modelo, atendimento_id=atendimento_id, pessoa_id=pessoa_id)
         # Salvar o PDF gerado sem assinatura
-        relatorio.relatorio.save(nome_arquivo, ContentFile(buffer.getvalue()))
+        relatorio.relatorio.save(nome_arquivo, ContentFile(pdf_base_bytes))
         return False
 
 

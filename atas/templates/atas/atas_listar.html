@@ -2,6 +2,14 @@
 templatetags %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
 <!-- LINKS DO MENU LATERAL -->
 <div class="form-group text-left m-3 mt-2">
+  <a
+    title="Novo"
+    href="{% url 'atas_cadastrar' %}"
+    class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded"
+    id="btn-novo"
+  >
+    <i class="fas fa-plus me-2" style="transition: color 0.3s"></i>Novo
+  </a>
   <form class="mt-2 text-white text-left" method="GET">
     <div class="item-left">
       <h5>Filtros</h5>
@@ -42,28 +50,15 @@ templatetags %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
 </div>
 <!-- FIM MENU LATERAL -->
 {% endblock %} {% block cabdados %}
-<div class="p-2 text-nowrap" style="max-width: 150px">
-  <i class="fas fa-list p-2"></i> Lista de Atas
-</div>
-
-<div class="p-2 text-nowrap" style="max-width: 400px">{{ atas_assunto }}</div>
+{% include 'parciais/_list_header.html' with icon_class='fas fa-file-signature' title='Lista de Atas' subtitle='Consultas rápidas, anexos e impressão em um layout mais limpo.' context_label='Assunto' context_value=atas_assunto %}
 <!-- FIM DADOS DO OBJETO -->
 {% endblock %} {% block lista %}
 
-<div id="table-container">
-  <table class="table">
-    <thead class="sticky-lista bg-success text-white">
+<div id="table-container" class="listing-table-shell">
+  <table class="table listing-table align-middle mb-0">
+    <thead class="sticky-lista listing-table-head text-white">
       <tr>
-        <th>
-          <a
-            title="Novo"
-            href="{% url 'atas_cadastrar' %}"
-            class="btn btn-sm btn-success btn-outline-light"
-            id="btn-novo"
-          >
-            <i class="fas fa-plus" style="transition: color 0.3s">NOVO</i>
-          </a>
-        </th>
+        <th>Ações</th>
         <th>ID</th>
         <th>Assunto</th>
         <th>Dt.Registro</th>
@@ -78,12 +73,12 @@ templatetags %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
       {% for atas in object_list %}
       <tr class="data-row">
         <td>
-          <div style="display: flex; flex-direction: row">
+          <div class="listing-action-bar">
             <a
               href="{% url 'atas_editar' pk=atas.pk %}"
               title="Editar"
               type="button"
-              class="btn btn-outline-warning btn-sm edit-evolucao-btn"
+              class="btn btn-outline-warning btn-sm edit-evolucao-btn listing-action-btn"
               id="btn-edit"
             >
               <i class="fas fa-edit"></i>
@@ -99,7 +94,7 @@ templatetags %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
               <button
                 type="submit"
                 title="Excluir"
-                class="btn btn-outline-danger btn-sm"
+                class="btn btn-outline-danger btn-sm listing-action-btn"
               >
                 <i class="fas fa-trash"></i>
               </button>
@@ -110,7 +105,7 @@ templatetags %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
             <a
               href="{{ atas.anexo.url }}"
               title="Visualizar Anexo"
-              class="btn btn-outline-info btn-sm"
+              class="btn btn-outline-info btn-sm listing-action-btn"
               target="_blank"
             >
               <i class="fas fa-paperclip"></i>
@@ -119,7 +114,7 @@ templatetags %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
             <!--CONCATENAR E ABRIR OS PDFS-->
             <a
               href="{% url 'combine_pdfs_specific' object_id=atas.pk tipo='atas' %}"
-              class="btn btn-outline-success btn-sm"
+              class="btn btn-outline-success btn-sm listing-action-btn"
               target="_blank"
             >
               <i class="fas fa-print"></i>
@@ -155,8 +150,12 @@ templatetags %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
 {% endblock %} {% block paginate %}
 <!--PAGINACAO-->
 {% if is_paginated %}
-<div id="pages" class="pagination justify-content-start p-2">
-  <ul class="pagination btn-sm">
+<div id="pages" class="listing-pagination-panel">
+  <div class="listing-pagination-meta">
+    <span>Exibindo {% if page_obj %}{{ page_obj.start_index }}-{{ page_obj.end_index }}{% else %}1-{{ object_list|length }}{% endif %}</span>
+    <strong>de {% if page_obj %}{{ page_obj.paginator.count }}{% else %}{{ object_list|length }}{% endif %} registros</strong>
+  </div>
+  <ul class="pagination listing-pagination btn-sm mb-0">
     {% if page_obj.has_previous %}
     <li class="page-item">
       <a

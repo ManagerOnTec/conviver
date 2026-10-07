@@ -167,8 +167,12 @@
 {% block paginate %}
 <!--PAGINACAO-->
 {% if is_paginated %}
-<div id="pages" class="pagination justify-content-start p-2">
-    <ul class="pagination btn-sm">
+<div id="pages" class="listing-pagination-panel">
+    <div class="listing-pagination-meta">
+        <span>Exibindo {{ page_obj.start_index }}-{{ page_obj.end_index }}</span>
+        <strong>de {{ page_obj.paginator.count }} registros</strong>
+    </div>
+    <ul class="pagination listing-pagination btn-sm mb-0">
         {% if page_obj.has_previous %}
         <li class="page-item">
             <a href="{% url 'adep_listar_administrar' %}?{{ request.GET.urlencode }}&page=1" class="page-link"><i

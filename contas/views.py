@@ -197,19 +197,34 @@ def select_estabelecimento(request):
             messages.error(request, "Estabelecimento não encontrado.")
             return redirect("select_estabelecimento")
 
-    try:
-        estabelecimento = request.user.perfil.estabelecimento.all()
-        if not estabelecimento.exists():
-            raise ObjectDoesNotExist
-
-    except ObjectDoesNotExist:
-        # Renderizar um template diferente ou mostrar uma mensagem de erro
-        # return render(request, "contas/sem_estabelecimento.html")
+    perfil = getattr(request.user, 'perfil', None)
+    if not perfil:
         messages.warning(
-            request, "Você não possui nenhum estabelecimento liberado. Contate o administrador do sistema e solicite liberação de acesso ao estabelecimento desejado")
-        return redirect("logout")
+            request,
+            "Perfil de usuário não encontrado. Faça login novamente e contate o administrador."
+        )
+        return redirect("login")
 
-    return render(request, "contas/select_estabelecimento.html", {"estabelecimento": estabelecimento, **context})
+    estabelecimentos = perfil.estabelecimento.all()
+    estabelecimento_padrao = getattr(perfil, 'estabelecimento_padrao', None)
+
+    if not estabelecimentos.exists():
+        if estabelecimento_padrao:
+            request.session["estabelecimento_id"] = estabelecimento_padrao.id
+            return redirect("cadastros_index")
+
+        messages.warning(
+            request,
+            "Você não possui estabelecimento liberado nem estabelecimento padrão. Contate o administrador do sistema."
+        )
+        auth.logout(request)
+        return redirect("login")
+
+    return render(
+        request,
+        "contas/select_estabelecimento.html",
+        {"estabelecimento": estabelecimentos, **context}
+    )
 
 
 def esqueci(request):
@@ -316,5 +331,4 @@ def password_reset_confirm(request, uidb64=None, token=None):
         return render(request, 'contas/resetar_senha.html', {'uidb64': uidb64, 'token': token})
     else:
         messages.error(request, "O link de redefinição de senha é inválido!")
-        # replace 'password_reset' with the name of your password reset view
-        return redirect('password_reset')
+        return redirect('esqueci')

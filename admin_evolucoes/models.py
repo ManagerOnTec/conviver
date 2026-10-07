@@ -6,6 +6,7 @@ from admin_cadastros_assistenciais.models import CadastroProfissional, Especiali
 from dominios.choices import status_choices
 from django.contrib.auth.models import User
 from django.core.validators import MaxLengthValidator
+from dominios.text_validators import validate_evolucao_like_text
 
 
 class TipoEvolucao(models.Model):
@@ -50,8 +51,9 @@ class TextoPadrao(models.Model):
                                      blank=True, on_delete=models.PROTECT, verbose_name='Profissional liberado')
     descricao = models.CharField(
         max_length=255, unique=True, verbose_name='Descrição Identificadora')  # Adicionado unique=True
-    texto = models.TextField(validators=[MaxLengthValidator(
-        5500)], verbose_name='Evolução Padronizada')
+    texto = models.TextField(validators=[
+        validate_evolucao_like_text
+    ], verbose_name='Evolução Padronizada')
 
     dt_registro = models.DateTimeField(
         default=timezone.now, null=True, verbose_name='Dt.Registro')

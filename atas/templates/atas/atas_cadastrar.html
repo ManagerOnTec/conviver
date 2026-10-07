@@ -13,15 +13,27 @@
   }
 </style>
 <!-- prettier-ignore -->
-{% block menul %} 
+{% block menul %}
+<div class="form-group text-left mt-2 m-3">
+  <a
+    title="Clique aqui para fechar"
+    href="{% url 'atas_listar' %}"
+    class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded"
+  >
+    <i class="fas fa-times-circle me-2" style="transition: color 0.3s"></i>Fechar
+  </a>
+  <a
+    href="{% url 'atas_listar' %}"
+    class="mt-2 list-group-item list-group-item-action custom-link rounded"
+  >
+    <i class="fas fa-list me-2"></i>Lista de Atas
+  </a>
+</div>
 {% endblock %}
 
 <!-- prettier-ignore -->
 {% block cabdados %}
-
-<div class="p-2">
-  <span>Nova Ata...</span>
-</div>
+{% include 'parciais/_module_context_header.html' with icon_class='fas fa-file-signature' title='Nova Ata' subtitle='Registre participantes, assunto e conteúdo com um cabeçalho mais consistente.' primary_label='Fluxo' primary_value='Cadastro' secondary_label='Módulo' secondary_value='Atas' %}
 
 {% endblock %}
 
@@ -104,17 +116,6 @@
         </div>
       </div>
       <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
-        <div class="d-flex justify-content-end">
-          <a
-            title="Clique aqui para fechar"
-            href="{% url 'atas_listar' %}"
-            class="btn btn-outline-dark mx-2 ml-2"
-          >
-            <i class="fas fa-times-circle" style="transition: color 0.3s"
-              >Fechar</i
-            >
-          </a>
-        </div>
         <div class="d-flex justify-content-end mt-2">
           <button
             id="btn-atas-cadastrar"

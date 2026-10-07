@@ -9,6 +9,11 @@
 <!-- LINKS DO MENU LATERAL -->
 <div class="form-group text-left m-3 mt-2">
 
+    <a title="Novo" href="{% url 'verificar_adeps' %}"
+        class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded" id="btn-novo">
+        <i class="fas fa-plus me-2"></i>Novo
+    </a>
+
     <form class="mt-2 text-white text-left" method="GET">
 
 
@@ -58,11 +63,7 @@
 
 
 {% block cabdados %}
-
-<div class="p-2">
-    <i class="fas fa-exchange-alt me-2"></i>
-    <span>Lista de Passagens de Plantões</span>
-</div>
+{% include 'parciais/_list_header.html' with icon_class='fas fa-exchange-alt' title='Lista de Passagens de Plantão' subtitle='Navegação mais limpa para conferência dos registros de troca.' %}
 
 <!-- FIM DADOS DO OBJETO -->
 {% endblock %}
@@ -71,20 +72,15 @@
 {% block lista %}
 
 
-<div id="table-container">
-    <table class="table">
+<div id="table-container" class="listing-table-shell">
+    <table class="table listing-table align-middle mb-0">
 
 
-        <thead class="sticky-lista bg-success text-white">
+        <thead class="sticky-lista listing-table-head text-white">
 
 
             <tr>
-                <th>
-                    <a title="Novo" href="{% url 'verificar_adeps' %}" class="btn btn-sm btn-success btn-outline-light"
-                        id="btn-novo">
-                        <i class="fas fa-plus" style="transition: color 0.3s;">NOVO</i>
-                    </a>
-                </th>
+                <th>Ações</th>
                 <th>ID</th>
                 <th>Tp.Plantão</th>
 
@@ -102,9 +98,9 @@
             <tr class="data-row">
 
                 <td>
-                    <div style="display: flex; flex-direction: row;">
+                    <div class="listing-action-bar">
                         <a href="{% url 'passagem_plantao_detalhe' pk=passagem_plantao.pk %}" title="Ver" type="button"
-                            class="btn btn-outline-primary btn-sm">
+                            class="btn btn-outline-primary btn-sm listing-action-btn">
                             <i class="fas fa-folder-open"></i>
                         </a>
                     </div>
@@ -142,8 +138,12 @@
 {% block paginate %}
 <!--PAGINACAO-->
 {% if is_paginated %}
-<div id="pages" class="pagination justify-content-start p-2">
-    <ul class="pagination btn-sm">
+<div id="pages" class="listing-pagination-panel">
+    <div class="listing-pagination-meta">
+        <span>Exibindo {% if page_obj %}{{ page_obj.start_index }}-{{ page_obj.end_index }}{% else %}1-{{ object_list|length }}{% endif %}</span>
+        <strong>de {% if page_obj %}{{ page_obj.paginator.count }}{% else %}{{ object_list|length }}{% endif %} registros</strong>
+    </div>
+    <ul class="pagination listing-pagination btn-sm mb-0">
         {% if page_obj.has_previous %}
         <li class="page-item">
             <a href="?{% with filters=request.session.passagem_plantao_filters|urlencode %}{{ filters }}{% endwith %}&page=1"

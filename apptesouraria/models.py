@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 from admin_cadastros.models import Estabelecimento
 from decimal import Decimal
 from datetime import date
@@ -129,6 +130,21 @@ class SaldoCaixa(models.Model):
     
     def __str__(self):
         return f"{self.caixa.numero_caixa} - {self.data_abertura}"
+
+    def clean(self):
+        if self.status == 'A':
+            saldo_aberto = SaldoCaixa.objects.filter(
+                caixa=self.caixa,
+                status='A'
+            ).exclude(pk=self.pk)
+            if saldo_aberto.exists():
+                raise ValidationError('Ja existe um saldo de caixa aberto para este caixa.')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        if self.status == 'F' and self.saldo_final is None:
+            self.saldo_final = self.calcular_saldo_final()
+        super().save(*args, **kwargs)
     
     def calcular_saldo_final(self):
         """Calcula o saldo final baseado nas movimentações"""
@@ -198,3 +214,31 @@ class MovimentacaoCaixa(models.Model):
     
     def __str__(self):
         return f"{self.tipo} - R$ {self.valor} - {self.descricao}"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        self._atualizar_saldo_caixa()
+
+    def delete(self, *args, **kwargs):
+        saldo_caixa = self.saldo_caixa
+        super().delete(*args, **kwargs)
+        self._recalcular_saldo(saldo_caixa)
+
+    def _atualizar_saldo_caixa(self):
+        self._recalcular_saldo(self.saldo_caixa)
+
+    @staticmethod
+    def _recalcular_saldo(saldo_caixa):
+        if not saldo_caixa:
+            return
+
+        entradas = saldo_caixa.movimentacoes.filter(tipo='ENTRADA', status='A').aggregate(
+            total=models.Sum('valor')
+        )['total'] or Decimal('0.00')
+
+        saidas = saldo_caixa.movimentacoes.filter(tipo='SAIDA', status='A').aggregate(
+            total=models.Sum('valor')
+        )['total'] or Decimal('0.00')
+
+        saldo_caixa.saldo_final = saldo_caixa.saldo_inicial + entradas - saidas
+        saldo_caixa.save(update_fields=['saldo_final', 'data_atualizacao'])

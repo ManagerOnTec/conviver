@@ -27,11 +27,11 @@ def handle_database_error(view_func):
         except OperationalError as e:
             logger.error(f"Erro de banco de dados: {str(e)}")
             messages.error(request, "Erro ao acessar o banco de dados. Execute: python manage.py migrate")
-            return redirect('cadastros_index')
+            return redirect('admin_cadastros:cadastros_index')
         except Exception as e:
             logger.error(f"Erro: {str(e)}")
             messages.error(request, f"Erro: {str(e)}")
-            return redirect('cadastros_index')
+            return redirect('admin_cadastros:cadastros_index')
     return wrapper
 
 
@@ -43,11 +43,11 @@ class HandleDatabaseErrorMixin:
         except OperationalError as e:
             logger.error(f"Erro de banco de dados: {str(e)}")
             messages.error(request, "Erro ao acessar o banco de dados. Execute: python manage.py migrate")
-            return redirect('cadastros_index')
+            return redirect('admin_cadastros:cadastros_index')
         except Exception as e:
             logger.error(f"Erro: {str(e)}")
             messages.error(request, f"Erro: {str(e)}")
-            return redirect('cadastros_index')
+            return redirect('admin_cadastros:cadastros_index')
 
 
 # ============================================================================
@@ -61,7 +61,7 @@ def conciliacao_index(request):
     estabelecimento_id = request.session.get('estabelecimento_id')
     if not estabelecimento_id:
         messages.warning(request, "Selecione um estabelecimento")
-        return redirect('cadastros_index')
+        return redirect('admin_cadastros:cadastros_index')
     
     estabelecimento = get_object_or_404(Estabelecimento, id=estabelecimento_id)
     extratos = ExtratoBancario.objects.filter(
@@ -316,9 +316,9 @@ class ConciliacaoUpdateView(HandleDatabaseErrorMixin, LoginRequiredMixin, Permis
 class RelatorioConciliacaoListView(HandleDatabaseErrorMixin, LoginRequiredMixin, PermissionRequiredMixin, ListView):
     """Listar Relatórios de Conciliação"""
     model = RelatorioConciliacao
-    template_name = 'appconciliacao/relatorioconci liacao_listar.html'
+    template_name = 'appconciliacao/relatorioconciliacao_listar.html'
     context_object_name = 'relatorios'
-    permission_required = 'appconciliacao.view_relatorioconci liacao'
+    permission_required = 'appconciliacao.view_relatorioconciliacao'
     paginate_by = 20
     
     def get_queryset(self):
@@ -334,9 +334,9 @@ class RelatorioConciliacaoCreateView(HandleDatabaseErrorMixin, LoginRequiredMixi
     """Criar Relatório de Conciliação"""
     model = RelatorioConciliacao
     form_class = RelatorioConciliacaoForm
-    template_name = 'appconciliacao/relatorioconci liacao_form.html'
-    permission_required = 'appconciliacao.add_relatorioconci liacao'
-    success_url = reverse_lazy('appconciliacao:relatorioconci liacao_listar')
+    template_name = 'appconciliacao/relatorioconciliacao_form.html'
+    permission_required = 'appconciliacao.add_relatorioconciliacao'
+    success_url = reverse_lazy('appconciliacao:relatorioconciliacao_listar')
     
     def form_valid(self, form):
         estabelecimento_id = self.request.session.get('estabelecimento_id')
@@ -352,6 +352,6 @@ class RelatorioConciliacaoCreateView(HandleDatabaseErrorMixin, LoginRequiredMixi
 class RelatorioConciliacaoDetailView(HandleDatabaseErrorMixin, LoginRequiredMixin, PermissionRequiredMixin, DetailView):
     """Detalhes do Relatório de Conciliação"""
     model = RelatorioConciliacao
-    template_name = 'appconciliacao/relatorioconci liacao_detalhe.html'
+    template_name = 'appconciliacao/relatorioconciliacao_detalhe.html'
     context_object_name = 'relatorio'
-    permission_required = 'appconciliacao.view_relatorioconci liacao'
+    permission_required = 'appconciliacao.view_relatorioconciliacao'

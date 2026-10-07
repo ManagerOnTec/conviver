@@ -14,6 +14,16 @@
 {% block menul %}
 <div class="form-group text-left mt-2 m-3">
 
+    <a title="Clique aqui para fechar"
+        href="{% url 'psicoterapia_listar' atendimento_id=atendimento.id %}"
+        class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded">
+        <i class="fas fa-times-circle me-2"></i>Fechar
+    </a>
+    <a href="{% url 'psicoterapia_listar' atendimento_id=atendimento.id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-list me-2"></i>Lista de Psicoterapias
+    </a>
+
 
     <a href="{% url 'prontuario_detalhe' pk=atendimento.id %}"
         class="mt-2 list-group-item list-group-item-action custom-link rounded">
@@ -74,53 +84,7 @@
 
 
 {% block cabdados %}
-<div class="text-nowrap p-2" style="max-width: 150px;">
-    Prontuário:{{ atendimento_id }}
-</div>
-
-<div class="text-nowrap p-2" style="max-width: 400px;">
-    {{ pessoa_form.nome.value }}
-</div>
-
-
-
-{% if pessoa_form.alergico.value == 'S' %}
-
-<button class="btn btn-danger" type="button" disabled>
-    <span>Alergia(s):</span>
-    <span class="spinner-grow spinner-grow-sm" role="status" aria-hidden="true"></span>
-    {{ pessoa_form.alergias.value }}
-</button>
-{% endif %}
-
-<div class="text-nowrap p-2" style="max-width: 200px;">
-    D.N:{{ pessoa_form.dt_nascimento.value }}
-</div>
-
-
-<div class="p-2 text-nowrap" style="max-width: 190px;">
-    Cidade: {{ pessoa_form.instance.cidade }}
-</div>
-
-
-<div class="p-2 text-nowrap" style="max-width: 120px;">
-    Idade:{{ idade }}
-</div>
-<div class="text-nowrap p-2" style="max-width: 120px;">
-    Sexo:{{ pessoa_form.sexo.value }}
-</div>
-
-<div class="text-nowrap p-2" style="max-width: 150px;">
-    Cor/Raça:{{ pessoa_form.cor_raca.value }}
-</div>
-
-<div class="text-nowrap p-2" style="max-width: 180px;">
-    Religião:{{ pessoa_form.religiao.value }}
-</div>
-
-<div class="text-nowrap p-2" style="max-width: 300px;">
-    Filiação:{{ pessoa_form.pai.value }}, {{ pessoa_form.mae.value }}
-</div>
+{% include 'parciais/_patient_context_header.html' with module_icon='fas fa-brain' module_title='Nova Psicoterapia' module_subtitle='Registre a sessão mantendo o contexto do paciente acessível.' primary_label='Prontuário' primary_value=atendimento_id secondary_label='Fluxo' secondary_value='Cadastro' %}
 
 <!-- FIM DADOS DO OBJETO -->
 {% endblock %}
@@ -157,19 +121,6 @@
 
 
             <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
-
-
-                <div class="d-flex justify-content-end">
-
-
-                    <a title="Clique aqui para fechar"
-                        href="{% url 'psicoterapia_listar' atendimento_id=atendimento.id %}"
-                        class="btn btn-outline-dark mx-2 ml-2">
-                        <i class="fas fa-times-circle" style="transition: color 0.3s;">Fechar</i>
-                    </a>
-
-                </div>
-
                 <div class="d-flex justify-content-end mt-2">
 
 

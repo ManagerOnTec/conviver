@@ -13,13 +13,39 @@
   }
 </style>
 
-{% block menul %} {% endblock %} {% block cabdados %}
-
-<div class="p-2">
-  <span>Nova Ata...</span>
+{% block menul %}
+<div class="form-group text-left mt-2 m-3">
+  <a
+    title="Clique aqui para fechar"
+    href="{% url 'atas_listar' %}"
+    class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded"
+  >
+    <i class="fas fa-times-circle me-2" style="transition: color 0.3s"></i>Fechar
+  </a>
+  <a
+    href="{% url 'atas_listar' %}"
+    class="mt-2 list-group-item list-group-item-action custom-link rounded"
+  >
+    <i class="fas fa-list me-2"></i>Lista de Atas
+  </a>
 </div>
+{% endblock %} {% block cabdados %}
+{% include 'parciais/_module_context_header.html' with icon_class='fas fa-file-signature' title='Editar Ata' subtitle='Atualize conteúdo, anexos e assinatura com uma leitura mais limpa.' primary_label='Fluxo' primary_value='Edição' secondary_label='Registro' secondary_value=object.pk %}
 
 {% endblock %} {% block lista %}
+<div class="d-flex justify-content-start">
+  <button
+    id="insertDefaultDocs"
+    data-tipo-documento="atas"
+    class="btn btn-sm btn-success btn-outline-light"
+  >
+    <i class="fas fa-plus" style="transition: color 0.3s"></i>Texto Padrão
+  </button>
+
+  <div id="context-menu" style="display: none">
+  </div>
+</div>
+
 <!--TABELA CONT DIREITA-->
 <div class="container">
   <form
@@ -79,17 +105,6 @@
         </div>
       </div>
       <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
-        <div class="d-flex justify-content-end">
-          <a
-            title="Clique aqui para fechar"
-            href="{% url 'atas_listar' %}"
-            class="btn btn-outline-dark mx-2 ml-2"
-          >
-            <i class="fas fa-times-circle" style="transition: color 0.3s"
-              >Fechar</i
-            >
-          </a>
-        </div>
         <div class="d-flex justify-content-end mt-2">
           <button
             id="btn-atas-cadastrar"
@@ -110,6 +125,7 @@
 {% block scriptcustom %}
 <!-- Incluir o script para inicializar o Select2 -->
 <script src="{% static 'js/selectparadois.js' %}"></script>
+<script src="{% static 'js/texto_padrao_filtrado.js' %}"></script>
 <!-- Incluir o script para checagem de anexos -->
 
 <script>

@@ -1,0 +1,26 @@
+<div class="workflow-form-sidebar workflow-form-stack">
+    <div class="workflow-form-panel-soft">
+        <button
+            {% if button_id %}id="{{ button_id }}"{% endif %}
+            type="submit"
+            title="{{ button_title|default:submit_label|default:'Salvar' }}"
+            class="workflow-form-submit"
+            {% if button_disabled %}disabled{% endif %}
+        >
+            <i class="{{ submit_icon|default:'fas fa-save' }}"></i>
+            <span>{{ submit_label|default:'Salvar' }}</span>
+        </button>
+
+        {% if status_title or status_text %}
+        <div class="workflow-form-status mt-3">
+            <div class="spinner-border {{ status_spinner_class|default:'text-success' }}" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <div>
+                {% if status_title %}<strong class="d-block {{ status_text_class|default:'' }}">{{ status_title }}</strong>{% endif %}
+                {% if status_text %}<span class="workflow-form-note">{{ status_text }}</span>{% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>

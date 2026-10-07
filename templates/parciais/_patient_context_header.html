@@ -1,0 +1,87 @@
+<div class="patient-record-header">
+    <div class="patient-record-summary">
+        <div class="patient-record-header-brand">
+            <div class="patient-record-header-icon">
+                <i class="{{ module_icon|default:'fas fa-notes-medical' }}"></i>
+            </div>
+            <div>
+                <div class="patient-record-header-title">{{ module_title|default:'Contexto do Paciente' }}</div>
+                <div class="patient-record-header-subtitle">{{ module_subtitle|default:'Resumo clínico e dados principais do paciente.' }}</div>
+            </div>
+        </div>
+
+        <div class="patient-record-summary-meta">
+            <div class="patient-record-chip">
+                <span>{{ primary_label|default:'Prontuário' }}</span>
+                <strong>{% firstof primary_value atendimento_id object.pk '-' %}</strong>
+            </div>
+            {% if secondary_label and secondary_value %}
+            <div class="patient-record-chip">
+                <span>{{ secondary_label }}</span>
+                <strong>{{ secondary_value }}</strong>
+            </div>
+            {% endif %}
+            <div class="patient-record-chip patient-record-chip-wide">
+                <span>Paciente</span>
+                <strong>{{ pessoa_form.nome.value|default:'-' }}</strong>
+            </div>
+            {% if pessoa_form.alergico.value == 'S' %}
+            <div class="patient-record-alert patient-record-alert-compact">
+                <span>Alergia(s)</span>
+                <span class="spinner-grow spinner-grow-sm" role="status" aria-hidden="true"></span>
+                <strong>{{ pessoa_form.alergias.value }}</strong>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <details class="patient-record-disclosure">
+        <summary class="patient-record-disclosure-summary">
+            <span class="patient-record-section-label">Dados do paciente</span>
+            <span class="patient-record-disclosure-action">
+                <span class="patient-record-disclosure-label-closed">Exibir</span>
+                <span class="patient-record-disclosure-label-open">Recolher</span>
+                <i class="fas fa-chevron-down"></i>
+            </span>
+        </summary>
+
+        <div class="patient-record-details-panel">
+            <div class="patient-record-details-grid">
+                {% if show_cpf %}
+                <div class="patient-record-chip">
+                    <span>CPF</span>
+                    <strong>{{ pessoa_form.cpf.value|default:'-' }}</strong>
+                </div>
+                {% endif %}
+                <div class="patient-record-chip">
+                    <span>Nascimento</span>
+                    <strong>{{ pessoa_form.dt_nascimento.value|default:'-' }}</strong>
+                </div>
+                <div class="patient-record-chip">
+                    <span>Cidade</span>
+                    <strong>{{ pessoa_form.instance.cidade|default:'-' }}</strong>
+                </div>
+                <div class="patient-record-chip">
+                    <span>Idade</span>
+                    <strong>{{ idade|default:'-' }}</strong>
+                </div>
+                <div class="patient-record-chip">
+                    <span>Sexo</span>
+                    <strong>{{ pessoa_form.sexo.value|default:'-' }}</strong>
+                </div>
+                <div class="patient-record-chip">
+                    <span>Cor/Raça</span>
+                    <strong>{{ pessoa_form.cor_raca.value|default:'-' }}</strong>
+                </div>
+                <div class="patient-record-chip">
+                    <span>Religião</span>
+                    <strong>{{ pessoa_form.religiao.value|default:'-' }}</strong>
+                </div>
+                <div class="patient-record-chip patient-record-chip-wide">
+                    <span>Filiação</span>
+                    <strong>{{ pessoa_form.pai.value|default:'-' }}, {{ pessoa_form.mae.value|default:'-' }}</strong>
+                </div>
+            </div>
+        </div>
+    </details>
+</div>

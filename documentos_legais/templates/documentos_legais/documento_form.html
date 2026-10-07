@@ -1,0 +1,164 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+{% block titulos %}{{ title }}|{% endblock %}
+
+{% block menul %}
+<div class="form-group text-left mt-2 m-3">
+  <a href="{{ documentos_legais_index }}" class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded">
+    <i class="fas fa-times-circle me-2"></i>Fechar
+  </a>
+  <a href="{{ detalhe_atendimento_url }}" class="mt-2 list-group-item list-group-item-action custom-link rounded">
+    <i class="fas fa-arrow-left me-2"></i>Atendimento
+  </a>
+  <a href="{{ documentos_legais_index }}" class="mt-2 list-group-item list-group-item-action custom-link rounded">
+    <i class="fas fa-list me-2"></i>Lista de Termos
+  </a>
+  <a href="#preview-termo" class="mt-2 list-group-item list-group-item-action custom-link rounded">
+    <i class="fas fa-eye me-2"></i>Visualizar Termo
+  </a>
+</div>
+{% endblock %}
+
+{% block cabdados %}
+{% if object.pk %}
+{% include 'parciais/_patient_context_header.html' with module_icon='fas fa-file-signature' module_title='Editar Termo Legal' module_subtitle='Revise o termo com o contexto do atendimento e do paciente sempre acessível.' primary_label='Atendimento' primary_value=atendimento.pk secondary_label='Fluxo' secondary_value='Edição' show_cpf=True %}
+{% else %}
+{% include 'parciais/_patient_context_header.html' with module_icon='fas fa-file-signature' module_title='Novo Termo Legal' module_subtitle='Configure o termo e a assinatura mantendo o contexto do paciente acessível.' primary_label='Atendimento' primary_value=atendimento.pk secondary_label='Fluxo' secondary_value='Cadastro' show_cpf=True %}
+{% endif %}
+{% endblock %}
+
+{% block lista %}
+<div class="container" id="documento-legal-root" data-preview-url="{% url 'documentos_legais_modelo_preview' atendimento_id=atendimento.pk %}">
+  {% if not documentos_legais_configurados %}
+  <div class="alert alert-warning mt-3">
+    Cadastre no admin ao menos um tipo de termo e um modelo ativo para o estabelecimento antes de gerar documentos legais.
+  </div>
+  {% endif %}
+
+  {% if form.errors %}
+  <div class="alert alert-danger mt-3">
+    <strong>Revise as informações antes de salvar:</strong>
+    <ul class="mb-0 mt-2">
+      {% for error in form.non_field_errors %}
+      <li>{{ error }}</li>
+      {% endfor %}
+      {% for error in form.assinatura_data.errors %}
+      <li>Assinatura do responsável: {{ error }}</li>
+      {% endfor %}
+      {% for error in form.foto_validacao_data.errors %}
+      <li>Foto de validação: {{ error }}</li>
+      {% endfor %}
+      {% for error in form.assinar_funcionario.errors %}
+      <li>Assinatura do funcionário: {{ error }}</li>
+      {% endfor %}
+      {% for field in form.visible_fields %}
+      {% for error in field.errors %}
+      {% if field.name != 'assinar_funcionario' %}
+      <li>{{ field.label }}: {{ error }}</li>
+      {% endif %}
+      {% endfor %}
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <form method="post" enctype="multipart/form-data" class="workflow-form-shell mt-2" id="form-documento-legal">
+    {% csrf_token %}
+    {{ form.assinatura_data }}
+    {{ form.foto_validacao_data }}
+
+    <div class="workflow-form-layout">
+      <div class="workflow-form-main workflow-form-stack">
+        <div class="workflow-form-panel">
+          <div class="row g-3">
+            <div class="col-md-6">{{ form.tipo_documento|as_crispy_field }}</div>
+            <div class="col-md-6">{{ form.modelo_documento|as_crispy_field }}</div>
+            <div class="col-md-6">{{ form.responsavel_nome|as_crispy_field }}</div>
+            <div class="col-md-6">{{ form.responsavel_cpf|as_crispy_field }}</div>
+            <div class="col-md-6">{{ form.responsavel_documento|as_crispy_field }}</div>
+            <div class="col-md-6">{{ form.responsavel_data_nascimento|as_crispy_field }}</div>
+            <div class="col-md-6">{{ form.responsavel_telefone|as_crispy_field }}</div>
+            <div class="col-md-6">{{ form.responsavel_email|as_crispy_field }}</div>
+            <div class="col-md-12">{{ form.observacoes|as_crispy_field }}</div>
+            <div class="col-md-12 mt-2">{{ form.declaracao_aceite|as_crispy_field }}</div>
+          </div>
+        </div>
+
+        <div class="workflow-form-panel">
+          <h5>Assinatura do Responsável</h5>
+          <div class="workflow-signature-box">
+            <canvas id="signature-pad" width="760" height="220" style="width:100%; max-width:100%; border:1px dashed #6c757d; border-radius:8px; background:#fff;"></canvas>
+            <div class="mt-2 d-flex gap-2">
+              <button type="button" class="btn btn-outline-secondary btn-sm" id="clear-signature">Limpar Assinatura</button>
+            </div>
+          </div>
+          {% if object.assinatura_imagem %}
+          <div class="mt-3">
+            <img src="{{ object.assinatura_imagem.url }}" alt="Assinatura atual" style="max-width: 320px; border:1px solid #ddd; padding:4px; background:#fff;">
+          </div>
+          {% endif %}
+        </div>
+
+        <div class="workflow-form-panel-soft">
+          <h5>Assinatura do Funcionário</h5>
+          <p class="workflow-form-note mb-3">Esta assinatura é opcional e utiliza o certificado digital do usuário logado, caso ele esteja configurado no perfil.</p>
+          <div class="mt-1">
+            <div class="form-check">
+              {{ form.assinar_funcionario }}
+              <label class="form-check-label" for="{{ form.assinar_funcionario.id_for_label }}">{{ form.assinar_funcionario.label }}</label>
+            </div>
+            {% if form.assinar_funcionario.help_text %}
+            <small class="text-muted d-block mt-2">{{ form.assinar_funcionario.help_text }}</small>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="workflow-form-panel">
+          <h5>Foto de Validação</h5>
+          <p class="workflow-form-note mb-3">Permita o acesso à câmera do notebook e capture uma única foto para validar o responsável e o atendimento.</p>
+          <div class="workflow-signature-box">
+            <video id="camera-stream" autoplay playsinline muted style="width:100%; max-width:100%; border:1px dashed #6c757d; border-radius:8px; background:#0b1220;"></video>
+            <canvas id="camera-canvas" width="760" height="420" class="d-none"></canvas>
+            <div class="mt-3 d-flex gap-2 flex-wrap">
+              <button type="button" class="btn btn-outline-primary btn-sm" id="start-camera">Ativar câmera</button>
+              <button type="button" class="btn btn-outline-success btn-sm" id="capture-photo" disabled>Capturar foto</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm" id="reset-photo">Refazer foto</button>
+            </div>
+            <div id="camera-feedback" class="workflow-form-note mt-3">Nenhuma foto capturada ainda.</div>
+            <img id="camera-preview" class="img-fluid rounded border mt-3 d-none" alt="Prévia da foto de validação">
+            {% if object %}
+            {% firstof object.selfie object.documento_frente object.documento_verso as foto_existente %}
+            {% if foto_existente %}
+            <div class="mt-3">
+              <small class="text-muted d-block mb-2">Foto atual do registro</small>
+              <img src="{{ foto_existente.url }}" class="img-fluid rounded border" alt="Foto atual de validação">
+            </div>
+            {% endif %}
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="workflow-form-sidebar workflow-form-stack">
+        <div class="workflow-form-panel-soft">
+          <button type="submit" class="workflow-form-submit" {% if not documentos_legais_configurados %}disabled{% endif %}>
+            <i class="fas fa-save"></i>
+            <span>Salvar termo</span>
+          </button>
+          <p class="workflow-form-note mt-3 mb-0">O termo será validado com assinatura, anexos e prévia dinâmica antes do uso operacional.</p>
+        </div>
+
+        <div class="workflow-preview-card" id="preview-termo">
+          <div class="workflow-preview-header">Prévia do Termo</div>
+          <div class="workflow-preview-body" id="documento-preview"></div>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block scriptcustom %}
+<script src="{% static 'documentos_legais/js/documentos_legais_form.js' %}"></script>
+{% endblock %}

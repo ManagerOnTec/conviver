@@ -7,11 +7,24 @@ tz %} {% block titulos %}{{title}}|{% endblock %}
   }
 </style>
 
-{% block menul %} {% endblock %} {% block cabdados %}
-
-<div class="p-2">
-  <span>Novo Atendimento...</span>
+{% block menul %}
+<div class="form-group text-left mt-2 m-3">
+  <a
+    title="Clique aqui para fechar"
+    href="{% url 'atendimento_listar' %}"
+    class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded"
+  >
+    <i class="fas fa-times-circle me-2" style="transition: color 0.3s"></i>Fechar
+  </a>
+  <a
+    href="{% url 'atendimento_listar' %}"
+    class="mt-2 list-group-item list-group-item-action custom-link rounded"
+  >
+    <i class="fas fa-list me-2"></i>Lista de Atendimentos
+  </a>
 </div>
+{% endblock %} {% block cabdados %}
+{% include 'parciais/_module_context_header.html' with icon_class='fas fa-hospital-user' title='Novo Atendimento' subtitle='Inicie o atendimento com dados cadastrais e contexto assistencial em uma leitura mais objetiva.' primary_label='Fluxo' primary_value='Cadastro' secondary_label='Módulo' secondary_value='Atendimentos' %}
 
 {% endblock %} {% block lista %}
 <!--TABELA CONT DIREITA-->
@@ -174,17 +187,6 @@ tz %} {% block titulos %}{{title}}|{% endblock %}
       </div>
 
       <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
-        <div class="d-flex justify-content-end">
-          <a
-            title="Clique aqui para fechar"
-            href="{% url 'atendimento_listar' %}"
-            class="btn btn-outline-dark mx-2 ml-2"
-          >
-            <i class="fas fa-times-circle" style="transition: color 0.3s"
-              >Fechar</i
-            >
-          </a>
-        </div>
         <div class="d-flex justify-content-end mt-2">
           <button
             id="btn-atendimento-cadastrar"

@@ -1,37 +1,18 @@
 {% extends 'base.html' %} {% load static %} {% load crispy_forms_tags %} {% load
 tz %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
+<div class="form-group text-left mt-2 m-3">
+  <a title="Clique aqui para fechar" href="{% url 'atendimento_listar' %}"
+    class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded">
+    <i class="fas fa-times-circle me-2" style="transition: color 0.3s">Fechar</i>
+  </a>
+  <a href="{% url 'atendimento_listar' %}"
+    class="mt-2 list-group-item list-group-item-action custom-link rounded">
+    <i class="fas fa-list me-2"></i>Lista de Atendimentos
+  </a>
+</div>
 <!--FIM MENU LATERAL-->
 {% endblock %} {% block cabdados %}
-<div class="text-nowrap p-2" style="max-width: 150px">
-  Atendimento:{{ object.pk }}
-</div>
-
-<div class="text-nowrap p-2" style="max-width: 400px">
-  {{ pessoa_form.nome.value }}
-</div>
-
-{% if pessoa_form.alergico.value == 'S' %}
-
-<button class="btn btn-danger" type="button" disabled>
-  <span>Alergia(s):</span>
-  <span class="spinner-grow spinner-grow-sm" role="status" aria-hidden="true"></span>
-  {{ pessoa_form.alergias.value }}
-</button>
-{% endif %}
-
-<div class="text-nowrap p-2" style="max-width: 200px">
-  D.N:{{ pessoa_form.dt_nascimento.value }}
-</div>
-
-<div class="text-nowrap p-2" style="max-width: 150px">
-  CPF:{{ pessoa_form.cpf.value }}
-</div>
-
-<div class="p-2 text-nowrap" style="max-width: 190px">
-  Cidade: {{ pessoa_form.instance.cidade }}
-</div>
-
-<div class="text-nowrap p-2" style="max-width: 100px">Idade:{{ idade }}</div>
+{% include 'parciais/_patient_context_header.html' with module_icon='fas fa-hospital-user' module_title='Editar Atendimento' module_subtitle='Atualize o atendimento com o contexto do paciente sempre acessível.' primary_label='Atendimento' primary_value=object.pk secondary_label='Fluxo' secondary_value='Edição' show_cpf=True %}
 
 <!-- FIM DADOS DO OBJETO -->
 {% endblock %} {% block lista %}
@@ -166,13 +147,6 @@ tz %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
 
       <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
         <div class="d-flex flex-column">
-          <div class="d-flex justify-content-end mt-2">
-            <a title="Clique aqui para fechar" href="{% url 'atendimento_listar' %}"
-              class="btn btn-outline-dark mx-2 ml-2">
-              <i class="fas fa-times-circle" style="transition: color 0.3s">Fechar</i>
-            </a>
-          </div>
-
           <div class="d-flex justify-content-end mt-2">
             <button id="btn-atendimento-cadastrar" type="submit" title="Salvar"
               class="btn btn-success btn-outline-light border border-black mx-2 ml-2">

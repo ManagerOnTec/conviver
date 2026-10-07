@@ -1,4 +1,5 @@
 from django.views.generic import TemplateView
+import zipfile
 from django.utils.timezone import make_aware
 from django.apps import apps
 from admin_cadastros_assistenciais.models import CID
@@ -69,7 +70,7 @@ from django.contrib.auth.models import User
 import django_filters
 from django.http import JsonResponse
 from django.conf import settings
-from django.core.exceptions import ObjectDoesNotExist
+from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from admin_cadastros_assistenciais.models import CadastroProfissional
 from admin_evolucoes.models import TipoEvolucao
 from .models import SAE, PerdasGanhos, PlanoCuidados, SinaisVitais
@@ -107,8 +108,61 @@ from admin_relatorios.models import Relatorio
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Max
 from django.db.models import Subquery, OuterRef
+from urllib.parse import urlparse
 
 # FIM IMPORTS
+
+
+def _listar_pdfs_para_download(pdf_paths):
+    arquivos = []
+
+    for pdf_path in pdf_paths:
+        if not default_storage.exists(pdf_path) or default_storage.size(pdf_path) <= 0:
+            continue
+
+        with default_storage.open(pdf_path, 'rb') as f:
+            pdf_bytes = f.read()
+
+        if not pdf_bytes.startswith(b'%PDF'):
+            continue
+
+        arquivos.append((pdf_path.rsplit('/', 1)[-1], pdf_bytes))
+
+    return arquivos
+
+
+def _montar_resposta_download_pdfs(pdf_paths, download_name, inline_single=False):
+    arquivos = _listar_pdfs_para_download(pdf_paths)
+
+    if not arquivos:
+        return HttpResponse('Nenhum PDF valido encontrado para download.', status=404)
+
+    if len(arquivos) == 1:
+        nome_arquivo, pdf_bytes = arquivos[0]
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        disposition = 'inline' if inline_single else 'attachment'
+        response['Content-Disposition'] = f'{disposition}; filename="{nome_arquivo}"'
+        return response
+
+    pacote = BytesIO()
+    nomes_usados = set()
+
+    with zipfile.ZipFile(pacote, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        for nome_arquivo, pdf_bytes in arquivos:
+            nome_final = nome_arquivo
+            contador = 1
+            while nome_final in nomes_usados:
+                base, ext = nome_arquivo.rsplit('.', 1)
+                nome_final = f'{base}_{contador}.{ext}'
+                contador += 1
+
+            nomes_usados.add(nome_final)
+            zip_file.writestr(nome_final, pdf_bytes)
+
+    pacote.seek(0)
+    response = HttpResponse(pacote.getvalue(), content_type='application/zip')
+    response['Content-Disposition'] = f'attachment; filename="{download_name}.zip"'
+    return response
 
 # FUNCAO PARA CONCATENAR PDFS POR TIPO E OBJECT ID IGUIS DO MODELO E ABRIR EM TELA - UM OBJETO PK POR VEZ
 
@@ -119,15 +173,11 @@ def combine_pdfs_specific(request, object_id, tipo):
         content_type=content_type, object_id=object_id, status='A')
 
     pdf_paths = [relatorio.relatorio.name for relatorio in relatorios]
-
-    combined_pdf = combine_pdfs(pdf_paths)
-
-    response = HttpResponse(combined_pdf.getvalue(),
-                            content_type='application/pdf')
-    # Altere 'attachment' por 'inline' para abrir no navegador, ou simplesmente remova essa linha.
-    response['Content-Disposition'] = f'inline; filename="{tipo}_report_{object_id}.pdf"'
-
-    return response
+    return _montar_resposta_download_pdfs(
+        pdf_paths,
+        f'{tipo}_report_{object_id}',
+        inline_single=True,
+    )
 
 
 # FUNÇÃO PARA JUNTAR PDFS E DISPONIBILIZAR NA DOWNLOAD_FILTERED_PDFS
@@ -137,13 +187,27 @@ def combine_pdfs(pdfs):
         if default_storage.exists(pdf_path) and default_storage.size(pdf_path) > 0:
             try:
                 with default_storage.open(pdf_path, 'rb') as f:
-                    pdf_reader = PdfReader(f)
-                    for page in pdf_reader.pages:
-                        pdf_writer.add_page(page)
+                    pdf_bytes = f.read()
+
+                if not pdf_bytes.startswith(b'%PDF'):
+                    print(f"Arquivo inválido (não inicia com %PDF): {pdf_path}")
+                    continue
+
+                pdf_reader = PdfReader(BytesIO(pdf_bytes))
+                for page in pdf_reader.pages:
+                    # Ao combinar PDFs assinados, remover widgets/anotações de
+                    # assinatura evita carregar SigDict quebrado no arquivo final.
+                    if '/Annots' in page:
+                        del page['/Annots']
+                    pdf_writer.add_page(page)
             except Exception as e:
                 print(f"Erro ao ler o arquivo PDF {pdf_path}: {e}")
         else:
             print(f"Arquivo não encontrado ou vazio: {pdf_path}")
+
+    if '/AcroForm' in pdf_writer._root_object:
+        del pdf_writer._root_object['/AcroForm']
+
     output = BytesIO()
     pdf_writer.write(output)
     return output
@@ -192,22 +256,23 @@ def download_filtered_pdfs(request, atendimento_id, model_name):
     # Obtém os IDs dos objetos filtrados
     object_ids = [obj.id for obj in filtered_objects]
 
-    # Obtém os Relatorios correspondentes aos objetos filtrados
+    # Obtém apenas o relatório ativo mais recente de cada objeto filtrado
     content_type = ContentType.objects.get_for_model(model)
+    latest_relatorio_ids = Relatorio.objects.filter(
+        content_type=content_type,
+        object_id__in=object_ids,
+        status='A',
+    ).values('object_id').annotate(max_id=Max('id')).values('max_id')
+
     relatorios = Relatorio.objects.filter(
-        content_type=content_type, object_id__in=object_ids, status='A').order_by('object_id')
+        id__in=Subquery(latest_relatorio_ids)
+    ).order_by('object_id')
 
     pdf_paths = [relatorio.relatorio.name for relatorio in relatorios]
-
-    # Combina os PDFs em um único documento
-    combined_pdf = combine_pdfs(pdf_paths)
-
-    # Prepara a resposta HTTP com o PDF combinado
-    response = HttpResponse(combined_pdf.getvalue(),
-                            content_type='application/pdf')
-    response['Content-Disposition'] = f'attachment; filename="{model_name}_combined_report.pdf"'
-
-    return response
+    return _montar_resposta_download_pdfs(
+        pdf_paths,
+        f'{model_name}_filtered_reports',
+    )
 
 
 class ProntuarioListView(LoginRequiredMixin, CustomPermissionRequiredMixin, FilterObjectsByEstabelecimentoMixin, ListView):
@@ -482,38 +547,42 @@ class EvolucaoCreateView(LoginRequiredMixin, CustomPermissionRequiredMixin, Filt
                 self.request, "Sua sessão expirou. Por favor, faça login novamente.")
             return HttpResponseRedirect(reverse('login'))
 
-        # Atribuir o atendimento e o estabelecimento ao objeto Evolucao
         atendimento_id = self.kwargs.get('atendimento_id')
         atendimento = Atendimento.objects.get(pk=atendimento_id)
-        form.instance.atendimento = atendimento
         estabelecimento_id = self.request.session.get("estabelecimento_id")
 
-        if estabelecimento_id:
-            estabelecimento = Estabelecimento.objects.get(
-                id=estabelecimento_id)
-            form.instance.estabelecimento = estabelecimento
-        else:
+        if not estabelecimento_id:
             messages.error(
                 self.request, "Selecione um estabelecimento antes de criar um atendimento.")
             return self.form_invalid(form)
 
-        # Atribuir o usuário logado ao objeto Evolucao
-        form.instance.us_registro = self.request.user
+        try:
+            with transaction.atomic():
+                evolucao = form.save(commit=False)
+                evolucao.atendimento = atendimento
+                evolucao.estabelecimento = Estabelecimento.objects.get(id=estabelecimento_id)
+                evolucao.us_registro = self.request.user
+                evolucao.full_clean()
+                evolucao.save()
 
-        # Salvar o objeto Evolucao
-        evolucao = form.save(commit=False)
-        # Salvar para obter um ID
-        evolucao.save()
+                pdf_gerado = salvar_pdf_prontuario(
+                    self.request.user, evolucao, assinar=evolucao.assinar)
+        except ValidationError as exc:
+            form.add_error('evolucao', exc)
+            return self.form_invalid(form)
+        except Exception:
+            messages.error(
+                self.request, "Não foi possível gerar o PDF da evolução. A evolução não foi salva.")
+            return self.form_invalid(form)
 
-        # Gerar e salvar PDF, assinado se necessário
-        relatorio = salvar_pdf_prontuario(
-            self.request.user, evolucao, assinar=evolucao.assinar)
-        if relatorio:
+        messages.success(self.request, settings.MSG_ADD)
+
+        if pdf_gerado:
             messages.success(
-                self.request, f"PDF assinado com sucesso! & {settings.MSG_ADD}")
+                self.request, "PDF assinado com sucesso!")
         else:
             messages.warning(
-                self.request, f"PDF gerado sem assinatura! & {settings.MSG_ADD}")
+                self.request, "Relatório gerado sem assinatura.")
 
         return HttpResponseRedirect(self.get_success_url())
 
@@ -852,32 +921,34 @@ class EvolucaoUpdateView(LoginRequiredMixin, UserIsCreatorMixin, CustomPermissio
         return kwargs
 
     def form_valid(self, form):
-        super().form_valid(form)
-
         if not self.request.user.is_authenticated:
             messages.warning(
                 self.request, "Sua sessão expirou. Por favor, faça login novamente.")
-            # substitua 'login' com sua URL de login
             return HttpResponseRedirect(reverse('login'))
 
-        self.object = form.save(commit=False)
-        self.object.us_atualizacao = self.request.user
-        self.object.dt_atualizacao = timezone.now()
-        self.object.save()
+        try:
+            with transaction.atomic():
+                self.object = form.save(commit=False)
+                self.object.us_atualizacao = self.request.user
+                self.object.dt_atualizacao = timezone.now()
+                self.object.full_clean()
+                self.object.save()
 
-        # Atualizar status dos Relatórios relacionados à Evolução
-        Relatorio.objects.filter(
-            content_type=ContentType.objects.get_for_model(self.object),
-            object_id=self.object.pk
-        ).update(status='I')
+                Relatorio.objects.filter(
+                    content_type=ContentType.objects.get_for_model(self.object),
+                    object_id=self.object.pk
+                ).update(status='I')
 
-        if self.object.status != 'I':
-            relatorio = salvar_pdf_prontuario(
-                self.request.user, self.object, assinar=self.object.assinar)
-            if relatorio:
-                messages.success(self.request, "PDF assinado com sucesso!")
-            else:
-                messages.warning(self.request, "PDF gerado sem assinatura!")
+                if self.object.status != 'I':
+                    salvar_pdf_prontuario(
+                        self.request.user, self.object, assinar=self.object.assinar)
+        except ValidationError as exc:
+            form.add_error('evolucao', exc)
+            return self.form_invalid(form)
+        except Exception:
+            messages.error(
+                self.request, "Não foi possível gerar o PDF da evolução. As alterações não foram salvas.")
+            return self.form_invalid(form)
 
         messages.success(self.request, "Evolução atualizada com sucesso.")
         return HttpResponseRedirect(self.get_success_url())
@@ -2935,6 +3006,22 @@ class PrescricaoGeralListView(LoginRequiredMixin, CustomPermissionRequiredMixin,
     model = Prescricao
     context_object_name = "prescricao_listar"
     paginate_by = 15
+    return_url_session_key = 'prescricao_geral_return_url'
+
+    def _get_return_url(self):
+        referer = self.request.META.get('HTTP_REFERER')
+        current_path = self.request.path
+
+        if referer:
+            parsed_referer = urlparse(referer)
+            referer_path = parsed_referer.path or ''
+
+            if parsed_referer.netloc in ('', self.request.get_host()) and referer_path and referer_path != current_path:
+                if parsed_referer.query:
+                    referer_path = f'{referer_path}?{parsed_referer.query}'
+                self.request.session[self.return_url_session_key] = referer_path
+
+        return self.request.session.get(self.return_url_session_key)
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -3009,6 +3096,7 @@ class PrescricaoGeralListView(LoginRequiredMixin, CustomPermissionRequiredMixin,
         disable_button = current_filters.get('status') == 'I'
 
         context['disable_button'] = disable_button
+        context['return_to_last_url'] = self._get_return_url()
 
         return context
 

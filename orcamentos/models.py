@@ -5,8 +5,8 @@ from dominios.utils import validate_anexo_file
 from django.utils import timezone
 from django.contrib.auth.models import User
 from dominios.choices import status_choices
-from django.core.validators import MaxLengthValidator
 from admin_cadastros.models import Estabelecimento
+from dominios.text_validators import validate_evolucao_like_text
 # Create your models here.
 
 
@@ -15,7 +15,7 @@ class Orcamentos(models.Model):
 
     observacao = models.CharField(max_length=255, verbose_name="Observações")
 
-    orcamento = models.TextField(validators=[MaxLengthValidator(5500)])
+    orcamento = models.TextField(validators=[validate_evolucao_like_text])
 
     anexo = models.FileField(upload_to='anexos/orcamentos/%Y/%m/', blank=True, null=True, help_text='Adicione arquivos dos formatos PDF, JPG, JPEG, PNG.',
                              validators=[FileExtensionValidator(['pdf', 'jpg', 'jpeg', 'png']), validate_anexo_file])

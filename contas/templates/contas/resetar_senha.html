@@ -8,51 +8,64 @@
 <link rel="stylesheet" href="{% static 'css/auth_style.css' %}">
 {% endblock %}
 
-<div class="row min-vh-100 rounded">
+<div class="auth-page">
+    <div class="auth-shell">
+        <div class="auth-layout" style="grid-template-columns: minmax(0, 0.85fr) minmax(340px, 0.92fr);">
+            <section class="auth-panel auth-panel-simple">
+                <div>
+                    <div class="auth-brand-kicker">
+                        <i class="fas fa-shield-keyhole"></i>
+                        <span>Redefinição segura</span>
+                    </div>
+                    <h1 class="auth-brand-title"><span>Nova senha</span></h1>
+                    <p class="auth-card-subtitle text-white-50">Defina uma nova senha para continuar usando a plataforma com segurança.</p>
+                </div>
 
+                <div class="auth-footer">
+                    <strong>ManaterOntec Solutions</strong><br />
+                    CNPJ 20141965000101<br />
+                    admin@managerontecsolutions.com.br
+                </div>
+            </section>
 
+            <section class="auth-card">
+                <div class="auth-card-head">
+                    <div class="auth-card-logo">
+                        <i class="fas fa-key"></i>
+                    </div>
+                    <h2 class="auth-card-title">Redefinir senha</h2>
+                    <p class="auth-card-subtitle">Escolha uma senha forte e confirme os dados antes de continuar.</p>
+                </div>
 
-    <div class="col-md-12 p-2">
+                <div class="auth-messages">
+                    {% include 'parciais/_messages.html' %}
+                </div>
 
-
-        {% block add %}
-        <div class="d-flex justify-content-center mt-4">
-            {% include 'parciais/_messages.html' %}
-        </div>
-        {% endblock %}
-
-        <div class="table-container p-2">
-            <div class="auth-container p-2">
-
-                <div class="auth-box bg-dark rounded">
-
-                    <div class="col-md-12 p-2 mt-4">
-                        <h1 class="text-white text-center">ManagerONTEC</h1>
+                <form method="POST" action="." class="auth-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="uidb64" value="{{ uidb64 }}" class="form-control">
+                    <input type="hidden" name="token" value="{{ token }}" class="form-control">
+                    <div class="auth-field">
+                        <label for="novasenha"><i class="fas fa-key me-2"></i>Nova senha</label>
+                        <input type="password" name="novasenha" id="novasenha" class="form-control">
+                    </div>
+                    <div class="auth-field">
+                        <label for="confirmasenha"><i class="fas fa-key me-2"></i>Confirmar senha</label>
+                        <input type="password" name="confirmasenha" id="confirmasenha" class="form-control" autocomplete="off">
                     </div>
 
-                    <form method="POST" action=".">
-                        {% csrf_token %}
-                        <input type="hidden" name="uidb64" value="{{ uidb64 }}" class="form-control">
-                        <input type="hidden" name="token" value="{{ token }}" class="form-control">
-                        <div class="form-group">
-                            <label for="novasenha" class="form-label"><i class="fas fa-key"></i> Nova Senha</label>
-                            <input type="password" name="novasenha" id="novasenha" class="form-control">
-                        </div>
-                        <div class="form-group">
-                            <label for="confirmasenha" class="form-label"><i class="fas fa-key"></i> Confirma
-                                Senha</label>
-                            <input type="password" name="confirmasenha" id="confirmasenha" class="form-control"
-                                autocomplete="off">
-                        </div>
-                        <div class="d-flex justify-content-between align-items-center">
-                            <button title="Clique aqui para alterar" type="submit" class="btn btn-outline-light"
-                                id="btn-alterar">
-                                <i class="fas fa-key"></i> Alterar
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
+                    <div class="auth-actions">
+                        <a href="{% url 'login' %}" class="auth-btn-secondary">
+                            <i class="fas fa-arrow-left"></i>
+                            <span>Voltar</span>
+                        </a>
+                        <button title="Clique aqui para alterar" type="submit" class="auth-btn-primary" id="btn-alterar">
+                            <i class="fas fa-key"></i>
+                            <span>Redefinir</span>
+                        </button>
+                    </div>
+                </form>
+            </section>
         </div>
     </div>
 </div>

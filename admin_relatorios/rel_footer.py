@@ -48,5 +48,4 @@ def genFooterRel(footer_data, width, height):
         ('VALIGN', (1, 0), (1, 0), 'MIDDLE'),
         # ('BACKGROUND', (0, 0), (-1, -1), color),
     ])
-    print("Footer Table: ", res)  # Debugging
     return res

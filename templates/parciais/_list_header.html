@@ -1,0 +1,28 @@
+<div class="listing-header">
+    <div class="listing-header-brand">
+        <div class="listing-header-icon">
+            <i class="{{ icon_class|default:'fas fa-list' }}"></i>
+        </div>
+        <div>
+            <div class="listing-header-title">{{ title }}</div>
+            <div class="listing-header-subtitle">{{ subtitle|default:'Painel responsivo com leitura rápida e navegação visual.' }}</div>
+        </div>
+    </div>
+
+    <div class="listing-header-chips">
+        <div class="listing-header-chip">
+            <span>Registros</span>
+            <strong>{% if page_obj %}{{ page_obj.paginator.count }}{% else %}{{ object_list|length }}{% endif %}</strong>
+        </div>
+        <div class="listing-header-chip">
+            <span>Página</span>
+            <strong>{% if page_obj %}{{ page_obj.number }}/{{ page_obj.paginator.num_pages }}{% else %}1/1{% endif %}</strong>
+        </div>
+        {% if context_value %}
+        <div class="listing-header-chip listing-header-chip-wide">
+            <span>{{ context_label|default:'Contexto' }}</span>
+            <strong>{{ context_value }}</strong>
+        </div>
+        {% endif %}
+    </div>
+</div>

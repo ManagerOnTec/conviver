@@ -27,11 +27,11 @@ def handle_database_error(view_func):
         except OperationalError as e:
             logger.error(f"Erro de banco de dados: {str(e)}")
             messages.error(request, "Erro ao acessar o banco de dados. Execute: python manage.py migrate")
-            return redirect('cadastros_index')
+            return redirect('admin_cadastros:cadastros_index')
         except Exception as e:
             logger.error(f"Erro: {str(e)}")
             messages.error(request, f"Erro: {str(e)}")
-            return redirect('cadastros_index')
+            return redirect('admin_cadastros:cadastros_index')
     return wrapper
 
 
@@ -43,11 +43,11 @@ class HandleDatabaseErrorMixin:
         except OperationalError as e:
             logger.error(f"Erro de banco de dados: {str(e)}")
             messages.error(request, "Erro ao acessar o banco de dados. Execute: python manage.py migrate")
-            return redirect('cadastros_index')
+            return redirect('admin_cadastros:cadastros_index')
         except Exception as e:
             logger.error(f"Erro: {str(e)}")
             messages.error(request, f"Erro: {str(e)}")
-            return redirect('cadastros_index')
+            return redirect('admin_cadastros:cadastros_index')
 
 
 # ============================================================================
@@ -61,7 +61,7 @@ def cartao_index(request):
     estabelecimento_id = request.session.get('estabelecimento_id')
     if not estabelecimento_id:
         messages.warning(request, "Selecione um estabelecimento")
-        return redirect('cadastros_index')
+        return redirect('admin_cadastros:cadastros_index')
     
     estabelecimento = get_object_or_404(Estabelecimento, id=estabelecimento_id)
     cartoes = CartaoPagamento.objects.filter(

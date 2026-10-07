@@ -9,6 +9,7 @@ import django
 from datetime import datetime, timedelta, date
 from decimal import Decimal
 from django.db.models import Sum
+from django.core.files.base import ContentFile
 
 # Setup Django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'managerontec.settings')
@@ -17,9 +18,9 @@ django.setup()
 from django.contrib.auth import get_user_model
 from admin_cadastros.models import Estabelecimento, Empresa, Pessoa
 from admin_cadastros_financeiros.models import Conta, Banco, Agencia
-from admin_tesouraria.models import Caixa, SaldoCaixa, MovimentacaoCaixa
-from admin_pagamentos.models_cartao import CartaoPagamento, TransacaoCartao, FaturaCartao, PagamentoCartao
-from admin_conciliacao.models import ExtratoBancario, Conciliacao
+from apptesouraria.models import Tesouraria, Caixa, SaldoCaixa, MovimentacaoCaixa
+from appcartao.models import CartaoPagamento, TransacaoCartao, FaturaCartao, PagamentoCartao
+from appconciliacao.models import ExtratoBancario
 
 User = get_user_model()
 
@@ -119,11 +120,20 @@ except Exception as e:
 # 6. Criar Caixa
 print("\n6. Criando caixa...")
 try:
-    caixa = Caixa.objects.filter(estabelecimento=estabelecimento).first()
+    tesouraria = Tesouraria.objects.filter(estabelecimento=estabelecimento).first()
+    if not tesouraria:
+        tesouraria = Tesouraria.objects.create(
+            estabelecimento=estabelecimento,
+            descricao='Tesouraria Principal',
+            numero_tesouraria='TES-001',
+            us_registro=user
+        )
+
+    caixa = Caixa.objects.filter(tesouraria=tesouraria).first()
     if not caixa:
         caixa = Caixa.objects.create(
             descricao='Caixa Teste',
-            estabelecimento=estabelecimento,
+            tesouraria=tesouraria,
             numero_caixa='001',
             us_registro=user
         )
@@ -177,7 +187,7 @@ try:
             tipo='SAIDA',
             descricao='Pagamento a fornecedor',
             valor=Decimal('500.00'),
-            origem='PAGAMENTO_FORNECEDOR',
+            origem='PAGAMENTO',
             us_registro=user
         )
         print(f"   OK: Movimentacao SAIDA criada: R$ {mov2.valor}")
@@ -303,14 +313,26 @@ except Exception as e:
 # 13. Criar Extrato Bancário
 print("\n13. Criando extrato bancario...")
 try:
-    extrato = ExtratoBancario.objects.filter(conta=conta).first()
+    extrato = ExtratoBancario.objects.filter(
+        estabelecimento=estabelecimento,
+        numero_conta=conta.numero_conta
+    ).first()
     if not extrato:
+        csv_demo = ContentFile(
+            b"data,descricao,tipo,valor,numero_documento\n01/01/2026,Saldo Inicial,C,10000.00,INI001\n",
+            name='extrato_teste.csv'
+        )
         extrato = ExtratoBancario.objects.create(
-            conta=conta,
+            estabelecimento=estabelecimento,
+            numero_banco=getattr(banco, 'codigo', '001'),
+            numero_agencia=agencia.numero,
+            numero_conta=conta.numero_conta,
             data_inicio=date.today() - timedelta(days=30),
             data_fim=date.today(),
             saldo_inicial=Decimal('10000.00'),
             saldo_final=Decimal('12500.00'),
+            tipo_arquivo='CSV',
+            arquivo=csv_demo,
             us_registro=user
         )
         print(f"   OK: Extrato Bancario criado")

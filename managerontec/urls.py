@@ -1,8 +1,11 @@
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, reverse_lazy
 from django.conf import settings
 from django.conf.urls.static import static
 from admin_relatorios.views import TextoPadraoFiltradoPorTipoView
+
+# Define o destino do link "Ver o site" no Django Admin.
+admin.site.site_url = reverse_lazy('select_estabelecimento')
 
 urlpatterns = [
     path('', include('contas.urls')),
@@ -15,9 +18,8 @@ urlpatterns = [
     path('oficios/', include('oficios.urls')),
     path('orcamentos/', include('orcamentos.urls')),
     path('atas/', include('atas.urls')),
+    path('documentos-legais/', include('documentos_legais.urls')),
     path('admin_prescricoes/', include('admin_prescricoes.urls')),
-    path('admin_conciliacao/', include('admin_conciliacao.urls')),
-    path('admin_tesouraria/', include('admin_tesouraria.urls')),
     path('admin_pagamentos/', include('admin_pagamentos.urls')),
     
     path('apptesouraria/', include('apptesouraria.urls')),

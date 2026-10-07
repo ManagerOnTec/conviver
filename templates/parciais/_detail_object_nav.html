@@ -1,0 +1,62 @@
+<div class="detail-nav-panel">
+  <div class="detail-nav-header">
+    <span class="detail-nav-kicker">Navegacao</span>
+    <span class="detail-nav-title">{{ nav_label|default:'Registros relacionados' }}</span>
+  </div>
+
+  <div class="detail-nav-actions">
+    {% if objeto_anterior %}
+      <a
+        class="detail-nav-link"
+        href="{% url detail_url_name objeto_anterior.id %}"
+        aria-label="Abrir registro anterior"
+        title="Abrir registro anterior"
+      >
+        <span class="detail-nav-icon">
+          <i class="fas fa-chevron-left"></i>
+        </span>
+        <span class="detail-nav-copy">
+          <small>Anterior</small>
+          <strong>Registro #{{ objeto_anterior.id }}</strong>
+        </span>
+      </a>
+    {% else %}
+      <span class="detail-nav-link-disabled" aria-disabled="true">
+        <span class="detail-nav-icon">
+          <i class="fas fa-chevron-left"></i>
+        </span>
+        <span class="detail-nav-copy">
+          <small>Anterior</small>
+          <strong>Primeiro registro</strong>
+        </span>
+      </span>
+    {% endif %}
+
+    {% if proximo_objeto %}
+      <a
+        class="detail-nav-link"
+        href="{% url detail_url_name proximo_objeto.id %}"
+        aria-label="Abrir proximo registro"
+        title="Abrir proximo registro"
+      >
+        <span class="detail-nav-copy">
+          <small>Proximo</small>
+          <strong>Registro #{{ proximo_objeto.id }}</strong>
+        </span>
+        <span class="detail-nav-icon">
+          <i class="fas fa-chevron-right"></i>
+        </span>
+      </a>
+    {% else %}
+      <span class="detail-nav-link-disabled" aria-disabled="true">
+        <span class="detail-nav-copy">
+          <small>Proximo</small>
+          <strong>Ultimo registro</strong>
+        </span>
+        <span class="detail-nav-icon">
+          <i class="fas fa-chevron-right"></i>
+        </span>
+      </span>
+    {% endif %}
+  </div>
+</div>

@@ -1,0 +1,26 @@
+<div class="listing-header">
+    <div class="listing-header-brand">
+        <div class="listing-header-icon">
+            <i class="{{ icon_class|default:'fas fa-folder-open' }}"></i>
+        </div>
+        <div>
+            <div class="listing-header-title">{{ title }}</div>
+            <div class="listing-header-subtitle">{{ subtitle|default:'Fluxo organizado para leitura e operação da tela atual.' }}</div>
+        </div>
+    </div>
+
+    <div class="listing-header-chips">
+        {% if primary_label and primary_value %}
+        <div class="listing-header-chip">
+            <span>{{ primary_label }}</span>
+            <strong>{{ primary_value }}</strong>
+        </div>
+        {% endif %}
+        {% if secondary_label and secondary_value %}
+        <div class="listing-header-chip listing-header-chip-wide">
+            <span>{{ secondary_label }}</span>
+            <strong>{{ secondary_value }}</strong>
+        </div>
+        {% endif %}
+    </div>
+</div>

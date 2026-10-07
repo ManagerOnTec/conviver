@@ -23,7 +23,7 @@ from django_select2.forms import Select2MultipleWidget
 from admin_cadastros_assistenciais.models import CID
 from tinymce.widgets import TinyMCE
 from django.core.validators import MaxLengthValidator
-from dominios.utils import validar_tamanho_ata
+from dominios.text_validators import validate_evolucao_like_text
 
 
 class OrcamentosCreateForm(FilterByStatusMixin, forms.ModelForm):
@@ -37,7 +37,7 @@ class OrcamentosCreateForm(FilterByStatusMixin, forms.ModelForm):
                        'contextmenu': False}
         ),
         validators=[
-            validar_tamanho_ata
+            validate_evolucao_like_text
         ]
     )
 
@@ -72,7 +72,7 @@ class OrcamentosUpdateForm(FilterByStatusMixin, forms.ModelForm):
                        'contextmenu': False}
         ),
         validators=[
-            validar_tamanho_ata
+            validate_evolucao_like_text
         ]
     )
 

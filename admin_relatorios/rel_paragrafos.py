@@ -1,4 +1,4 @@
-from reportlab.platypus import Table, Paragraph
+from reportlab.platypus import Table, Paragraph, Spacer
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib import colors
 from reportlab.platypus import TableStyle
@@ -42,11 +42,13 @@ def limpar_html_para_pdf(texto):
 
 
 def genParagrafosRel(parag, width, height, p, tipo="evolucao"):
+    margem_lateral = width * 5 / 100
+
     estilo_paragrafo = ParagraphStyle(
         name='ParagrafoStyle',
         fontSize=10,
-        leftIndent=5,
-        rightIndent=5,
+        leftIndent=margem_lateral,
+        rightIndent=margem_lateral,
         wordWrap=True,
         leading=12,
         spaceAfter=5,
@@ -57,8 +59,8 @@ def genParagrafosRel(parag, width, height, p, tipo="evolucao"):
         name='CabecalhoStyle',
         fontSize=10,
         alignment=1,  # Centralizado
-        leftIndent=5,
-        rightIndent=5,
+        leftIndent=margem_lateral,
+        rightIndent=margem_lateral,
         wordWrap=True,
         leading=12,
         spaceAfter=5,
@@ -245,105 +247,36 @@ def genParagrafosRel(parag, width, height, p, tipo="evolucao"):
         data = [['', sub_table, '']]
         widthList = [width * 5 / 100, width * 90 / 100, width * 5 / 100]
 
-    elif tipo == "atas":
-        # Supondo que 'parag' seja uma string formatada com diagnósticos e observação como descrito
-        # linhas = parag.split('\n')
-        # data_sub_table = []
-
-        parag = limpar_html_para_pdf(parag)  # Limpa o HTML antes de processar
-
-        # Substitui quebras de linha por <br/> e divide o texto
-        # Corrigido: substitui '\n' por '<br/>'
-        parag = parag.replace('\n', '<br/>')
-        linhas = parag.split('<br/>')  # Divide o texto por '<br/>'
-
-        data_sub_table = []
-
-        for linha in linhas:
-            celula = [Paragraph(linha, estilo_paragrafo)]
-            data_sub_table.append(celula)
-
-        sub_table = Table(data_sub_table, colWidths=[width * 90 / 100])
-        sub_table.setStyle(TableStyle([
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            # ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.black),
-            # ('BOX', (0, 0), (-1, -1), 0.25, colors.black),
-        ]))
-
-        data = [['', sub_table, '']]
-        widthList = [width * 5 / 100, width * 90 / 100, width * 5 / 100]
-
-    elif tipo == "oficios":
-        # Supondo que 'parag' seja uma string formatada com diagnósticos e observação como descrito
-        # linhas = parag.split('\n')
-        # data_sub_table = []
-
-        parag = limpar_html_para_pdf(parag)  # Limpa o HTML antes de processar
-
-        # Substitui quebras de linha por <br/> e divide o texto
-        # Corrigido: substitui '\n' por '<br/>'
-        parag = parag.replace('\n', '<br/>')
-        linhas = parag.split('<br/>')  # Divide o texto por '<br/>'
-
-        data_sub_table = []
-
-        for linha in linhas:
-            celula = [Paragraph(linha, estilo_paragrafo)]
-            data_sub_table.append(celula)
-
-        sub_table = Table(data_sub_table, colWidths=[width * 90 / 100])
-        sub_table.setStyle(TableStyle([
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            # ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.black),
-            # ('BOX', (0, 0), (-1, -1), 0.25, colors.black),
-        ]))
-
-        data = [['', sub_table, '']]
-        widthList = [width * 5 / 100, width * 90 / 100, width * 5 / 100]
-
-    elif tipo == "orcamentos":
-        # Supondo que 'parag' seja uma string formatada com diagnósticos e observação como descrito
-        # linhas = parag.split('\n')
-        # data_sub_table = []
-
-        parag = limpar_html_para_pdf(parag)  # Limpa o HTML antes de processar
-
-        # Substitui quebras de linha por <br/> e divide o texto
-        # Corrigido: substitui '\n' por '<br/>'
-        parag = parag.replace('\n', '<br/>')
-        linhas = parag.split('<br/>')  # Divide o texto por '<br/>'
-
-        data_sub_table = []
-
-        for linha in linhas:
-            celula = [Paragraph(linha, estilo_paragrafo)]
-            data_sub_table.append(celula)
-
-        sub_table = Table(data_sub_table, colWidths=[width * 90 / 100])
-        sub_table.setStyle(TableStyle([
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            # ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.black),
-            # ('BOX', (0, 0), (-1, -1), 0.25, colors.black),
-        ]))
-
-        data = [['', sub_table, '']]
-        widthList = [width * 5 / 100, width * 90 / 100, width * 5 / 100]
-
     else:
+        # Para evolução e demais textos longos, a sequência de Paragraphs é a forma mais segura
+        # para paginar corretamente sem empilhar tudo em uma única célula que não respeita o espaço da página.
+        if tipo in {"evolucao", "atas", "oficios", "orcamentos"}:
+            chunks = [chunk.strip() for chunk in re.split(r'<br\s*/?>|\n', parag or '') if chunk.strip()]
+            if not chunks:
+                chunks = ["Nenhum texto disponível."]
+
+            flowables = []
+            for chunk in chunks:
+                flowables.append(Paragraph(chunk, estilo_paragrafo))
+                flowables.append(Spacer(1, 3 * mm))
+            return flowables
+
         # Para outros tipos que não são 'prescricao' nem 'adep', usa-se um parágrafo simples
         paragrafo = Paragraph(parag, estilo_paragrafo) if parag else Paragraph(
             "Nenhum texto disponível.", estilo_paragrafo)
         data = [['', paragrafo, '']]
         widthList = [width * 5 / 100, width * 90 / 100, width * 5 / 100]
 
-    # Cria a tabela resultante com as configurações definidas
-    res = Table(data, colWidths=widthList, rowHeights=[height for _ in data])
+    # Cria a tabela resultante com as configurações definidas.
+    # A altura deve ser calculada pelo próprio flowable para permitir a quebra automática de páginas.
+    res = Table(data, colWidths=widthList)
     res.setStyle(TableStyle([
         ('ALIGN', (1, 0), (1, -1), 'CENTER'),
         ('VALIGN', (1, 0), (1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
     ]))
 
     return res

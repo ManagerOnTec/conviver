@@ -5,8 +5,8 @@ from dominios.utils import validate_anexo_file
 from django.utils import timezone
 from django.contrib.auth.models import User
 from dominios.choices import status_choices, tipo_atas_choices
-from django.core.validators import MaxLengthValidator
 from admin_cadastros.models import Estabelecimento
+from dominios.text_validators import validate_evolucao_like_text
 # Create your models here.
 
 # Modelo principal para as atas
@@ -27,7 +27,7 @@ class Atas(models.Model):
         max_length=100
     )
 
-    ata = models.TextField(validators=[MaxLengthValidator(5500)])
+    ata = models.TextField(validators=[validate_evolucao_like_text])
 
     assinar = models.BooleanField(default=True)
 

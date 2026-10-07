@@ -8,30 +8,87 @@
 {% endblock %}
 
 {% block content %}
-  {% block extracss %}
+{% block extracss %}
 <link rel="stylesheet" href="{% static 'css/auth_style.css' %}" />
 {% endblock %}
 
-<div class="row min-vh-100 rounded">
-  <div class="col-md-12 p-2">
-    {% block add %}
-    <div class="d-flex justify-content-center mt-4">
-      {% include 'parciais/_messages.html' %}
-    </div>
-    {% endblock %}
+<div class="auth-page">
+  <div class="auth-shell">
+    <div class="auth-layout">
+      <section class="auth-panel">
+        <div>
+          <div class="auth-brand-kicker">
+            <i class="fas fa-cloud"></i>
+            <span>PEP CLOUD</span>
+          </div>
+          <h1 class="auth-brand-title">PEP CLOUD<span>Gestor Online</span></h1>
+          <hr class="auth-brand-rule" />
+          <p class="auth-brand-subtitle">Prontuário Eletrônico PEP</p>
 
-    <div class="auth-container p-2">
-      <div class="auth-box bg-dark rounded">
-        <div class="col-md-12 p-4">
-          <h1 class="text-white text-center">ManagerONTEC</h1>
+          <div class="auth-capability-grid">
+            <article class="auth-capability-card">
+              <h3>Atendimento</h3>
+              <ul>
+                <li>Internação</li>
+                <li>Evolução</li>
+                <li>Visitas</li>
+                <li>Fichas</li>
+              </ul>
+            </article>
+            <article class="auth-capability-card">
+              <h3>Gestão</h3>
+              <ul>
+                <li>Contratos</li>
+                <li>Mensalidades</li>
+                <li>Financeiro</li>
+                <li>Caixa</li>
+                <li>Relatórios</li>
+              </ul>
+            </article>
+            <article class="auth-capability-card" style="grid-column: 1 / -1;">
+              <h3>Documentos</h3>
+              <ul>
+                <li>Termos e assinaturas</li>
+                <li>Fichas e documentos do paciente</li>
+                <li>Operação 100% online com acesso seguro</li>
+              </ul>
+            </article>
+          </div>
+
+          <div class="auth-cloud-badge">
+            <i class="fas fa-cloud"></i>
+            <span>100% Online</span>
+          </div>
         </div>
 
-        <form method="POST" action="{% url 'login' %}">
+        <div class="auth-footer">
+          <strong>ManaterOntec Solutions</strong><br />
+          CNPJ 20141965000101<br />
+          admin@managerontecsolutions.com.br
+          <a href="https://www.managerontecsolutions.com.br" target="_blank"></a>https://www.managerontecsolutions.com.br</a>
+        </div>
+      </section>
+
+      <section class="auth-card">
+        <div class="auth-card-head">
+          <div class="auth-card-logo">
+            <i class="fas fa-shield-heart"></i>
+          </div>
+          <h2 class="auth-card-title">Entrar na plataforma</h2>
+          <p class="auth-card-subtitle">Acesse o prontuário eletrônico, a gestão assistencial e os documentos do paciente em um único fluxo.</p>
+        </div>
+
+        <div class="auth-messages">
+          {% include 'parciais/_messages.html' %}
+        </div>
+
+        <form method="POST" action="{% url 'login' %}" class="auth-form">
           {% csrf_token %}
 
-          <div class="form-group">
-            <i class="fas fa-user"></i> Usuário
+          <div class="auth-field">
+            <label for="id_usuario"><i class="fas fa-user me-2"></i>Usuário</label>
             <input
+              id="id_usuario"
               type="text"
               name="usuario"
               value="{{ request.POST.user }}"
@@ -40,9 +97,10 @@
             />
           </div>
 
-          <div class="form-group">
-            <label class="form-label"><i class="fas fa-lock"></i> Senha</label>
+          <div class="auth-field">
+            <label for="id_senha"><i class="fas fa-lock me-2"></i>Senha</label>
             <input
+              id="id_senha"
               type="password"
               name="senha"
               class="form-control"
@@ -50,16 +108,19 @@
             />
           </div>
 
-          <div class="d-flex justify-content-between">
-            <a href="{% url 'esqueci' %}" class="btn btn-outline-light">
-              <i class="fas fa-key"></i> Esqueci
-            </a>
-            <button type="submit" class="btn btn-outline-light">
-              <i class="fas fa-home"></i> Entrar
+          <div class="auth-meta-row">
+            <span class="auth-inline-note">Acesso protegido por autenticação individual.</span>
+            <a href="{% url 'esqueci' %}" class="auth-link">Esqueci minha senha</a>
+          </div>
+
+          <div class="auth-actions">
+            <button type="submit" class="auth-btn-primary">
+              <i class="fas fa-arrow-right-to-bracket"></i>
+              <span>Entrar</span>
             </button>
           </div>
         </form>
-      </div>
+      </section>
     </div>
   </div>
 </div>

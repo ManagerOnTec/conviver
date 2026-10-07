@@ -3,6 +3,14 @@ templatetags %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
 <!-- LINKS DO MENU LATERAL -->
 <div class="form-group text-left m-3 mt-2">
   <a
+    title="Fechar"
+    href="{% url 'prescricao_listar'  atendimento_id=atendimento_id %}"
+    class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded"
+    id="btn-fechar"
+  >
+    <i class="fas fa-times-circle me-2"></i>Voltar
+  </a>
+  <a
     href="{% url 'prontuario_detalhe' pk=atendimento_id %}"
     class="mt-2 list-group-item list-group-item-action custom-link rounded"
   >
@@ -117,56 +125,7 @@ templatetags %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
 </div>
 <!-- FIM MENU LATERAL -->
 {% endblock %} {% block cabdados %}
-
-<div class="p-2 text-nowrap" style="max-width: 150px">
-  Prontuário:{{ atendimento_id }}
-</div>
-
-<div class="p-2 text-nowrap" style="max-width: 400px">
-  {{ pessoa_form.nome.value }}
-</div>
-
-{% if pessoa_form.alergico.value == 'S' %}
-
-<button class="btn btn-danger" type="button" disabled>
-  <span>Alergia(s):</span>
-  <span
-    class="spinner-grow spinner-grow-sm"
-    role="status"
-    aria-hidden="true"
-  ></span>
-  {{ pessoa_form.alergias.value }}
-</button>
-{% endif %}
-
-<div class="p-2 text-nowrap" style="max-width: 200px">
-  D.N:{{ pessoa_form.dt_nascimento.value }}
-</div>
-
-<div class="p-2 text-nowrap" style="max-width: 150px">
-  CPF:{{ pessoa_form.cpf.value }}
-</div>
-
-<div class="p-2 text-nowrap" style="max-width: 190px">
-  Cidade: {{ pessoa_form.instance.cidade }}
-</div>
-
-<div class="p-2 text-nowrap" style="max-width: 120px">Idade:{{ idade }}</div>
-<div class="text-nowrap p-2" style="max-width: 120px">
-  Sexo:{{ pessoa_form.sexo.value }}
-</div>
-
-<div class="text-nowrap p-2" style="max-width: 150px">
-  Cor/Raça:{{ pessoa_form.cor_raca.value }}
-</div>
-
-<div class="text-nowrap p-2" style="max-width: 180px">
-  Religião:{{ pessoa_form.religiao.value }}
-</div>
-
-<div class="text-nowrap p-2" style="max-width: 300px">
-  Filiação:{{ pessoa_form.pai.value }}, {{ pessoa_form.mae.value }}
-</div>
+{% include 'parciais/_patient_record_header.html' with module_icon='fas fa-pills' module_title='Itens da Prescrição' module_subtitle='Visão dos itens prescritos com foco em aprazamento e observações.' show_cpf=True %}
 
 <!-- FIM DADOS DO OBJETO -->
 {% endblock %} {% block lista %}
@@ -175,16 +134,7 @@ templatetags %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
   <table class="table">
     <thead class="sticky-lista bg-success text-white">
       <tr>
-        <th>
-          <a
-            title="Fechar"
-            href="{% url 'prescricao_listar'  atendimento_id=atendimento_id %}"
-            class="btn btn-sm btn-light btn-outline-dark"
-            id="btn-fechar"
-          >
-            <i class="fas fa-times-circle"></i> Voltar
-          </a>
-        </th>
+        <th>Ações</th>
         <th>Prescrição</th>
         <th>ID.Item</th>
         <th>ItemPrescrição</th>
@@ -263,8 +213,12 @@ templatetags %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
 {% endblock %} {% block paginate %}
 <!--PAGINACAO-->
 {% if is_paginated %}
-<div id="pages" class="pagination justify-content-start p-2">
-  <ul class="pagination btn-sm">
+<div id="pages" class="listing-pagination-panel">
+  <div class="listing-pagination-meta">
+    <span>Exibindo {{ page_obj.start_index }}-{{ page_obj.end_index }}</span>
+    <strong>de {{ page_obj.paginator.count }} registros</strong>
+  </div>
+  <ul class="pagination listing-pagination btn-sm mb-0">
     {% if page_obj.has_previous %}
     <li class="page-item">
       <a

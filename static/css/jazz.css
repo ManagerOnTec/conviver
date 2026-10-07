@@ -1,0 +1,32 @@
+/* Para alterar a cor de fundo e do texto dos links que estão diretamente no dropdown */
+.navbar-dark .navbar-nav .dropdown .dropdown-menu a {
+    color: white;
+    background-color: #343a40;
+    /* Dark */
+}
+
+/* Quando o mouse passa sobre os links que estão diretamente no dropdown */
+.navbar-dark .navbar-nav .dropdown .dropdown-menu a:hover {
+    color: white;
+    background-color: black;
+}
+
+
+
+/* Altera a cor do último item da breadcrumb */
+li.breadcrumb-item.active {
+    color: #3366d3 !important;
+
+}
+
+tr.add-row td a.btn.btn-sm.btn-default.float-right {
+    color: white !important;
+    background-color: #28a745 !important;
+    /* Altere para a cor de fundo desejada */
+}
+
+.alert-success {
+    background-color: rgb(40, 167, 69) !important;
+    color: white !important;
+    /* Altere para a cor de fundo desejada */
+}

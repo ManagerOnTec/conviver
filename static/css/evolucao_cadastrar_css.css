@@ -1,0 +1,76 @@
+/* Estilos básicos para o menu de contexto */
+#context-menu {
+    display: none;
+    position: absolute;
+    background-color: rgb(0, 0, 0);
+    /* Fundo preto */
+    color: #ffffff;
+    /* Texto branco */
+    border: 1px solid #ffffff;
+    /* Borda branca */
+    z-index: 1000;
+    border-radius: 5px;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+    /* Corrigido para incluir opacidade */
+    white-space: nowrap;
+}
+
+/* Utilizando classes do Bootstrap para responsividade */
+#context-menu ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+    background-color: rgb(0, 0, 0);
+    /* Fundo preto */
+    color: #ffffff;
+    /* Texto branco */
+    border: 1px solid #ffffff;
+    /* Borda branca */
+    white-space: nowrap;
+}
+
+#context-menu li,
+.has-submenu,
+.has-sub {
+    padding: 8px 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    color: #ffffff;
+    /* Texto branco */
+}
+
+/* Hover effect */
+#context-menu li:hover,
+.has-submenu:hover,
+.has-sub:hover {
+    background-color: #0000ff;
+    /* Fundo muda para azul ao passar o mouse */
+}
+
+/* Submenu */
+.submenu {
+    display: none;
+    position: absolute;
+    left: 100%;
+    top: 0;
+    white-space: nowrap;
+    background-color: rgb(0, 0, 0);
+    /* Fundo preto */
+    color: #ffffff;
+    /* Texto branco */
+    border-radius: 5px;
+    border: 1px solid #ffffff;
+    /* Borda branca */
+}
+
+.has-submenu:hover .submenu,
+.has-sub:hover .submenu {
+    display: block;
+}
+
+.has-submenu::after,
+.has-sub::after {
+    position: absolute;
+    color: #ffffff;
+    /* Texto branco */
+}

@@ -18,7 +18,7 @@ from contas.models import Perfil
 
 from reportlab.lib.units import mm, cm
 from reportlab.lib import colors
-from reportlab.platypus import Table, TableStyle
+from reportlab.platypus import Table, TableStyle, SimpleDocTemplate, Frame, PageTemplate
 from admin_relatorios.utils import assinar_pdf
 from admin_cadastros.utils import extrair_iniciais
 from admin_cadastros_assistenciais.utils import get_dados_profissional
@@ -34,7 +34,7 @@ from prontuarios.models import ProdutoPrescricao, Adep
 from django.db.models import Q
 
 
-def gerar_pdf_prontuario(obj, user):
+def gerar_pdf_prontuario(obj, user, assinar=False, assinatura_texto=None):
     # buffer e nao pdf
     buffer = BytesIO()
 
@@ -345,29 +345,17 @@ def gerar_pdf_prontuario(obj, user):
     # Fim relatório Perdas e Ganhos #####################################################
 
     if nome_modelo == 'atas':
-
-        texto_atas = (
-            f"{obj.ata or ''}\t"
-        )
-        texto_parag = texto_atas
+        texto_parag = obj.ata or ''
         atendimento = None
         pessoa = None
 
     if nome_modelo == 'orcamentos':
-
-        texto_orcamentos = (
-            f"{obj.orcamento or ''}\t"
-        )
-        texto_parag = texto_orcamentos
+        texto_parag = obj.orcamento or ''
         atendimento = None
         pessoa = None
 
     if nome_modelo == 'oficios':
-
-        texto_oficios = (
-            f"{obj.oficio or ''}\t"
-        )
-        texto_parag = texto_oficios
+        texto_parag = obj.oficio or ''
         atendimento = None
         pessoa = None
 
@@ -467,39 +455,93 @@ def gerar_pdf_prontuario(obj, user):
     # fim dados das variaveis dos gerenciadores para passar aos metodos construtores da tabela
     ################################################################
 
-    #################################################################
-    # Montagem da tabela principal com todos os métodos de reportlab
-    mainTable = Table([
-        [genHeaderRel(logo_path, header_data,
-                      right_data, width, heightList[0])],
-        [genDadosPessoaisRel(nome_pessoa, width, heightList[1])],
-        [genDadosUsuarioRel(dados, width, heightList[2])],
-        [genDadosObjRel(vardinpk, width, heightList[3])],
-        [genParagrafosRel(texto_parag, width,
-                          heightList[4], p, tipo=nome_modelo)],
-        [genAssinaturaRel(width, heightList[5])],
-        [genFooterRel(footer_data, width, heightList[6])],
-    ], colWidths=width, rowHeights=heightList)
-    # Fim tabelas e métods
+    def _draw_fixed_sections(canvas, doc):
+        page_top = doc.height - doc.topMargin - 4 * mm
+        fixed = [
+            genHeaderRel(logo_path, header_data, right_data, doc.width, 22 * mm),
+            genDadosPessoaisRel(nome_pessoa, doc.width, 10 * mm),
+            genDadosUsuarioRel(dados, doc.width, 10 * mm),
+            genDadosObjRel(vardinpk, doc.width, 8 * mm),
+        ]
 
-    # Aplicando estilos à tabela principal
-    mainTable.setStyle([
-        ('GRID', (0, 0), (-1, -1), 10, colors.lightgrey),
+        y = page_top
+        for table in fixed:
+            table.wrapOn(canvas, doc.width, doc.height)
+            table_h = getattr(table, '_height', 0)
+            if not table_h:
+                table_h = 10 * mm
+            table.drawOn(canvas, doc.leftMargin, y - table_h)
+            y -= table_h + 2 * mm
 
-        ('LEFTPADDING', (0, 0), (-1, -1), 0),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-        ('TOPPADDING', (0, 0), (-1, -1), 0),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        if footer_data:
+            footer_table = genFooterRel(footer_data, doc.width, 10 * mm)
+            footer_table.wrapOn(canvas, doc.width, doc.height)
+            footer_y = 6 * mm
+            footer_table.drawOn(canvas, doc.leftMargin, footer_y)
 
-    ])
-    # Fim estilos
-    #################################################################
+    left_margin = 12 * mm
+    right_margin = 12 * mm
+    top_margin = 10 * mm
+    bottom_margin = 18 * mm
+    page_width, page_height = A4
+    content_width = page_width - left_margin - right_margin
 
-    # Desenhando a tabela no canvas
-    mainTable.wrapOn(p, 0, 0)
-    mainTable.drawOn(p, 0, 0)
-    # metodos gerar e salvar pdf em buffer
-    p.showPage()
-    p.save()
+    body_flowable = genParagrafosRel(texto_parag, content_width, 0, None, tipo=nome_modelo)
+    story = []
+    if isinstance(body_flowable, list):
+        story.extend(body_flowable)
+    else:
+        story.append(body_flowable)
+
+    fixed_block_height = 54 * mm
+    footer_height = 12 * mm if footer_data else 0
+    body_top = page_height - top_margin - fixed_block_height - 8 * mm
+    body_bottom = bottom_margin + footer_height + 10 * mm
+
+    canvas_obj = canvas.Canvas(buffer, pagesize=A4)
+
+    def draw_fixed_sections():
+        page_top = page_height - top_margin - 4 * mm
+        fixed = [
+            genHeaderRel(logo_path, header_data, right_data, content_width, 22 * mm),
+            genDadosPessoaisRel(nome_pessoa, content_width, 10 * mm),
+            genDadosUsuarioRel(dados, content_width, 10 * mm),
+            genDadosObjRel(vardinpk, content_width, 8 * mm),
+        ]
+
+        y = page_top
+        for table in fixed:
+            table.wrapOn(canvas_obj, content_width, page_height)
+            table_h = getattr(table, '_height', 10 * mm)
+            table.drawOn(canvas_obj, left_margin, y - table_h)
+            y -= table_h + 2 * mm
+
+        if footer_data:
+            footer_table = genFooterRel(footer_data, content_width, 10 * mm)
+            footer_table.wrapOn(canvas_obj, content_width, page_height)
+            footer_table.drawOn(canvas_obj, left_margin, 6 * mm)
+
+    draw_fixed_sections()
+
+    current_y = body_top
+    for flowable in story:
+        if hasattr(flowable, 'wrap'):
+            flowable.wrap(content_width, page_height)
+            flowable_h = getattr(flowable, 'height', 0) or getattr(flowable, '_height', 0) or 0
+        else:
+            flowable_h = 0
+
+        if flowable_h <= 0:
+            continue
+
+        if current_y - flowable_h < body_bottom:
+            canvas_obj.showPage()
+            draw_fixed_sections()
+            current_y = body_top
+
+        flowable.drawOn(canvas_obj, left_margin, current_y - flowable_h)
+        current_y -= flowable_h + 2 * mm
+
+    canvas_obj.save()
     buffer.seek(0)
     return buffer

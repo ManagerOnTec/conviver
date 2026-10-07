@@ -69,7 +69,7 @@ def validar_tamanho_ata(value):
     if not value.strip().endswith(('\n', '<br>', '<br/>', '</p>', '</li>')):
         linhas += 1
 
-    if tamanho > 4000:
+    if tamanho > 8000:
         raise ValidationError(
             f"O campo deve conter no máximo 4000 caracteres. Atual: {tamanho}.")
 

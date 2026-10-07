@@ -6,88 +6,85 @@
 {% block titulos %}{{title}}|{% endblock %}
 <!-- prettier-ignore -->
 {% block content %}
-<!-- prettier-ignore -->
 {% block extracss %}
 <link rel="stylesheet" href="{% static 'css/auth_style.css' %}" />
 {% endblock %}
-<!-- prettier-ignore -->
-<div class="row min-vh-100 rounded">
+<div class="auth-page">
+    <div class="auth-shell">
+        <div class="auth-layout" style="grid-template-columns: minmax(0, 0.85fr) minmax(340px, 0.92fr);">
+            <section class="auth-panel auth-panel-simple">
+                <div>
+                    <div class="auth-brand-kicker">
+                        <i class="fas fa-lock"></i>
+                        <span>Segurança da conta</span>
+                    </div>
+                    <h1 class="auth-brand-title"><span>Alterar senha</span></h1>
+                    <p class="auth-card-subtitle text-white-50">Atualize sua senha para manter o acesso seguro ao prontuário e aos módulos de gestão.</p>
+                </div>
 
+                <div class="auth-footer">
+                    <strong>ManaterOntec Solutions</strong><br />
+                    CNPJ 20141965000101<br />
+                    admin@managerontecsolutions.com.br
+                    <a href="https://www.managerontecsolutions.com.br" target="_blank"></a>https://www.managerontecsolutions.com.br</a>
+                </div>
+            </section>
 
+            <section class="auth-card">
+                <div class="auth-card-head">
+                    <div class="auth-card-logo">
+                        <i class="fas fa-user-lock"></i>
+                    </div>
+                    <h2 class="auth-card-title">Atualizar credencial</h2>
+                    <p class="auth-card-subtitle">Confirme sua senha atual e defina uma nova senha para continuar usando a plataforma.</p>
+                </div>
 
+                <div class="auth-messages">
+                    {% include 'parciais/_messages.html' %}
+                </div>
 
-    <div class="col-md-12 p-2">
+                <form method="POST" action="{% url 'alterar' %}" class="auth-form">
+                    {% csrf_token %}
+                    <div class="auth-user-pill">
+                        <i class="fas fa-user"></i>
+                        <span>Usuário {{ user }}</span>
+                    </div>
+                    <input type="hidden" name="usuario" value="{{ user }}" class="form-control">
 
-<!-- prettier-ignore -->
-        {% block add %}
-        <div class="d-flex justify-content-center mt-4">
-            {% include 'parciais/_messages.html' %}
-        </div>
-        {% endblock %}
-        <!-- prettier-ignore -->
-        <div class="table-container p-2">
-            <div class="auth-container p-2">
-
-                <div class="auth-box bg-dark rounded">
-
-
-                    <div class="col-md-12 p-2 mt-4">
-                        <h1 class="text-white text-center">ManagerONTEC</h1>
+                    <div class="auth-field">
+                        <label for="senha_atual"><i class="fas fa-key me-2"></i>Senha atual</label>
+                        <input type="password" name="senha_atual" id="senha_atual" class="form-control bloqueado">
+                    </div>
+                    <div class="auth-field">
+                        <label for="novasenha"><i class="fas fa-key me-2"></i>Nova senha</label>
+                        <input type="password" name="novasenha" id="novasenha" class="form-control bloqueado">
+                    </div>
+                    <div class="auth-field">
+                        <label for="confirmasenha"><i class="fas fa-key me-2"></i>Confirmar senha</label>
+                        <input type="password" name="confirmasenha" id="confirmasenha" class="form-control bloqueado" autocomplete="off">
                     </div>
 
-                    <form method="POST" action="{% url 'alterar' %}">
-                        {% csrf_token %}
-                        <div class="row">
-                            <div class="col-md-6">
-                                <span class="text-light text-center mb-2">Usuário {{ user }}</span>
-                            </div>
-                            <div class="col-md-6">
-                                <span class="text-center">Alteração de Senha</span>
-                            </div>
-                        </div>
-                        <input type="hidden" name="usuario" value="{{ user }}" class="form-control">
-                        <div class="form-group">
-                            <label for="senha_atual" class="form-label"><i class="fas fa-key"></i> Senha Atual</label>
-                            <input type="password" name="senha_atual" id="senha_atual" class="form-control bloqueado">
-                        </div>
-                        <div class="form-group">
-                            <label for="novasenha" class="form-label"><i class="fas fa-key"></i> Nova Senha</label>
-                            <input type="password" name="novasenha" id="novasenha" class="form-control bloqueado">
-                        </div>
-                        <div class="form-group">
-                            <label for="confirmasenha" class="form-label"><i class="fas fa-key"></i> Confirma
-                                Senha</label>
-                            <input type="password" name="confirmasenha" id="confirmasenha"
-                                class="form-control bloqueado" autocomplete="off">
-                        </div>
-                        <div class="d-flex justify-content-between align-items-center">
-<!-- prettier-ignore -->
-                            {% if user.perfil.senha_alterada %}
-                            <a href="{% url 'select_estabelecimento' %}" title="Clique aqui para fechar" type="button"
-                                class="btn btn-outline-light" onclick="window.history.back();">
-                                <i class="fas fa-times"></i> Cancelar
-                            </a>
-                            {% endif %}
-<!-- prettier-ignore -->
-
-
-                            <a href="{% url 'login' %}" title="Clique aqui para fechar" type="button"
-                            class="btn btn-outline-light">
-                            <i class="fas fa-times"></i> Sair
+                    <div class="auth-actions">
+                        {% if user.perfil.senha_alterada %}
+                        <a href="{% url 'select_estabelecimento' %}" title="Clique aqui para fechar" class="auth-btn-secondary" onclick="window.history.back();">
+                            <i class="fas fa-arrow-left"></i>
+                            <span>Cancelar</span>
                         </a>
+                        {% else %}
+                        <a href="{% url 'login' %}" title="Clique aqui para fechar" class="auth-btn-secondary">
+                            <i class="fas fa-right-from-bracket"></i>
+                            <span>Sair</span>
+                        </a>
+                        {% endif %}
 
-                            <button title="Clique aqui para alterar" type="submit" class="btn btn-outline-light"
-                                id="btn-alterar">
-                                <i class="fas fa-key"></i> Alterar
-                            </button>
-
-
-                        </div>
-                    </form>
-                </div>
-            </div>
+                        <button title="Clique aqui para alterar" type="submit" class="auth-btn-primary" id="btn-alterar">
+                            <i class="fas fa-key"></i>
+                            <span>Alterar senha</span>
+                        </button>
+                    </div>
+                </form>
+            </section>
         </div>
     </div>
 </div>
-<!-- prettier-ignore -->
 {% endblock %}

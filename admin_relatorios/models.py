@@ -3,6 +3,7 @@ from dominios.choices import status_choices
 from admin_cadastros_assistenciais.models import CadastroProfissional, Especialidade, Profissao
 from admin_cadastros.models import Estabelecimento
 from django.core.exceptions import ValidationError
+from dominios.text_validators import validate_evolucao_like_text
 from django.db import models
 from django.utils import timezone
 from django.core.validators import FileExtensionValidator
@@ -60,6 +61,14 @@ class GerenciadorRelatorioPersonalizado(models.Model):
 
     tipo_evolucao = models.ForeignKey(
         TipoEvolucao, on_delete=models.PROTECT, blank=True, null=True)
+
+    tipo_documento_legal = models.ForeignKey(
+        'documentos_legais.TipoDocumentoLegal',
+        on_delete=models.PROTECT,
+        blank=True,
+        null=True,
+        verbose_name='Tipo de Documento Legal',
+    )
 
     cidade = models.CharField(
         max_length=100, verbose_name='Cidade')
@@ -143,7 +152,7 @@ class TextoDocumentoPadrao(models.Model):
     )
 
     texto = models.TextField(
-        validators=[MaxLengthValidator(4000)], verbose_name='Textos Padronizados'
+        validators=[validate_evolucao_like_text], verbose_name='Textos Padronizados'
     )
 
     dt_registro = models.DateTimeField(

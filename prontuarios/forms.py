@@ -40,7 +40,7 @@ from django.urls import reverse, reverse_lazy
 from django.contrib.admin.widgets import ForeignKeyRawIdWidget
 from django.contrib import messages
 from django import forms
-from prontuarios.models import Evolucao
+from prontuarios.models import Evolucao, MAX_EVOLUCAO_TEXT_LENGTH, validate_evolucao_texto
 from unidecode import unidecode
 from django.apps import apps
 from django.contrib.contenttypes.models import ContentType
@@ -68,8 +68,9 @@ class EvolucaoCreateForm(FilterByStatusMixin, forms.ModelForm):
                        'toolbar': 'undo redo | bold italic | alignleft aligncenter alignright alignjustify | outdent indent',
                        'menubar': False,
                        'contextmenu': False}),
-        # Adiciona o validador de tamanho máximo aqui
-        validators=[validar_tamanho_ata]
+        validators=[
+            validate_evolucao_texto,
+        ],
     )
 
     class Meta:
@@ -143,8 +144,9 @@ class EvolucaoUpdateForm(forms.ModelForm):
                 'contextmenu': False,
             }
         ),
-        # Adiciona o validador de tamanho máximo aqui
-        validators=[validar_tamanho_ata]
+        validators=[
+            validate_evolucao_texto,
+        ],
     )
 
     class Meta:

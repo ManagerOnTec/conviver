@@ -6,17 +6,17 @@
 {% block titulos %}{{title}}|{% endblock %}
 
 {% block content %}
-<div id="template-index" class="container-fluid bg-dark min-vh-90 rounded">
+<div id="template-index" class="container-fluid bg-dark min-vh-90 rounded index-shell">
     <form class="form" method="post" id="form-estabelecimento">
         {% csrf_token %}
         <h3 class="text-white text-center mt-1 p-3 mb-1">Estabelecimentos Cadastrados</h3>
 
         <div class="container-fluid px-3 mb-3">
             <div class="input-group">
-                <span class="input-group-text bg-secondary border-0" id="basic-addon1">
+                <span class="input-group-text index-search-icon border-0" id="basic-addon1">
                     <i class="fas fa-search text-white"></i>
                 </span>
-                <input type="text" class="form-control bg-dark text-white border-secondary"
+                <input type="text" class="form-control index-search-input text-white border-secondary"
                     placeholder="Pesquisar estabelecimentos..." aria-label="Pesquisar estabelecimentos"
                     aria-describedby="basic-addon1" id="myInput" />
             </div>
@@ -57,20 +57,45 @@
 <script src="{% static 'js/select_estabelecimento.js' %}"></script>
 <style>
     /* Sincronizado com o estilo do cadastros_index.html */
+    .index-shell {
+        background: radial-gradient(circle at top, #17304a 0%, #0c1420 42%, #09111b 100%) !important;
+        border: 1px solid rgba(122, 166, 209, 0.22);
+        box-shadow: 0 28px 52px rgba(6, 15, 26, 0.28);
+    }
+
+    .index-search-icon {
+        background: linear-gradient(135deg, #1a5da0 0%, #0f3f73 100%) !important;
+        color: #ffffff;
+    }
+
+    .index-search-input {
+        background: rgba(9, 17, 27, 0.86) !important;
+        border-color: rgba(122, 166, 209, 0.28) !important;
+    }
+
+    .index-search-input:focus {
+        box-shadow: 0 0 0 0.2rem rgba(11, 94, 215, 0.18);
+        border-color: #6caef0 !important;
+    }
+
     .transition-card {
         transition: all 0.3s ease;
         cursor: pointer;
         border-width: 2px;
+        border-color: rgba(105, 152, 209, 0.26) !important;
+        background: linear-gradient(180deg, rgba(15, 25, 39, 0.96) 0%, rgba(11, 18, 29, 0.96) 100%) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
     }
 
     .transition-card:hover {
         transform: translateY(-5px);
-        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
-        border-color: #0d6efd !important;
+        box-shadow: 0 16px 28px rgba(5, 14, 25, 0.34);
+        border-color: #64a3db !important;
     }
 
     .card-body i {
         transition: color 0.3s ease;
+        color: #79b7ff !important;
     }
 
     .transition-card:hover i {
@@ -85,6 +110,7 @@
     .card-text {
         font-size: 0.9rem;
         line-height: 1.4;
+        color: #9fb3c8 !important;
     }
 
     /* Responsividade */

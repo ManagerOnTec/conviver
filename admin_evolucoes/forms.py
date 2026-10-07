@@ -8,7 +8,18 @@ from dominios.utils import FilterByStatusMixin
 from .models import ParametrosEvolucao
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxLengthValidator
-from dominios.utils import validar_tamanho_ata
+from dominios.text_validators import validate_evolucao_like_text
+
+
+EDITOR_PADRAO_EVOLUCAO = TinyMCE(
+    attrs={'cols': 80, 'rows': 44},
+    mce_attrs={
+        'height': 900,
+        'toolbar': 'undo redo | bold italic | alignleft aligncenter alignright alignjustify | outdent indent',
+        'menubar': False,
+        'contextmenu': False,
+    }
+)
 
 
 class ParametrosEvolucaoAdminForm(forms.ModelForm):
@@ -58,9 +69,8 @@ class TipoEvolucaoForm(FilterByStatusMixin, forms.ModelForm):
 
 class TextoPadraoForm(FilterByStatusMixin, forms.ModelForm):
 
-    texto = forms.CharField(widget=TinyMCE(
-        attrs={'cols': 80, 'rows': 25}), validators=[
-            validar_tamanho_ata
+    texto = forms.CharField(widget=EDITOR_PADRAO_EVOLUCAO, validators=[
+        validate_evolucao_like_text
     ])
 
     class Meta:

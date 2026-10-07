@@ -11,10 +11,7 @@ tz %} {% block titulos %}{{title}}|{% endblock %}
 
 <!--FIM MENU LATERAL-->
 {% endblock %} {% block cabdados %}
-
-<div class="p-2">
-  <span>Novo Cadastro de Pessoa...</span>
-</div>
+{% include 'parciais/_module_context_header.html' with icon_class='fas fa-user-plus' title='Novo Cadastro de Pessoa' subtitle='Cadastro inicial com dados civis e assistenciais organizados em um fluxo mais claro.' primary_label='Fluxo' primary_value='Cadastro' secondary_label='Módulo' secondary_value='Cadastros' %}
 {% endblock %} {% block lista %}
 
 <div class="container">

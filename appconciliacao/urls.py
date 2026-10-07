@@ -26,7 +26,7 @@ urlpatterns = [
     path('conciliacao_editar/<int:pk>/', views.ConciliacaoUpdateView.as_view(), name='conciliacao_editar'),
     
     # Relatório de Conciliação
-    path('relatorioconci liacao_listar/', views.RelatorioConciliacaoListView.as_view(), name='relatorioconci liacao_listar'),
-    path('relatorioconci liacao_criar/', views.RelatorioConciliacaoCreateView.as_view(), name='relatorioconci liacao_criar'),
-    path('relatorioconci liacao_detalhe/<int:pk>/', views.RelatorioConciliacaoDetailView.as_view(), name='relatorioconci liacao_detalhe'),
+    path('relatorioconciliacao_listar/', views.RelatorioConciliacaoListView.as_view(), name='relatorioconciliacao_listar'),
+    path('relatorioconciliacao_criar/', views.RelatorioConciliacaoCreateView.as_view(), name='relatorioconciliacao_criar'),
+    path('relatorioconciliacao_detalhe/<int:pk>/', views.RelatorioConciliacaoDetailView.as_view(), name='relatorioconciliacao_detalhe'),
 ]

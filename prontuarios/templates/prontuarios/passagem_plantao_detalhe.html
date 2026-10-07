@@ -8,14 +8,22 @@
 
 
 {% block menul %}
+<div class="form-group text-left mt-2 m-3">
+    <a title="Clique aqui para fechar" href="{% url 'passagem_plantao_listar' %}"
+        class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded">
+        <i class="fas fa-times-circle me-2"></i>Fechar
+    </a>
+    <a href="{% url 'passagem_plantao_listar' %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-list me-2"></i>Lista de Passagens de Plantões
+    </a>
+</div>
 <!-- FIM MENU LATERAL -->
 {% endblock %}
 
 
 {% block cabdados %}
-<div class="p-2">
-    <span>Detalhes da Passagem de Plantão...</span>
-</div>
+{% include 'parciais/_module_context_header.html' with icon_class='fas fa-exchange-alt' title='Passagem de Plantão' subtitle='Consulta em modo leitura do registro selecionado.' primary_label='Fluxo' primary_value='Detalhe' secondary_label='Registro' secondary_value=object.pk %}
 
 <!-- FIM DADOS DO OBJETO -->
 {% endblock %}
@@ -87,33 +95,7 @@
 
 
             <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
-                <div class="d-flex flex-column">
-                    <div class="d-flex justify-content-end">
-
-                        <a title="Clique aqui para fechar" href="{% url 'passagem_plantao_listar' %}"
-                            class="btn btn-outline-dark mx-2 ml-2">
-                            <i class="fas fa-times-circle" style="transition: color 0.3s;">Fechar</i>
-                        </a>
-                    </div>
-
-
-                    <div class="d-flex justify-content-end mt-2">
-                        <div class="mt-2">
-                            {% if objeto_anterior %}
-                            <a class="btn btn-outline-primary mx-2 ml-2"
-                                href="{% url 'passagem_plantao_detalhe' objeto_anterior.id %}">&lt; </a>
-                            {% endif %}
-                        </div>
-
-                        <div class="mt-2">
-                            {% if proximo_objeto %}
-                            <a class="btn btn-outline-primary mx-2 ml-2"
-                                href="{% url 'passagem_plantao_detalhe' proximo_objeto.id %}"> &gt;</a>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-
+                {% include 'parciais/_detail_object_nav.html' with detail_url_name='passagem_plantao_detalhe' nav_label='Navegar entre passagens de plantao' %}
             </div>
 
         </div>

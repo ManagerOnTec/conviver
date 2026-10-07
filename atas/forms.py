@@ -29,7 +29,7 @@ from django.core.validators import MaxLengthValidator
 from django import forms
 from django.core.validators import MaxLengthValidator
 from tinymce.widgets import TinyMCE
-from dominios.utils import validar_tamanho_ata
+from dominios.text_validators import validate_evolucao_like_text
 
 
 class AtasCreateForm(FilterByStatusMixin, forms.ModelForm):
@@ -42,7 +42,7 @@ class AtasCreateForm(FilterByStatusMixin, forms.ModelForm):
                        'contextmenu': False}
         ),
         validators=[
-            validar_tamanho_ata
+            validate_evolucao_like_text
         ]
     )
 
@@ -77,7 +77,7 @@ class AtasUpdateForm(FilterByStatusMixin, forms.ModelForm):
                        'contextmenu': False}
         ),
         validators=[
-            validar_tamanho_ata
+            validate_evolucao_like_text
         ]
     )
 

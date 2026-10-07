@@ -8,16 +8,23 @@
 {% block titulos %}{{title}}|{% endblock %}
 
 {% block menul %}
+<div class="form-group text-left mt-2 m-3">
+    <a title="Clique aqui para fechar" href="{% url 'passagem_plantao_listar' %}"
+        class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded">
+        <i class="fas fa-times-circle me-2"></i>Fechar
+    </a>
+    <a href="{% url 'passagem_plantao_listar' %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-list me-2"></i>Lista de Passagens de Plantões
+    </a>
+</div>
 <!-- FIM MENU LATERAL -->
 {% endblock %}
 
 
 
 {% block cabdados %}
-
-<div class="p-2">
-    <span>Novo Registro de Passagem de Plantão...</span>
-</div>
+{% include 'parciais/_module_context_header.html' with icon_class='fas fa-exchange-alt' title='Nova Passagem de Plantão' subtitle='Registre a troca de plantão com foco na continuidade assistencial.' primary_label='Fluxo' primary_value='Cadastro' secondary_label='Módulo' secondary_value='Passagem de Plantão' %}
 <!-- FIM DADOS DO OBJETO -->
 {% endblock %}
 
@@ -76,16 +83,6 @@
 
             <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
 
-
-                <div class="d-flex justify-content-end">
-
-
-                    <a title="Clique aqui para fechar" href="{% url 'passagem_plantao_listar' %}"
-                        class="btn btn-outline-dark mx-2 ml-2">
-                        <i class="fas fa-times-circle" style="transition: color 0.3s;">Fechar</i>
-                    </a>
-
-                </div>
 
                 <div class="d-flex justify-content-end mt-2">
 

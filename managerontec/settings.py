@@ -125,7 +125,7 @@ handler500 = handler_exception
 # ==========================================================
 
 INSTALLED_APPS = [
-    'jazzmin',
+    ## 'jazzmin',
     'django.contrib.admin',
     'admin_cadastros.templatetags',
     'django.contrib.auth',
@@ -164,8 +164,6 @@ INSTALLED_APPS = [
     'admin_cadastros_financeiros',
     'admin_pagamentos',
     'admin_financeiro',
-    'admin_conciliacao',
-    'admin_tesouraria',
     'oficios',
     'orcamentos',
     'atas',
@@ -174,6 +172,7 @@ INSTALLED_APPS = [
     'appconciliacao',
     'appcartao',
     'appbaixa_fatura',
+    'documentos_legais',
 ]
 
 

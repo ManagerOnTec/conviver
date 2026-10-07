@@ -1,3 +1,5 @@
+import re
+import html
 from io import BytesIO
 from django.core.files.base import ContentFile
 from django.core.files.temp import NamedTemporaryFile
@@ -33,6 +35,22 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from admin_relatorios.models import Relatorio
 from admin_relatorios.utils import RelatorioMixin
+from django.utils.html import strip_tags
+from dominios.text_validators import (
+    MAX_RICH_TEXT_LENGTH,
+    rich_text_to_plain_text,
+    validate_evolucao_like_text,
+)
+
+MAX_EVOLUCAO_TEXT_LENGTH = MAX_RICH_TEXT_LENGTH
+
+
+def _texto_puro_evolucao(value):
+    return rich_text_to_plain_text(value)
+
+
+def validate_evolucao_texto(value):
+    validate_evolucao_like_text(value)
 
 
 class BaseModelPrescricao(models.Model):
@@ -96,7 +114,9 @@ class Evolucao(models.Model, RelatorioMixin):
 
     tipo_evolucao = models.ForeignKey(
         TipoEvolucao, on_delete=models.PROTECT, verbose_name='Tipo de Evolução')
-    evolucao = models.TextField(validators=[MaxLengthValidator(5500)])
+    evolucao = models.TextField(validators=[
+        validate_evolucao_texto,
+    ])
     estabelecimento = models.ForeignKey(
         Estabelecimento, on_delete=models.PROTECT)
 
@@ -115,6 +135,10 @@ class Evolucao(models.Model, RelatorioMixin):
                                       validators=[FileExtensionValidator(['jpg', 'jpeg', 'png']), validate_anexo_file])
 
     assinar = models.BooleanField(default=True)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
     class Meta:
         verbose_name = 'Evolução'

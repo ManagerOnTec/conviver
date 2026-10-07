@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.forms import ValidationError
 from admin_cadastros.models import Empresa, Estabelecimento, Pessoa
 from admin_cadastros_financeiros.models import Conta, TransacaoFinanceira
-from admin_tesouraria.models import Caixa
+from apptesouraria.models import Caixa
 from dominios.choices import status_choices, forma_pagamento_choices
 from django.utils import timezone
 from datetime import timedelta

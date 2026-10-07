@@ -178,7 +178,7 @@ class OficiosCreateView(LoginRequiredMixin, CustomPermissionRequiredMixin, Filte
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['titulo'] = "oficios"
+        context['titulo'] = "Ofícios"
         context['title'] = 'oficios_cadastrar'
 
         estabelecimento_id = self.request.session.get("estabelecimento_id")
@@ -261,7 +261,7 @@ class OficiosUpdateView(LoginRequiredMixin, CustomPermissionRequiredMixin, Filte
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['titulo'] = "oficios"
+        context['titulo'] = "Ofícios"
         context['title'] = 'oficios_editar'
         estabelecimento_id = self.request.session.get("estabelecimento_id")
         if estabelecimento_id:

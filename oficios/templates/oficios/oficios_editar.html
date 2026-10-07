@@ -13,11 +13,38 @@
   }
 </style>
 
-{% block menul %} {% endblock %} {% block cabdados %}
-<div class="p-2">
-  <span>Editando Ofício...</span>
+{% block menul %}
+<div class="form-group text-left mt-2 m-3">
+  <a
+    title="Clique aqui para fechar"
+    href="{% url 'oficios_listar' %}"
+    class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded"
+  >
+    <i class="fas fa-times-circle me-2" style="transition: color 0.3s"></i>Fechar
+  </a>
+  <a
+    href="{% url 'oficios_listar' %}"
+    class="mt-2 list-group-item list-group-item-action custom-link rounded"
+  >
+    <i class="fas fa-list me-2"></i>Lista de Ofícios
+  </a>
 </div>
+{% endblock %} {% block cabdados %}
+{% include 'parciais/_module_context_header.html' with icon_class='fas fa-envelope-open-text' title='Editar Ofício' subtitle='Revise texto, anexo e assinatura com um cabeçalho mais organizado.' primary_label='Fluxo' primary_value='Edição' secondary_label='Registro' secondary_value=object.pk %}
 {% endblock %} {% block lista %}
+<div class="d-flex justify-content-start">
+  <button
+    id="insertDefaultDocs"
+    data-tipo-documento="oficios"
+    class="btn btn-sm btn-success btn-outline-light"
+  >
+    <i class="fas fa-plus" style="transition: color 0.3s"></i>Texto Padrão
+  </button>
+
+  <div id="context-menu" style="display: none">
+  </div>
+</div>
+
 <div class="container">
   <form
     id="form-oficios-editar"
@@ -67,17 +94,6 @@
         </div>
       </div>
       <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
-        <div class="d-flex justify-content-end">
-          <a
-            title="Clique aqui para fechar"
-            href="{% url 'oficios_listar' %}"
-            class="btn btn-outline-dark mx-2 ml-2"
-          >
-            <i class="fas fa-times-circle" style="transition: color 0.3s"
-              >Fechar</i
-            >
-          </a>
-        </div>
         <div class="d-flex justify-content-end mt-2">
           <button
             id="btn-oficios-editar"
@@ -96,6 +112,7 @@
 <!-- prettier-ignore -->
 {% block scriptcustom %}
 <script src="{% static 'js/selectparadois.js' %}"></script>
+<script src="{% static 'js/texto_padrao_filtrado.js' %}"></script>
 <script>
   $(document).ready(function () {
     $(".django-select2").select2();

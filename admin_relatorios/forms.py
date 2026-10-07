@@ -8,9 +8,20 @@ from dominios.utils import FilterByStatusMixin
 from .models import GerenciadorRelatorioPersonalizado, GerenciadorRelatorioGeral
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxLengthValidator
-from dominios.utils import validar_tamanho_ata
+from dominios.text_validators import validate_evolucao_like_text
 from django import forms
 from .models import TextoDocumentoPadrao
+
+
+EDITOR_PADRAO_EVOLUCAO = TinyMCE(
+    attrs={'cols': 80, 'rows': 44},
+    mce_attrs={
+        'height': 900,
+        'toolbar': 'undo redo | bold italic | alignleft aligncenter alignright alignjustify | outdent indent',
+        'menubar': False,
+        'contextmenu': False,
+    }
+)
 
 
 class GerenciadorRelatorioGeralForm(FilterByStatusMixin, forms.ModelForm):
@@ -70,19 +81,31 @@ class GerenciadorRelatorioPersonalizadoForm(FilterByStatusMixin, forms.ModelForm
         cleaned_data = super().clean()
         relatorio = cleaned_data.get("relatorio")
         tipo_evolucao = cleaned_data.get("tipo_evolucao")
+        tipo_documento_legal = cleaned_data.get("tipo_documento_legal")
 
         # Se 'relatorio' for 'evolucao', então 'tipo_evolucao' é obrigatório
         if relatorio == "evolucao" and not tipo_evolucao:
             self.add_error(
                 'tipo_evolucao', "O campo Tipo Evolução é obrigatório quando Relatório é Evolução.")
 
+        if relatorio == "documentos_legais" and not tipo_documento_legal:
+            self.add_error(
+                'tipo_documento_legal',
+                "O campo Tipo de Documento Legal é obrigatório quando Relatório é Documentos Legais.")
+
+        if relatorio != "evolucao":
+            cleaned_data['tipo_evolucao'] = None
+
+        if relatorio != "documentos_legais":
+            cleaned_data['tipo_documento_legal'] = None
+
         return cleaned_data
 
 
 class TextoDocumentoPadraoForm(forms.ModelForm):
     texto = forms.CharField(
-        widget=TinyMCE(attrs={'cols': 80, 'rows': 30}),
-        validators=[validar_tamanho_ata],
+        widget=EDITOR_PADRAO_EVOLUCAO,
+        validators=[validate_evolucao_like_text],
         label='Textos Padronizados'
     )
 
