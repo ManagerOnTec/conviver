@@ -12,7 +12,7 @@ from admin_relatorios.utils import obter_dados_assinatura_certificado
 from contas.models import Perfil
 from dominios.text_validators import validate_evolucao_like_text
 from .models import DocumentoLegalInternacao, ModeloDocumentoLegal, TipoDocumentoLegal
-from .services import render_documento_html
+from .services import render_documento_html, obter_ip_cliente
 
 
 EDITOR_PADRAO_DOCUMENTO = TinyMCE(
@@ -54,9 +54,9 @@ class DocumentoLegalInternacaoForm(forms.ModelForm):
     foto_validacao_data = forms.CharField(widget=forms.HiddenInput(), required=False)
     assinar_funcionario = forms.BooleanField(
         required=False,
-        initial=False,
+        initial=True,
         label='Assinar também com o certificado digital do funcionário logado',
-        help_text='Quando marcado, o PDF será assinado com o certificado digital do usuário do sistema.',
+        help_text='Quando marcado, o PDF será assinado com o certificado digital do usuário do sistema. Desmarque para gerar o termo sem a assinatura digital.',
     )
 
     class Meta:
@@ -230,7 +230,7 @@ class DocumentoLegalInternacaoForm(forms.ModelForm):
             self._save_camera_capture(instance, foto_validacao_data)
 
         if self.request:
-            instance.ip_assinatura = (self.request.META.get('REMOTE_ADDR') or '')[:45]
+            instance.ip_assinatura = obter_ip_cliente(self.request)[:45]
             instance.user_agent = (self.request.META.get('HTTP_USER_AGENT') or '')[:500]
 
         if commit:

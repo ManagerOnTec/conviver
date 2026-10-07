@@ -80,8 +80,8 @@
       <tr>
         <td>
           <div class="listing-action-bar">
-            <a href="{% url 'documentos_legais_editar' pk=documento.pk %}" class="btn btn-outline-warning btn-sm listing-action-btn" title="Editar">
-              <i class="fas fa-edit"></i>
+            <a href="{% url 'documentos_legais_excluir' pk=documento.pk %}" class="btn btn-outline-danger btn-sm listing-action-btn" title="Excluir">
+              <i class="fas fa-trash"></i>
             </a>
             {% if documento.pdf_gerado %}
             <a href="{% url 'documentos_legais_pdf' pk=documento.pk %}" target="_blank" class="btn btn-outline-success btn-sm listing-action-btn" title="Abrir PDF">

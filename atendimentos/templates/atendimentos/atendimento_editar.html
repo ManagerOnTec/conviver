@@ -3,7 +3,7 @@ tz %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
 <div class="form-group text-left mt-2 m-3">
   <a title="Clique aqui para fechar" href="{% url 'atendimento_listar' %}"
     class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded">
-    <i class="fas fa-times-circle me-2" style="transition: color 0.3s">Fechar</i>
+    <i class="fas fa-times-circle me-2"></i>Fechar
   </a>
   <a href="{% url 'atendimento_listar' %}"
     class="mt-2 list-group-item list-group-item-action custom-link rounded">
@@ -146,28 +146,26 @@ tz %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
       </div>
 
       <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
-        <div class="d-flex flex-column">
-          {% include 'parciais/_workflow_submit_sidebar.html' with button_id='btn-atendimento-cadastrar' submit_label='Salvar' status_title='Editando...' status_spinner_class='text-warning' status_text_class='text-warning' %}
+        {% include 'parciais/_workflow_submit_sidebar.html' with button_id='btn-atendimento-cadastrar' submit_label='Salvar' status_title='Editando...' status_spinner_class='text-warning' status_text_class='text-warning' %}
 
-          <div class="d-flex justify-content-end mt-2">
-            <div class="form-group text-center m-2">
+        <div class="d-flex justify-content-end mt-2">
+          <div class="form-group text-center m-2">
+            <div class="col-md-12 mt-2">
+              {% if request.user.is_staff %}
+              <a title="Registrar ou atualziar Cadastros Admin"
+                href="{% url 'admin:admin_cadastros_pessoa_changelist' %}"
+                class="btn btn-sm btn-primary btn-outline-light border border-black" id="addPessoaBtn">
+                <i class="fas fa-edit" style="transition: color 0.3s">Link Admin</i>
+              </a>
+
               <div class="col-md-12 mt-2">
-                {% if request.user.is_staff %}
-                <a title="Registrar ou atualziar Cadastros Admin"
-                  href="{% url 'admin:admin_cadastros_pessoa_changelist' %}"
-                  class="btn btn-sm btn-primary btn-outline-light border border-black" id="addPessoaBtn">
-                  <i class="fas fa-edit" style="transition: color 0.3s">Link Admin</i>
+                <a title="Utilize quando retornar do admin" onclick="location.reload();"
+                  class="btn btn-sm btn-warning btn-outline-primary border border-black">
+                  <i class="fas fa-sync" style="transition: color 0.3s">Atualizar</i>
                 </a>
-
-                <div class="col-md-12 mt-2">
-                  <a title="Utilize quando retornar do admin" onclick="location.reload();"
-                    class="btn btn-sm btn-warning btn-outline-primary border border-black">
-                    <i class="fas fa-sync" style="transition: color 0.3s">Atualizar</i>
-                  </a>
-                </div>
-
-                {% endif %}
               </div>
+
+              {% endif %}
             </div>
           </div>
         </div>

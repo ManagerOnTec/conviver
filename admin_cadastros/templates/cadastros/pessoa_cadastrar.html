@@ -8,8 +8,21 @@ tz %} {% block titulos %}{{title}}|{% endblock %}
 </style>
 
 {% block menul %}
-
-<!--FIM MENU LATERAL-->
+<div class="form-group text-left mt-2 m-3">
+  <a
+    title="Clique aqui para fechar"
+    href="{% url 'atendimento_listar' %}"
+    class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded"
+  >
+    <i class="fas fa-times-circle me-2" style="transition: color 0.3s"></i>Fechar
+  </a>
+  <a
+    href="{% url 'atendimento_listar' %}"
+    class="mt-2 list-group-item list-group-item-action custom-link rounded"
+  >
+    <i class="fas fa-list me-2"></i>Lista de Atendimentos
+  </a>
+</div>
 {% endblock %} {% block cabdados %}
 {% include 'parciais/_module_context_header.html' with icon_class='fas fa-user-plus' title='Novo Cadastro de Pessoa' subtitle='Cadastro inicial com dados civis e assistenciais organizados em um fluxo mais claro.' primary_label='Fluxo' primary_value='Cadastro' secondary_label='Módulo' secondary_value='Cadastros' %}
 {% endblock %} {% block lista %}
@@ -98,20 +111,7 @@ tz %} {% block titulos %}{{title}}|{% endblock %}
       </div>
 
       <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
-        <div class="d-flex justify-content-end">
-          <a
-            title="Clique aqui para fechar"
-            href="{% url 'atendimento_cadastrar' %}"
-            class="btn btn-outline-dark mx-2 ml-2"
-          >
-            <i class="fas fa-times-circle" style="transition: color 0.3s"
-              >Fechar</i
-            >
-          </a>
-        </div>
-        <div class="d-flex justify-content-end mt-2">
-          {% include 'parciais/_workflow_submit_sidebar.html' with button_id='submit_pessoa_form' submit_label='Salvar' status_title='Cadastrando...' status_spinner_class='text-success' status_text_class='text-success' %}
-        </div>
+        {% include 'parciais/_workflow_submit_sidebar.html' with button_id='submit_pessoa_form' submit_label='Salvar' status_title='Cadastrando...' status_spinner_class='text-success' status_text_class='text-success' %}
       </div>
     </div>
   </form>

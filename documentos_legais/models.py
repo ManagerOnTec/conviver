@@ -179,7 +179,7 @@ class DocumentoLegalInternacao(models.Model):
     responsavel_data_nascimento = models.DateField(verbose_name='Data de Nascimento do Responsável')
     responsavel_telefone = models.CharField(max_length=20, blank=True, null=True, verbose_name='Telefone')
     responsavel_email = models.EmailField(blank=True, null=True, verbose_name='E-mail')
-    declaracao_aceite = models.BooleanField(default=False, verbose_name='Li e concordo com o termo')
+    declaracao_aceite = models.BooleanField(default=True, verbose_name='Li e concordo com o termo')
     assinatura_imagem = models.ImageField(upload_to=assinatura_upload_path, blank=True, null=True, verbose_name='Assinatura Desenhada')
     documento_frente = models.ImageField(
         upload_to=documento_frente_upload_path,

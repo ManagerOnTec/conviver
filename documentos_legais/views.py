@@ -5,15 +5,15 @@ from io import BytesIO
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.files.storage import default_storage
-from django.db import connection
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import Q
+from django.db.models.deletion import ProtectedError
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse, HttpResponseRedirect, QueryDict
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views import View
-from django.views.generic import CreateView, ListView, UpdateView
+from django.views.generic import CreateView, DeleteView, ListView
 from django import forms
 import django_filters
 from django_filters import rest_framework as filters
@@ -281,52 +281,27 @@ class DocumentoLegalCreateView(AtendimentoDocumentoLegalMixin, CreateView):
         return HttpResponseRedirect(self.get_success_url())
 
 
-class DocumentoLegalUpdateView(AtendimentoDocumentoLegalMixin, UpdateView):
-    permission_required = 'documentos_legais.change_documentolegalinternacao'
-    template_name = 'documentos_legais/documento_form.html'
-    form_class = DocumentoLegalInternacaoForm
+class DocumentoLegalDeleteView(AtendimentoDocumentoLegalMixin, DeleteView):
+    permission_required = 'documentos_legais.delete_documentolegalinternacao'
+    template_name = 'documentos_legais/documento_excluir.html'
     context_object_name = 'documento_legal'
 
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs['atendimento'] = self.get_atendimento()
-        kwargs['request'] = self.request
-        return kwargs
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['title'] = 'documentos_legais_editar'
-        context['form_mode'] = 'update'
-        context['preview_context'] = build_document_context(self.get_atendimento(), {
-            'responsavel_nome': self.object.responsavel_nome,
-            'responsavel_cpf': self.object.responsavel_cpf,
-            'responsavel_documento': self.object.responsavel_documento,
-            'responsavel_data_nascimento': self.object.responsavel_data_nascimento,
-            'responsavel_telefone': self.object.responsavel_telefone,
-            'responsavel_email': self.object.responsavel_email,
-        })
-        return context
-
-    def form_valid(self, form):
-        assinatura_funcionario_solicitada = form.cleaned_data.get('assinar_funcionario', False)
-        with transaction.atomic():
-            self.object = form.save(commit=False)
-            self.object.us_atualizacao = self.request.user
-            self.object.dt_atualizacao = timezone.now()
-            self.object.dt_assinatura = timezone.now()
-            self.object.save()
-            assinatura_funcionario_aplicada = atualizar_pdf_documento(
-                self.object,
-                user=self.request.user,
-                assinar_funcionario=assinatura_funcionario_solicitada,
+    def post(self, request, *args, **kwargs):
+        documento = self.get_object()
+        codigo = documento.codigo_documento
+        try:
+            response = super().post(request, *args, **kwargs)
+            messages.success(request, f"Documento legal '{codigo}' excluído com sucesso.")
+            return response
+        except ProtectedError:
+            messages.error(
+                request,
+                f"Erro ao excluir o documento legal '{codigo}'. O registro está protegido por referências a outros objetos.",
             )
-        if assinatura_funcionario_solicitada and assinatura_funcionario_aplicada:
-            messages.success(self.request, 'Documento legal atualizado com sucesso e assinado digitalmente pelo funcionário!')
-        elif assinatura_funcionario_solicitada:
-            messages.warning(self.request, 'Documento legal atualizado, mas a assinatura digital do funcionário não pôde ser aplicada.')
-        else:
-            messages.success(self.request, 'Documento legal atualizado com sucesso!')
-        return HttpResponseRedirect(self.get_success_url())
+            return HttpResponseRedirect(self.get_success_url())
+        except Exception as e:
+            messages.error(request, f"Erro ao excluir o documento legal '{codigo}': {str(e)}")
+            return HttpResponseRedirect(self.get_success_url())
 
 
 class DocumentoLegalPdfView(LoginRequiredMixin, CustomPermissionRequiredMixin, View):

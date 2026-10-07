@@ -21,11 +21,7 @@
 {% endblock %}
 
 {% block cabdados %}
-{% if object.pk %}
-{% include 'parciais/_patient_context_header.html' with module_icon='fas fa-file-signature' module_title='Editar Termo Legal' module_subtitle='Revise o termo com o contexto do atendimento e do paciente sempre acessível.' primary_label='Atendimento' primary_value=atendimento.pk secondary_label='Fluxo' secondary_value='Edição' show_cpf=True %}
-{% else %}
 {% include 'parciais/_patient_context_header.html' with module_icon='fas fa-file-signature' module_title='Novo Termo Legal' module_subtitle='Configure o termo e a assinatura mantendo o contexto do paciente acessível.' primary_label='Atendimento' primary_value=atendimento.pk secondary_label='Fluxo' secondary_value='Cadastro' show_cpf=True %}
-{% endif %}
 {% endblock %}
 
 {% block lista %}
@@ -147,11 +143,11 @@
             <span>Salvar termo</span>
           </button>
           <div class="workflow-form-status mt-3">
-            <div class="spinner-border {% if object.pk %}text-warning{% else %}text-success{% endif %}" role="status">
+            <div class="spinner-border text-success" role="status">
               <span class="visually-hidden">Loading...</span>
             </div>
             <div>
-              <strong class="d-block {% if object.pk %}text-warning{% else %}text-success{% endif %}">{% if object.pk %}Editando...{% else %}Cadastrando...{% endif %}</strong>
+              <strong class="d-block text-success">Cadastrando...</strong>
               <span class="workflow-form-note">O termo será validado com assinatura, anexos e prévia dinâmica antes do uso operacional.</span>
             </div>
           </div>
