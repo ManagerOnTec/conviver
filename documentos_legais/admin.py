@@ -19,25 +19,8 @@ class TipoDocumentoLegalAdmin(AdminSaveModelAuditMixin, admin.ModelAdmin):
 @admin.register(ModeloDocumentoLegal)
 class ModeloDocumentoLegalAdmin(AdminEstabelecimentoPadraoMixin, AdminSaveModelAuditMixin, admin.ModelAdmin):
     form = ModeloDocumentoLegalAdminForm
-    list_display = ('nome_modelo', 'tipo_documento', 'estabelecimento', 'status')
+    list_display = ('nome_modelo', 'tipo_documento', 'estabelecimento', 'exige_assinatura_responsavel', 'exige_assinatura_atendente', 'status')
+    list_filter = (StatusFilterAdminMixin, 'tipo_documento', 'estabelecimento', 'exige_assinatura_responsavel', 'exige_assinatura_atendente')
     search_fields = ('nome_modelo', 'titulo_documento', 'conteudo_html')
-    list_filter = (StatusFilterAdminMixin, 'tipo_documento', 'estabelecimento')
     autocomplete_fields = ('tipo_documento', 'estabelecimento')
 
-
-@admin.register(DocumentoLegalInternacao)
-class DocumentoLegalInternacaoAdmin(admin.ModelAdmin):
-    list_display = ('codigo_documento', 'titulo_documento', 'tipo_documento', 'atendimento', 'responsavel_nome', 'dt_assinatura', 'status')
-    search_fields = ('codigo_documento', 'titulo_documento', 'responsavel_nome', 'responsavel_cpf', 'atendimento__pessoa__nome')
-    list_filter = (StatusFilterAdminMixin, 'tipo_documento', 'estabelecimento', 'dt_assinatura')
-    readonly_fields = ('codigo_documento', 'conteudo_html', 'hash_pdf', 'dt_registro', 'dt_atualizacao', 'us_registro', 'us_atualizacao')
-    autocomplete_fields = ('tipo_documento', 'modelo_documento')
-
-    def save_model(self, request, obj, form, change):
-        if not change:
-            obj.us_registro = request.user
-            obj.dt_registro = timezone.now()
-        else:
-            obj.us_atualizacao = request.user
-            obj.dt_atualizacao = timezone.now()
-        super().save_model(request, obj, form, change)

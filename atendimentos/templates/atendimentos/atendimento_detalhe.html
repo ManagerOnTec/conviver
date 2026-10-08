@@ -9,6 +9,11 @@ tz %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
     class="mt-2 list-group-item list-group-item-action custom-link rounded">
     <i class="fas fa-list me-2"></i>Lista de Atendimentos
   </a>
+
+    <a href="" class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded">
+    <i class="fas fa-hospital me-2"></i>Atendimentos
+  </a>
+
   <a href="{% url 'documentos_legais_listar' atendimento_id=object.pk %}"
     class="mt-2 list-group-item list-group-item-action custom-link rounded">
     <i class="fas fa-file-signature me-2"></i>Termos Legais

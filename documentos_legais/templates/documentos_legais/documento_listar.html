@@ -5,11 +5,18 @@
 
 {% block menul %}
 <div class="form-group text-left mt-2 m-3">
-  <a href="{% url 'documentos_legais_cadastrar' atendimento_id=atendimento.pk %}" class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded">
-    <i class="fas fa-file-signature me-2"></i>Novo Termo
-  </a>
+  
+<a title="Novo" href="{% url 'documentos_legais_cadastrar' atendimento_id=atendimento.pk %}"
+        class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded" id="btn-novo-atd">
+        <i class="fas fa-plus me-2" style="transition: color 0.3s;"></i>Novo
+    </a>
+
+
   <a href="{{ detalhe_atendimento_url }}" class="mt-2 list-group-item list-group-item-action custom-link rounded">
-    <i class="fas fa-times-circle me-2"></i>Voltar para Atendimento
+    <i class="fas fa-arrow-left me-2"></i>Atendimento
+  </a>
+  <a href="" class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded">
+    <i class="fas fa-file-contract me-2"></i>Termos Legais
   </a>
 
   <form class="mt-2 text-white text-left" method="GET">

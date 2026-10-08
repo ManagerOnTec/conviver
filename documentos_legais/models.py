@@ -23,16 +23,22 @@ def assinatura_upload_path(instance, filename):
     return _build_upload_path(instance, 'assinatura', filename)
 
 
+def foto_documento_upload_path(instance, filename):
+    return _build_upload_path(instance, 'foto_documento', filename)
+
+
+def selfie_upload_path(instance, filename):
+    return _build_upload_path(instance, 'selfie', filename)
+
+
+# Mantidos para compatibilidade com a migration 0001_initial, que ainda referencia
+# estes callables. Os campos correspondentes foram removidos do modelo.
 def documento_frente_upload_path(instance, filename):
     return _build_upload_path(instance, 'documento_frente', filename)
 
 
 def documento_verso_upload_path(instance, filename):
     return _build_upload_path(instance, 'documento_verso', filename)
-
-
-def selfie_upload_path(instance, filename):
-    return _build_upload_path(instance, 'selfie', filename)
 
 
 def pdf_upload_path(instance, filename):
@@ -96,6 +102,16 @@ class ModeloDocumentoLegal(models.Model):
     )
     nome_modelo = models.CharField(max_length=150, verbose_name='Nome do Modelo')
     titulo_documento = models.CharField(max_length=255, verbose_name='Título do Documento')
+    exige_assinatura_responsavel = models.BooleanField(
+        default=True,
+        verbose_name='Exige assinatura do responsável',
+        help_text='Quando marcado, o termo exige a assinatura desenhada e as fotos do responsável e do documento.',
+    )
+    exige_assinatura_atendente = models.BooleanField(
+        default=True,
+        verbose_name='Exige assinatura do atendente',
+        help_text='Quando marcado, habilita a assinatura digital por certificado do funcionário logado.',
+    )
     conteudo_html = models.TextField(
         validators=[validate_evolucao_like_text],
         verbose_name='Conteúdo do Termo',
@@ -173,34 +189,29 @@ class DocumentoLegalInternacao(models.Model):
     codigo_documento = models.CharField(max_length=32, unique=True, editable=False, verbose_name='Código')
     titulo_documento = models.CharField(max_length=255, verbose_name='Título do Documento')
     conteudo_html = models.TextField(validators=[validate_evolucao_like_text], verbose_name='Conteúdo Congelado')
-    responsavel_nome = models.CharField(max_length=255, verbose_name='Responsável')
-    responsavel_cpf = models.CharField(max_length=18, verbose_name='CPF do Responsável')
-    responsavel_documento = models.CharField(max_length=50, verbose_name='Documento de Identificação')
-    responsavel_data_nascimento = models.DateField(verbose_name='Data de Nascimento do Responsável')
+    responsavel_nome = models.CharField(max_length=255, blank=True, null=True, verbose_name='Responsável')
+    responsavel_cpf = models.CharField(max_length=18, blank=True, null=True, verbose_name='CPF do Responsável')
+    responsavel_documento = models.CharField(max_length=50, blank=True, null=True, verbose_name='Documento de Identificação')
+    responsavel_data_nascimento = models.DateField(blank=True, null=True, verbose_name='Data de Nascimento do Responsável')
     responsavel_telefone = models.CharField(max_length=20, blank=True, null=True, verbose_name='Telefone')
     responsavel_email = models.EmailField(blank=True, null=True, verbose_name='E-mail')
     declaracao_aceite = models.BooleanField(default=True, verbose_name='Li e concordo com o termo')
     assinatura_imagem = models.ImageField(upload_to=assinatura_upload_path, blank=True, null=True, verbose_name='Assinatura Desenhada')
-    documento_frente = models.ImageField(
-        upload_to=documento_frente_upload_path,
-        blank=True,
-        null=True,
-        validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'webp'])],
-        verbose_name='Documento Frente',
-    )
-    documento_verso = models.ImageField(
-        upload_to=documento_verso_upload_path,
-        blank=True,
-        null=True,
-        validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'webp'])],
-        verbose_name='Documento Verso',
-    )
     selfie = models.ImageField(
         upload_to=selfie_upload_path,
         blank=True,
         null=True,
         validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'webp'])],
-        verbose_name='Selfie',
+        verbose_name='Foto do Responsável',
+        help_text='Foto (selfie) do responsável capturada na validação.',
+    )
+    foto_documento = models.ImageField(
+        upload_to=foto_documento_upload_path,
+        blank=True,
+        null=True,
+        validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'webp'])],
+        verbose_name='Foto do Documento',
+        help_text='Foto do documento de identificação do responsável, capturada junto da selfie.',
     )
     pdf_gerado = models.FileField(upload_to=pdf_upload_path, blank=True, null=True, verbose_name='PDF Gerado')
     hash_pdf = models.CharField(max_length=64, blank=True, null=True, verbose_name='Hash SHA-256')

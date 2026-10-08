@@ -198,6 +198,43 @@ def _scaled_reportlab_image(file_field, max_width_mm=80, max_height_mm=55):
     return image
 
 
+def _build_fotos_validacao(foto_responsavel, foto_documento, section_style):
+    """Monta as fotos de validação lado a lado (responsável e documento).
+
+    Quando apenas uma das fotos existe, ela ocupa a linha inteira. O retorno é um
+    flowable pronto para entrar no story do PDF.
+    """
+    if not foto_responsavel and not foto_documento:
+        return None
+
+    col_width = 85 * mm
+
+    def _cell(foto, legenda):
+        if not foto:
+            return ''
+        return [
+            Paragraph(legenda, section_style),
+            Spacer(1, 2 * mm),
+            _scaled_reportlab_image(foto, 80, 55),
+        ]
+
+    celula_responsavel = _cell(foto_responsavel, 'Foto do Responsável')
+    celula_documento = _cell(foto_documento, 'Foto do Documento')
+
+    tabela = Table(
+        [[celula_responsavel, celula_documento]],
+        colWidths=[col_width, col_width],
+    )
+    tabela.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    return tabela
+
+
 def _pdf_bytes_validos(pdf_bytes):
     if not pdf_bytes or not isinstance(pdf_bytes, (bytes, bytearray)):
         return False
@@ -225,12 +262,13 @@ def gerar_pdf_documento_legal(documento, reservar_assinatura_digital=False):
         right_data = str(gerenciador_relatorio.dados_right_header) if gerenciador_relatorio.dados_right_header else None
         footer_data = str(gerenciador_relatorio.dados_footer) if gerenciador_relatorio.dados_footer else None
 
-    # Reserva a faixa inferior empilhando, de baixo para cima: rodapé, campo visual da
-    # assinatura digital do certificado (quando aplicável) e o bloco de identificação com
-    # o código. Assim o fluxo do conteúdo nunca sobrepõe nenhum desses elementos.
+    # Reserva a faixa inferior empilhando, de baixo para cima: rodapé e campo visual da
+    # assinatura digital do certificado (quando aplicável). O bloco de identificação com o
+    # código entra no fluxo do conteúdo, logo após a foto de validação, então só precisa que
+    # a margem inferior garanta que ele nunca sobreponha a assinatura digital nem o rodapé.
     footer_top_pt = (6 * mm) + (10 * mm) if footer_data else 0
-    faixa_inferior_pt = max(footer_top_pt, SIG_BOX_TOP_PT if reservar_assinatura_digital else 0)
-    bottom_margin_pt = faixa_inferior_pt + SIG_CODIGO_HEIGHT_PT + (4 * mm)
+    reservado_pt = max(footer_top_pt, SIG_BOX_TOP_PT if reservar_assinatura_digital else 0)
+    bottom_margin_pt = reservado_pt + (6 * mm)
 
     output = SimpleDocTemplate(
         buffer,
@@ -250,64 +288,6 @@ def gerar_pdf_documento_legal(documento, reservar_assinatura_digital=False):
 
     pessoa = documento.pessoa
 
-    def _build_story():
-        story = []
-
-        story.append(Paragraph('Dados do Paciente', section_style))
-        paciente_rows = [
-            ['Atendimento', str(documento.atendimento_id)],
-            ['Paciente', pessoa.nome if pessoa else ''],
-            ['CPF', pessoa.cpf if pessoa else ''],
-            ['Data de Nascimento', pessoa.dt_nascimento.strftime('%d/%m/%Y') if pessoa and pessoa.dt_nascimento else ''],
-        ]
-        paciente_table = Table(paciente_rows, colWidths=[40 * mm, 125 * mm])
-        paciente_table.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('BOTTOMPADDING', (0, 0), (-1, -1), 4)]))
-        story.extend([paciente_table, Spacer(1, 4 * mm)])
-
-        story.append(Paragraph('Dados do Responsável', section_style))
-        responsavel_rows = [
-            ['Nome', documento.responsavel_nome],
-            ['CPF', documento.responsavel_cpf],
-            ['Documento', documento.responsavel_documento],
-            ['Nascimento', documento.responsavel_data_nascimento.strftime('%d/%m/%Y') if documento.responsavel_data_nascimento else ''],
-            ['Telefone', documento.responsavel_telefone or ''],
-            ['E-mail', documento.responsavel_email or ''],
-            ['Assinado em', timezone.localtime(documento.dt_assinatura).strftime('%d/%m/%Y %H:%M') if documento.dt_assinatura else ''],
-        ]
-        responsavel_table = Table(responsavel_rows, colWidths=[40 * mm, 125 * mm])
-        responsavel_table.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('BOTTOMPADDING', (0, 0), (-1, -1), 4)]))
-        story.extend([responsavel_table, Spacer(1, 5 * mm)])
-
-        story.append(Paragraph('Dados do Atendente', section_style))
-        atendente_rows = [
-            ['Nome', atendente_nome],
-            ['CPF', atendente_cpf],
-        ]
-        atendente_table = Table(atendente_rows, colWidths=[40 * mm, 125 * mm])
-        atendente_table.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('BOTTOMPADDING', (0, 0), (-1, -1), 4)]))
-        story.extend([atendente_table, Spacer(1, 5 * mm)])
-
-        story.extend(html_to_flowables(documento.conteudo_html, body_style))
-        story.append(Spacer(1, 6 * mm))
-
-        if documento.assinatura_imagem:
-            story.append(KeepTogether([
-                _scaled_reportlab_image(documento.assinatura_imagem, 70, 30),
-                Spacer(1, 2 * mm),
-                Paragraph('Assinatura do Responsável', section_style),
-            ]))
-            story.append(Spacer(1, 4 * mm))
-
-        foto_validacao = documento.selfie or documento.documento_frente or documento.documento_verso
-        if foto_validacao:
-            story.append(KeepTogether([
-                _scaled_reportlab_image(foto_validacao),
-                Spacer(1, 2 * mm),
-                Paragraph('Foto de Validação', section_style),
-            ]))
-
-        return story
-
     atendente = getattr(getattr(documento.us_registro, 'perfil', None), 'pessoa', None) if documento.us_registro else None
     if atendente:
         atendente_nome = atendente.nome
@@ -317,6 +297,9 @@ def gerar_pdf_documento_legal(documento, reservar_assinatura_digital=False):
         atendente_nome = ''
     atendente_cpf = (atendente.cpf or '') if atendente else ''
 
+    # Bloco de identificação (título + tabela com código/emissão/IP). Entra no fluxo do
+    # conteúdo logo após a foto de validação, ficando acima da faixa reservada para a
+    # assinatura digital do certificado e do rodapé.
     codigo_style = ParagraphStyle(
         'DocLegalCodigo',
         parent=styles['BodyText'],
@@ -344,7 +327,83 @@ def gerar_pdf_documento_legal(documento, reservar_assinatura_digital=False):
     ]))
     codigo_titulo = Paragraph('Identificação do Documento', section_style)
 
-    draw_state = {'total_pages': 1}
+    def _build_story():
+        story = []
+
+        story.append(Paragraph('Dados do Paciente', section_style))
+        paciente_rows = [
+            ['Atendimento', str(documento.atendimento_id)],
+            ['Paciente', pessoa.nome if pessoa else ''],
+            ['CPF', pessoa.cpf if pessoa else ''],
+            ['Data de Nascimento', pessoa.dt_nascimento.strftime('%d/%m/%Y') if pessoa and pessoa.dt_nascimento else ''],
+        ]
+        paciente_table = Table(paciente_rows, colWidths=[40 * mm, 125 * mm])
+        paciente_table.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('BOTTOMPADDING', (0, 0), (-1, -1), 4)]))
+        story.extend([paciente_table, Spacer(1, 4 * mm)])
+
+        # Dados do responsável só aparecem no PDF quando o modelo exige a assinatura
+        # dele, e cada linha só entra se estiver preenchida. A data de assinatura não é
+        # exibida aqui porque o bloco de identificação/validador no final já a registra.
+        modelo_aplicado = documento.modelo_documento
+        exige_responsavel = modelo_aplicado.exige_assinatura_responsavel if modelo_aplicado else True
+        responsavel_rows = []
+        if exige_responsavel and documento.responsavel_nome:
+            responsavel_rows.append(['Nome', documento.responsavel_nome])
+        if documento.responsavel_cpf:
+            responsavel_rows.append(['CPF', documento.responsavel_cpf])
+        if documento.responsavel_documento:
+            responsavel_rows.append(['Documento', documento.responsavel_documento])
+        if documento.responsavel_data_nascimento:
+            responsavel_rows.append(['Nascimento', documento.responsavel_data_nascimento.strftime('%d/%m/%Y')])
+        if documento.responsavel_telefone:
+            responsavel_rows.append(['Telefone', documento.responsavel_telefone])
+        if documento.responsavel_email:
+            responsavel_rows.append(['E-mail', documento.responsavel_email])
+
+        if exige_responsavel and responsavel_rows:
+            story.append(Paragraph('Dados do Responsável', section_style))
+            responsavel_table = Table(responsavel_rows, colWidths=[40 * mm, 125 * mm])
+            responsavel_table.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('BOTTOMPADDING', (0, 0), (-1, -1), 4)]))
+            story.extend([responsavel_table, Spacer(1, 5 * mm)])
+
+        story.append(Paragraph('Dados do Atendente', section_style))
+        atendente_rows = [
+            ['Nome', atendente_nome],
+            ['CPF', atendente_cpf],
+        ]
+        atendente_table = Table(atendente_rows, colWidths=[40 * mm, 125 * mm])
+        atendente_table.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('BOTTOMPADDING', (0, 0), (-1, -1), 4)]))
+        story.extend([atendente_table, Spacer(1, 5 * mm)])
+
+        story.extend(html_to_flowables(documento.conteudo_html, body_style))
+        story.append(Spacer(1, 6 * mm))
+
+        if documento.assinatura_imagem:
+            story.append(KeepTogether([
+                _scaled_reportlab_image(documento.assinatura_imagem, 70, 30),
+                Spacer(1, 2 * mm),
+                Paragraph('Assinatura do Responsável', section_style),
+            ]))
+            story.append(Spacer(1, 4 * mm))
+
+        foto_validacao = documento.selfie
+        foto_documento = documento.foto_documento
+        bloco_identificacao = KeepTogether([codigo_titulo, Spacer(1, 2 * mm), codigo_table])
+        if foto_validacao or foto_documento:
+            # Fotos do responsável e do documento lado a lado, seguidas do bloco de
+            # identificação, tudo junto logo acima da assinatura digital do certificado.
+            fotos_flowable = _build_fotos_validacao(foto_validacao, foto_documento, section_style)
+            story.append(KeepTogether([
+                fotos_flowable,
+                Spacer(1, 5 * mm),
+                codigo_titulo,
+                Spacer(1, 2 * mm),
+                codigo_table,
+            ]))
+        else:
+            story.append(bloco_identificacao)
+
+        return story
 
     def draw_header_footer(canvas_obj, doc):
         page_width, page_height = A4
@@ -361,40 +420,8 @@ def gerar_pdf_documento_legal(documento, reservar_assinatura_digital=False):
             footer_table.wrapOn(canvas_obj, doc.width, page_height)
             footer_table.drawOn(canvas_obj, doc.leftMargin, 6 * mm)
 
-        # Bloco de identificação desenhado apenas na última página, empilhado acima do
-        # rodapé e da faixa reservada para a assinatura digital do certificado.
-        if doc.page == draw_state['total_pages']:
-            footer_top = (6 * mm) + (10 * mm) if footer_data else 0
-            base_y = max(footer_top, SIG_BOX_TOP_PT if reservar_assinatura_digital else 0) + (2 * mm)
-            try:
-                tw, th = codigo_titulo.wrap(doc.width, page_height)
-                codigo_titulo.drawOn(canvas_obj, doc.leftMargin, base_y + SIG_CODIGO_HEIGHT_PT - th)
-            except Exception:
-                pass
-            try:
-                ctw, cth = codigo_table.wrap(doc.width, page_height)
-                codigo_table.drawOn(canvas_obj, doc.leftMargin, base_y)
-            except Exception:
-                pass
-
-    # Primeira passada: descobre o total de páginas usando um story novo (os flowables
-    # são mutados durante o build, então cada passada precisa de objetos próprios).
-    preview_buffer = BytesIO()
-    preview_output = SimpleDocTemplate(
-        preview_buffer,
-        pagesize=A4,
-        leftMargin=15 * mm,
-        rightMargin=15 * mm,
-        topMargin=26 * mm,
-        bottomMargin=bottom_margin_pt,
-    )
-    preview_output.build(_build_story(), onFirstPage=lambda c, d: None, onLaterPages=lambda c, d: None)
-    try:
-        import pymupdf as _pymupdf
-        draw_state['total_pages'] = _pymupdf.open(stream=preview_buffer.getvalue(), filetype='pdf').page_count
-    except Exception:
-        draw_state['total_pages'] = 1
-
+    # O bloco de identificação (código/emissão/IP) faz parte do fluxo do conteúdo, logo
+    # após a foto de validação, então não é mais desenhado diretamente no canvas.
     output.build(_build_story(), onFirstPage=draw_header_footer, onLaterPages=draw_header_footer)
     buffer.seek(0)
     return buffer.getvalue()

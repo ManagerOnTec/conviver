@@ -325,6 +325,18 @@ USE_TZ = True
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
+# ==========================================================
+# LIMITES DE UPLOAD
+# ==========================================================
+# As fotos de validação (responsável e documento) são enviadas como data URL
+# base64 dentro do corpo do POST, o que infla o tamanho em ~33%. O padrão do
+# Django (2,5 MB) é baixo demais e provocava RequestDataTooBig. Aumentamos os
+# limites para acomodar as duas capturas de webcam sem rejeitar o formulário.
+DATA_UPLOAD_MAX_MEMORY_SIZE = int(config('DATA_UPLOAD_MAX_MEMORY_SIZE', default=25 * 1024 * 1024))
+FILE_UPLOAD_MAX_MEMORY_SIZE = int(config('FILE_UPLOAD_MAX_MEMORY_SIZE', default=25 * 1024 * 1024))
+DATA_UPLOAD_MAX_NUMBER_FIELDS = int(config('DATA_UPLOAD_MAX_NUMBER_FIELDS', default=2000))
+
+
 LOGIN_REDIRECT_URL = '/login/'
 LOGIN_URL = '/login/'
 LOGOUT_REDIRECT_URL = '/logout/'

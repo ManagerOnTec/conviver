@@ -24,7 +24,7 @@ from dominios.choices import status_choices
 from dominios.utils import CustomPermissionRequiredMixin, FilterObjectsByEstabelecimentoMixin, calcular_idade
 from .forms import DocumentoLegalInternacaoForm
 from .models import DocumentoLegalInternacao, ModeloDocumentoLegal, TipoDocumentoLegal
-from .services import build_document_context, render_documento_html, atualizar_pdf_documento
+from .services import render_documento_html, atualizar_pdf_documento
 
 
 def _listar_pdfs_para_download(pdf_paths):
@@ -246,7 +246,6 @@ class DocumentoLegalCreateView(AtendimentoDocumentoLegalMixin, CreateView):
         context = super().get_context_data(**kwargs)
         context['title'] = 'documentos_legais_cadastrar'
         context['form_mode'] = 'create'
-        context['preview_context'] = build_document_context(self.get_atendimento())
         return context
 
     def dispatch(self, request, *args, **kwargs):
@@ -372,7 +371,15 @@ class DocumentoLegalTemplatePreviewView(LoginRequiredMixin, CustomPermissionRequ
 
         html = render_documento_html(modelo, atendimento) if modelo else ''
         return JsonResponse({
-            'modelos': [{'id': item.id, 'nome': item.nome_modelo} for item in modelos],
+            'modelos': [
+                {
+                    'id': item.id,
+                    'nome': item.nome_modelo,
+                    'exige_assinatura_responsavel': item.exige_assinatura_responsavel,
+                    'exige_assinatura_atendente': item.exige_assinatura_atendente,
+                }
+                for item in modelos
+            ],
             'modelo_id': modelo.id if modelo else None,
             'titulo_documento': modelo.titulo_documento if modelo else '',
             'html': html,
