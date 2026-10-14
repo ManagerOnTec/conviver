@@ -1,0 +1,55 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+  &rsaquo; <a href="{% url 'admin:admin_estoques_produto_changelist' %}">Produtos</a>
+  &rsaquo; Importar Medicamentos
+</div>
+{% endblock %}
+
+{% block content %}
+<h1>Importar Medicamentos a partir de planilha XLSX</h1>
+
+<p>
+  Envie a planilha <strong>lista_medicamentos_completos.xlsx</strong>.
+  O sistema irá identificar automaticamente:
+</p>
+<ul>
+  <li><strong>Genérico</strong> &mdash; 1ª coluna (princípio ativo);</li>
+  <li><strong>Comercial</strong> &mdash; 2ª coluna (produto de referência; se houver
+    vários separados por &ldquo;/&rdquo;, cada um é cadastrado como produto);</li>
+  <li><strong>Classe</strong> e <strong>Subclasse</strong> &mdash; 3ª e 4ª colunas;</li>
+  <li><strong>Unidade de Medida</strong> e <strong>Via</strong> &mdash; 5ª e 6ª colunas.</li>
+</ul>
+<p>
+  Na próxima tela você poderá revisar cada linha e ajustar os dados antes de
+  confirmar a importação.
+</p>
+
+<form method="post" enctype="multipart/form-data">
+  {% csrf_token %}
+  <fieldset class="module aligned">
+    {% for field in form %}
+    <div class="form-row">
+      {{ field.errors }}
+      <div>
+        {{ field.label_tag }}
+        {{ field }}
+        {% if field.help_text %}
+        <p class="help">{{ field.help_text }}</p>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </fieldset>
+
+  <div class="submit-row">
+    <input type="submit" value="Analisar planilha" class="default">
+    <a href="{% url 'admin:admin_estoques_produto_changelist' %}" class="button cancel-link">
+      Cancelar
+    </a>
+  </div>
+</form>
+{% endblock %}

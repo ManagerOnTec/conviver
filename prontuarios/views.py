@@ -3373,28 +3373,36 @@ class PrescricaoUpdateView(LoginRequiredMixin, CustomPermissionRequiredMixin,  C
         estabelecimento = self.request.session.get("estabelecimento_id")
 
         if formset.is_valid():
-            prescricao_anterior = self.get_prescricao_anterior()
-            prescricao_anterior.us_atualizacao = self.request.user
-            prescricao_anterior.dt_atualizacao = timezone.now()
-            prescricao_anterior.fase = "S"
-            prescricao_anterior.save()
+            # Transacao atomica: suspender a prescricao anterior, criar a nova
+            # prescricao e gerar os novos adeps devem ocorrer de forma sincronizada.
+            # Se qualquer passo falhar, nada e persistido (rollback total).
+            with transaction.atomic():
+                prescricao_anterior = self.get_prescricao_anterior()
+                prescricao_anterior.us_atualizacao = self.request.user
+                prescricao_anterior.dt_atualizacao = timezone.now()
+                prescricao_anterior.us_suspensao = self.request.user
+                prescricao_anterior.dt_suspensao = timezone.now()
+                prescricao_anterior.fase = "S"
+                prescricao_anterior.save()
 
-            prescricao = form.save(commit=False)
-            prescricao.atendimento = prescricao_anterior.atendimento
-            prescricao.estabelecimento = prescricao_anterior.estabelecimento
-            prescricao.us_prescricao_inicial = prescricao_anterior.us_prescricao_inicial
-            prescricao.us_registro = self.request.user
-            prescricao.prescricao_anterior_id = prescricao_anterior.id
-            prescricao.save()
+                prescricao = form.save(commit=False)
+                prescricao.atendimento = prescricao_anterior.atendimento
+                prescricao.estabelecimento = prescricao_anterior.estabelecimento
+                prescricao.us_prescricao_inicial = prescricao_anterior.us_prescricao_inicial
+                prescricao.us_registro = self.request.user
+                prescricao.prescricao_anterior_id = prescricao_anterior.id
+                prescricao.save()
 
-            for formset_form in formset:
-                produto_prescricao = formset_form.save(commit=False)
-                produto_prescricao.prescricao = prescricao
-                produto_prescricao.atendimento = prescricao.atendimento
-                produto_prescricao.estabelecimento = prescricao.estabelecimento
-                produto_prescricao.us_registro = self.request.user
-                produto_prescricao.save()
+                for formset_form in formset:
+                    produto_prescricao = formset_form.save(commit=False)
+                    produto_prescricao.prescricao = prescricao
+                    produto_prescricao.atendimento = prescricao.atendimento
+                    produto_prescricao.estabelecimento = prescricao.estabelecimento
+                    produto_prescricao.us_registro = self.request.user
+                    produto_prescricao.save()
 
+            # PDF e assinatura ficam FORA da transacao: envolvem I/O externo e
+            # nao devem manter a transacao aberta nem sofrer rollback com ela.
             response = super().form_valid(form)
 
             relatorio = salvar_pdf_prontuario(
@@ -3544,6 +3552,10 @@ class ItensPrescricaoListView(LoginRequiredMixin, CustomPermissionRequiredMixin,
         context['titulo'] = "Prontuários"
         context['title'] = "itens_prescricao_listar"
         context['func'] = 'Prescrições'
+
+        # Expõe o prescricao_id no contexto para o menu lateral destacar
+        # "Itens da Prescrição" e permitir voltar para a lista de prescrições.
+        context['prescricao_id'] = self.kwargs.get('prescricao_id', None)
 
     # Obtendo o 'prescricao_id' do request ou do contexto atual
         prescricao_id = self.kwargs.get('prescricao_id', None)

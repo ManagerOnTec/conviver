@@ -8,9 +8,9 @@ templatetags %} {% block titulos %}{{title}}|{% endblock %}
   <a
     title="Clique aqui para fechar"
     href="{% url 'evolucao_listar' atendimento_id=object.atendimento.id %}"
-    class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded"
+    class="mt-2 list-group-item list-group-item-action voltar-link rounded"
   >
-    <i class="fas fa-times-circle me-2"></i>Fechar
+    <i class="fas fa-arrow-left me-2"></i>Voltar
   </a>
   <a
     href="{% url 'evolucao_listar' atendimento_id=object.atendimento.id %}"

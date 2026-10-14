@@ -118,6 +118,8 @@ class ProdutoAdmin(ExportToXLSMixin, BaseModelAdmin):
 
     actions = ['export_as_xls']
     
+    change_list_template = 'admin_estoques/produto/change_list.html'
+
     autocomplete_fields = ['classe',]
 
     list_display = ('id', 'descricao', 'unidade_medida', 'principio_ativo', 'produto_referencia',

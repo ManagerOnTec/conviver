@@ -1,0 +1,173 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+  &rsaquo; <a href="{% url 'admin:admin_estoques_produto_changelist' %}">Produtos</a>
+  &rsaquo; <a href="{% url 'admin_estoques:importar' %}">Importar Medicamentos</a>
+  &rsaquo; Confirmar
+</div>
+{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+  .import-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .import-table th,
+  .import-table td {
+    border: 1px solid #ddd;
+    padding: 6px 8px;
+    vertical-align: top;
+    font-size: 13px;
+  }
+
+  .import-table th {
+    background: #f5f5f5;
+    text-align: left;
+  }
+
+  .import-table input[type="text"] {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .import-table .cell-comerciais {
+    color: #555;
+  }
+
+  .duvida {
+    color: #b94a48;
+    font-size: 12px;
+    display: block;
+  }
+
+  .ok {
+    color: #468847;
+    font-size: 12px;
+  }
+
+  .linha-row.pular {
+    opacity: 0.45;
+  }
+
+  .toolbar-import {
+    margin: 10px 0;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>Confirmar Importação de Medicamentos</h1>
+
+<p>
+  Arquivo: <strong>{{ arquivo }}</strong> &mdash; {{ itens|length }} linha(s) encontrada(s).
+  Revise os dados abaixo. As células em vermelho indicam situações de dúvida:
+  ajuste o valor ou marque a linha para <em>pular</em>.
+</p>
+
+{% if avisos %}
+<ul class="messagelist">
+  {% for aviso in avisos %}
+  <li class="warning">{{ aviso }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<form method="post">
+  {% csrf_token %}
+
+  <div class="toolbar-import">
+    <a href="#" onclick="marcarTodas(false); return false;">Desmarcar todas (importar)</a>
+    &nbsp;|&nbsp;
+    <a href="#" onclick="marcarTodas(true); return false;">Marcar todas para pular</a>
+  </div>
+
+  <table class="import-table">
+    <thead>
+      <tr>
+        <th style="width:40px;">#</th>
+        <th style="width:60px;">Pular</th>
+        <th>Genérico</th>
+        <th>Comercial(is)</th>
+        <th>Classe</th>
+        <th>Subclasse</th>
+        <th style="width:70px;">UM</th>
+        <th style="width:70px;">Via</th>
+        <th>Observações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in itens %}
+      <tr class="linha-row">
+        <td>{{ item.linha }}</td>
+        <td>
+          <input type="checkbox" name="item_{{ item.linha }}_acao" value="pular" class="chk-pular"
+            onchange="toggleLinha(this);">
+        </td>
+        <td>
+          <input type="text" name="item_{{ item.linha }}_generico" value="{{ item.generico|default_if_none:'' }}">
+        </td>
+        <td class="cell-comerciais">
+          {% if item.comerciais %}
+          {% for c in item.comerciais %}
+          <div>{{ c }}</div>
+          {% endfor %}
+          {% else %}
+          <em>—</em>
+          {% endif %}
+        </td>
+        <td>
+          <input type="text" name="item_{{ item.linha }}_classe" value="{{ item.classe|default_if_none:'' }}">
+        </td>
+        <td>
+          <input type="text" name="item_{{ item.linha }}_subclasse" value="{{ item.subclasse|default_if_none:'' }}">
+        </td>
+        <td>
+          <input type="text" name="item_{{ item.linha }}_um" value="{{ item.um|default_if_none:'' }}">
+        </td>
+        <td>
+          <input type="text" name="item_{{ item.linha }}_via" value="{{ item.via|default_if_none:'' }}">
+        </td>
+        <td>
+          {% if item.duvidas %}
+          {% for d in item.duvidas %}
+          <span class="duvida">⚠ {{ d }}</span>
+          {% endfor %}
+          {% else %}
+          <span class="ok">✓ sem dúvidas</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="submit-row">
+    <input type="submit" value="Confirmar Importação" class="default">
+    <a href="{% url 'admin_estoques:importar' %}" class="button cancel-link">
+      Enviar outra planilha
+    </a>
+  </div>
+</form>
+
+<script>
+  function toggleLinha(checkbox) {
+    var linha = checkbox.closest('tr');
+    linha.classList.toggle('pular', checkbox.checked);
+    linha.querySelectorAll('input[type="text"]').forEach(function (el) {
+      el.disabled = checkbox.checked;
+    });
+  }
+  function marcarTodas(pular) {
+    document.querySelectorAll('.chk-pular').forEach(function (chk) {
+      chk.checked = pular;
+      toggleLinha(chk);
+    });
+  }
+</script>
+{% endblock %}

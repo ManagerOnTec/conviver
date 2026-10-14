@@ -3,12 +3,12 @@
         <button
             {% if button_id %}id="{{ button_id }}"{% endif %}
             type="submit"
-            title="{{ button_title|default:submit_label|default:'Salvar' }}"
+            title="{{ button_title|default:'Salvar' }}"
             class="workflow-form-submit"
             {% if button_disabled %}disabled{% endif %}
         >
             <i class="{{ submit_icon|default:'fas fa-save' }}"></i>
-            <span>{{ submit_label|default:'Salvar' }}</span>
+            <span>Salvar</span>
         </button>
 
         {% if status_title or status_text %}

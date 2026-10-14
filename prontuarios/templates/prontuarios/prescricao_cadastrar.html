@@ -4,9 +4,9 @@
     <a
       title="Clique aqui para fechar"
       href="{% url 'prescricao_listar' atendimento_id=atendimento.id %}"
-      class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded"
+      class="mt-2 list-group-item list-group-item-action voltar-link rounded"
     >
-      <i class="fas fa-times-circle me-2"></i>Fechar
+      <i class="fas fa-arrow-left me-2"></i>Voltar
     </a>
     <a
       href="{% url 'prescricao_listar' atendimento_id=atendimento.id %}"
@@ -53,7 +53,7 @@
       href="{% url 'prescricao_geral_listar' %}"
       class="mt-2 list-group-item list-group-item-action custom-link rounded"
     >
-      <i class="fas fa-pills me-2"></i>Gestão de Prescrições
+      <i class="fas fa-list-alt me-2"></i>Gestão de Prescrições
     </a>
   
     <a

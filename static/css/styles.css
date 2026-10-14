@@ -1,3 +1,85 @@
+
+/* Mantém a barra e os mini botões visíveis */
+#func-menu:not(.sidebar-collapsed) {
+    min-height: 58px;
+    padding: 0 8px;
+    box-sizing: border-box;
+}
+
+/* Mini botões: tamanho fixo, sem ocupar toda a largura */
+#func-menu .func-menu-btn {
+    display: inline-flex !important;
+    flex: 0 0 34px;
+    width: 34px !important;
+    min-width: 34px;
+    height: 34px;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    margin: 0 3px;
+    border: 1px solid rgba(255, 255, 255, 0.65);
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #FFFFFF !important;
+    text-decoration: none !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    transition: background-color 0.2s ease,
+                border-color 0.2s ease,
+                transform 0.2s ease;
+}
+
+/* Ícones sempre visíveis */
+#func-menu .func-menu-btn i {
+    display: inline-block !important;
+    padding: 0 !important;
+    background: transparent !important;
+    color: inherit !important;
+    font-size: 14px;
+    line-height: 1;
+}
+
+/* Lista / função: hover azul */
+#func-menu .func-menu-lista:hover,
+#func-menu .func-menu-lista:focus-visible {
+    background: #1565C0 !important;
+    border-color: #90CAF9 !important;
+    color: #FFFFFF !important;
+}
+
+/* Voltar: hover cinza-azulado */
+#func-menu .func-menu-voltar:hover,
+#func-menu .func-menu-voltar:focus-visible {
+    background: #546E7A !important;
+    border-color: #CFD8DC !important;
+    color: #FFFFFF !important;
+}
+
+/* Pequeno feedback ao clicar */
+#func-menu .func-menu-btn:active {
+    transform: scale(0.96);
+}
+
+/* Título não deve empurrar os botões para fora */
+#func-menu h5 {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-bottom: 0 !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Mantém o comportamento quando o menu é recolhido */
+#func-menu.sidebar-collapsed {
+    min-height: 0;
+    padding: 0;
+}
+
+
+
+
+
 .footer-dark {
     padding: 50px 0;
     color: #f0f9ff;

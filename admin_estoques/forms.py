@@ -102,3 +102,27 @@ class ProdutoForm(FilterByStatusMixin, BaseModelForm):
         # Defina a queryset inicial do campo 'subclasse'
         self.fields['subclasse'].queryset = SubClasse.objects.filter(
             status='A')
+class ImportarMedicamentosForm(forms.Form):
+    """Formulário de upload da planilha XLSX de medicamentos."""
+
+    arquivo = forms.FileField(
+        label='Planilha (XLSX)',
+        help_text='Selecione o arquivo .xlsx com a lista de medicamentos '
+                  '(colunas: Genérico, Comercial, Classe, Subclasse, UM, VA).',
+    )
+    criar_automatico = forms.BooleanField(
+        label='Criar automaticamente os grupos, classes e subclasses que não existirem',
+        required=False,
+        initial=True,
+    )
+
+    def clean_arquivo(self):
+        arquivo = self.cleaned_data['arquivo']
+        nome = (arquivo.name or '').lower()
+        if not nome.endswith('.xlsx'):
+            raise ValidationError(
+                'Formato inválido. Envie um arquivo no formato .xlsx.')
+        if arquivo.size > 10 * 1024 * 1024:
+            raise ValidationError(
+                'O arquivo excede o tamanho máximo permitido de 10 MB.')
+        return arquivo

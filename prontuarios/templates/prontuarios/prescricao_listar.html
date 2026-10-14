@@ -9,7 +9,7 @@
 <!-- LINKS DO MENU LATERAL -->
 <div class="form-group text-left m-3 mt-2">
     <a href="{% url 'prescricao_cadastrar'  atendimento_id=atendimento_id %}"
-        class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded" id="btn-novo">
+        class="btn-novo mt-2 list-group-item list-group-item-action bg-primary text-white rounded" id="btn-novo">
         <i class="fas fa-plus me-2"></i>Novo
     </a>
     <a href="{% url 'prontuario_detalhe' pk=atendimento_id %}"
@@ -38,7 +38,7 @@
     href="{% url 'prescricao_geral_listar' %}"
     class="mt-2 list-group-item list-group-item-action custom-link rounded"
   >
-    <i class="fas fa-pills me-2"></i>Gestão de Prescrições
+    <i class="fas fa-list-alt me-2"></i>Gestão de Prescrições
   </a>
 
 

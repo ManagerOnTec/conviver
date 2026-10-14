@@ -27,6 +27,7 @@ urlpatterns = [
     path('appcartao/', include('appcartao.urls')),
     path('appbaixa_fatura/', include('appbaixa_fatura.urls')),
     path('admin/', admin.site.urls),
+    path('admin_estoques/', include('admin_estoques.urls')),
 
     path('select2/', include('django_select2.urls')),
     path('chaining/', include('smart_selects.urls')),

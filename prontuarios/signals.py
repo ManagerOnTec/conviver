@@ -3,6 +3,8 @@ from datetime import datetime, timedelta
 from django.utils.timezone import make_aware, is_naive, get_current_timezone
 from django.utils.timezone import get_current_timezone
 from datetime import timezone as dt_timezone
+
+utc = dt_timezone.utc
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from datetime import timedelta, datetime
@@ -140,14 +142,18 @@ def update_adep_status(sender, instance, **kwargs):
         combined_datetime = instance.dt_inicio
 
         if is_naive(combined_datetime):
-            dt_inicio_anterior = make_aware(combined_datetime)
+            dt_inicio_anterior = make_aware(
+                combined_datetime, timezone=get_current_timezone())
         else:
             dt_inicio_anterior = combined_datetime
 
         dt_inicio_anterior_utc = dt_inicio_anterior.astimezone(utc)
 
+        # Suspende SOMENTE os adeps pendentes com data_hora >= inicio da
+        # prescricao editada/suspensa. Adeps anteriores ao inicio da
+        # prescricao NAO sao alterados, mesmo pertencendo a mesma prescricao.
         adeps_to_update = Adep.objects.filter(
-            prescricao_id=instance.prescricao_anterior.id,
+            prescricao_id=instance.prescricao_anterior_id,
             fase_adep='P',
             fase_prescricao='U',
             data_hora__gte=dt_inicio_anterior_utc,
@@ -174,12 +180,16 @@ def update_pres_adep_status(sender, instance, **kwargs):
             combined_datetime = instance.dt_inicio
 
             if is_naive(combined_datetime):
-                dt_inicio_anterior = make_aware(combined_datetime)
+                dt_inicio_anterior = make_aware(
+                    combined_datetime, timezone=get_current_timezone())
             else:
                 dt_inicio_anterior = combined_datetime
 
             dt_inicio_anterior_utc = dt_inicio_anterior.astimezone(utc)
 
+            # Suspende SOMENTE os adeps pendentes com data_hora >= inicio da
+            # prescricao suspensa. Adeps com data_hora anterior ao inicio da
+            # prescricao NAO sao alterados.
             adeps_to_update = Adep.objects.filter(
                 prescricao=instance,
                 fase_adep='P',

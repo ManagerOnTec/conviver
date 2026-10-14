@@ -5,8 +5,8 @@
 
 {% block menul %}
 <div class="form-group text-left mt-2 m-3">
-  <a href="{{ documentos_legais_index }}" class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded">
-    <i class="fas fa-times-circle me-2"></i>Fechar
+  <a href="{{ documentos_legais_index }}" class="mt-2 list-group-item list-group-item-action voltar-link rounded">
+    <i class="fas fa-arrow-left me-2"></i>Voltar
   </a>
 
     <a href="{{ documentos_legais_index }}" class="mt-2 list-group-item list-group-item-action custom-link rounded">
@@ -202,7 +202,7 @@
         <div class="workflow-form-panel-soft">
           <button type="submit" class="workflow-form-submit" id="salvar-termo" {% if not documentos_legais_configurados %}disabled{% endif %}>
             <i class="fas fa-save"></i>
-            <span>Salvar termo</span>
+            <span>Salvar</span>
           </button>
           <div class="workflow-form-status mt-3">
             <div class="spinner-border text-success" role="status">

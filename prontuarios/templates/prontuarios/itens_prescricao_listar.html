@@ -3,12 +3,12 @@ templatetags %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
 <!-- LINKS DO MENU LATERAL -->
 <div class="form-group text-left m-3 mt-2">
   <a
-    title="Fechar"
+    title="Voltar"
     href="{% url 'prescricao_listar'  atendimento_id=atendimento_id %}"
-    class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded"
+    class="mt-2 list-group-item list-group-item-action voltar-link rounded"
     id="btn-fechar"
   >
-    <i class="fas fa-times-circle me-2"></i>Voltar
+    <i class="fas fa-arrow-left me-2"></i>Voltar
   </a>
   <a
     href="{% url 'prontuario_detalhe' pk=atendimento_id %}"
@@ -39,17 +39,26 @@ templatetags %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
   </a>
 
   <a
-    href=""
-    class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded"
+    href="{% url 'prescricao_listar' atendimento_id=atendimento_id %}"
+    class="mt-2 list-group-item list-group-item-action custom-link rounded"
   >
     <i class="fas fa-capsules me-2"></i>Prescrições
   </a>
 
   <a
+    href="{% url 'itens_prescricao_listar' prescricao_id=prescricao_id %}"
+    class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded"
+  >
+    <i class="fas fa-pills me-2"></i>Itens da Prescrição
+  </a>
+
+
+
+  <a
     href="{% url 'prescricao_geral_listar' %}"
     class="mt-2 list-group-item list-group-item-action custom-link rounded"
   >
-    <i class="fas fa-pills me-2"></i>Gestão de Prescrições
+    <i class="fas fa-list-alt me-2"></i>Gestão de Prescrições
   </a>
 
   <a
