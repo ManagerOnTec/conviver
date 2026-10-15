@@ -10,15 +10,9 @@
 <div class="form-group text-left m-3 mt-2">
     {% if return_to_last_url %}
     <a href="{{ return_to_last_url }}" class="mt-2 list-group-item list-group-item-action custom-link rounded">
-        <i class="fas fa-arrow-left me-2"></i>Voltar para última tela
+        <i class="fas fa-arrow-left me-2"></i>Voltar
     </a>
     {% endif %}
-
-    <a href="" class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded">
-        <i class="fas fa-list-alt me-2"></i>Gestão de Prescrições
-    </a>
-
-
 
 
     <form class="mt-2 text-white text-left" method="GET">
@@ -74,7 +68,7 @@
 
 
 {% block cabdados %}
-{% include 'parciais/_list_header.html' with icon_class='fas fa-list-alt' title='Lista de Prescrições' subtitle='Gestão centralizada com foco em leitura e vencimento.' %}
+{% include 'parciais/_list_header.html' with icon_class='fas fa-list-alt' title='Gestão de Prescrições' subtitle='Gestão centralizada com foco em leitura e vencimento.' %}
 
 <!-- FIM DADOS DO OBJETO -->
 {% endblock %}
@@ -83,6 +77,16 @@
 
 {% block lista %}
 
+<!-- BARRA DE ACOES EM LOTE -->
+<div id="bulk-actions-bar" class="d-flex align-items-center gap-2 mb-2">
+    <button type="button" id="btn-renovar-lote" class="btn btn-primary btn-sm" disabled>
+        <i class="fas fa-sync-alt me-1"></i>Renovar Selecionadas (<span id="count-selecionadas">0</span>)
+    </button>
+    <button type="button" id="btn-suspender-lote" class="btn btn-outline-info btn-sm" disabled
+            title="Suspender prescrições selecionadas">
+        <i class="fas fa-pause-circle me-1"></i>Suspender Selecionadas (<span id="count-selecionadas-susp">0</span>)
+    </button>
+</div>
 
 <div id="table-container" class="listing-table-shell">
     <table class="table listing-table align-middle mb-0">
@@ -92,7 +96,7 @@
 
 
             <tr>
-                <th>Ações</th>
+                <th><input type="checkbox" id="select-all-prescricoes" title="Selecionar todas"></th>
 
                 <th>Paciente</th>
 
@@ -119,23 +123,11 @@
 
             <tr class="data-row">
                 <td>
-                    <div class="listing-action-bar">
-                        <a href="{% url 'itens_prescricao_listar' prescricao_id=prescricao.id %}" title="Ver"
-                            type="button" class="btn btn-outline-primary btn-sm listing-action-btn">
-                            <i class="fas fa-folder-open"></i>
-                        </a>
-                        <a href="{% url 'prescricao_editar' pk=prescricao.pk %}" title="Editar" type="button"
-                            class="btn btn-outline-warning btn-sm edit-prescricao-btn listing-action-btn" id="btn-edit">
-                            <i class="fas fa-edit"></i>
-                        </a>
-
-                        <a title="Suspender" type="button" class="btn btn-outline-info btn-sm listing-action-btn"
-                            onclick='suspendPrescription("{{ prescricao.id }}")'>
-                            <i class="fas fa-pause-circle"></i>
-                        </a>
-
-
-
+                    <div class="listing-action-bar d-flex align-items-center">
+                        <input type="checkbox" class="prescricao-select me-2" name="prescricao_ids"
+                               value="{{ prescricao.pk }}"
+                               data-fase="{{ prescricao.fase }}"
+                               {% if prescricao.fase == 'S' or prescricao.fase == 'F' %}disabled title="Prescrição suspensa/finalizada não pode ser renovada/suspensa"{% endif %}>
 
                         {% if prescricao.status == 'A' %}
                         <!--CONCATENAR E ABRIR OS PDFS-->
@@ -143,11 +135,7 @@
                             class="btn btn-outline-success btn-sm listing-action-btn" target="_blank">
                             <i class="fas fa-print"></i>
                         </a>
-
-                        {% else %}
                         {% endif %}
-
-
                     </div>
                 </td>
 
@@ -255,7 +243,7 @@
 {% block scriptcustom %}
 
 <script>
-    // inicio legendas de vencimento da prescricao 
+    // inicio legendas de vencimento da prescricao
 
     document.addEventListener('DOMContentLoaded', function () {
         var legendas = document.querySelectorAll('.legenda');
@@ -295,6 +283,129 @@
 
 
     // fim legendas
+</script>
+
+<script>
+    // SELECAO EM LOTE - prescricao_geral_listar
+    document.addEventListener('DOMContentLoaded', function () {
+        var selectAll = document.getElementById('select-all-prescricoes');
+        if (selectAll) {
+            selectAll.addEventListener('change', function () {
+                document.querySelectorAll('.prescricao-select').forEach(function (cb) {
+                    cb.checked = selectAll.checked;
+                });
+                updateSelectedCount();
+            });
+        }
+        document.querySelectorAll('.prescricao-select').forEach(function (cb) {
+            cb.addEventListener('change', updateSelectedCount);
+        });
+
+        var btnRenovar = document.getElementById('btn-renovar-lote');
+        if (btnRenovar) {
+            btnRenovar.addEventListener('click', function () {
+                var ids = getSelecionadas();
+                if (!ids.length) {
+                    alert('Selecione pelo menos uma prescrição para renovar.');
+                    return;
+                }
+                window.location.href = '/prontuarios/prescricao_renovar_lote/?ids=' + ids.join(',');
+            });
+        }
+
+        var btnSuspender = document.getElementById('btn-suspender-lote');
+        if (btnSuspender) {
+            btnSuspender.addEventListener('click', function () {
+                var ids = getSelecionadas();
+                if (!ids.length) {
+                    alert('Selecione pelo menos uma prescrição para suspender.');
+                    return;
+                }
+                if (!window.confirm('Isto irá suspender as ' + ids.length + ' prescrição(ões) selecionada(s). Deseja continuar?')) {
+                    return;
+                }
+                var csrftoken = getCookie('csrftoken');
+                btnSuspender.disabled = true;
+                $.ajax({
+                    type: "POST",
+                    url: "/prontuarios/prescricao_suspender_lote/",
+                    data: {
+                        'ids': ids.join(','),
+                        'csrfmiddlewaretoken': csrftoken
+                    },
+                    dataType: 'json',
+                    success: function (data) {
+                        if (data.success) {
+                            var msg = data.suspensas + ' prescrição(ões) suspensa(s) com sucesso.';
+                            if (data.message) { msg += '\n' + data.message; }
+                            alert(msg);
+                            location.reload();
+                        } else {
+                            alert(data.message || 'Não foi possível suspender as prescrições.');
+                            btnSuspender.disabled = false;
+                        }
+                    },
+                    error: function () {
+                        alert('Erro ao suspender prescrições.');
+                        btnSuspender.disabled = false;
+                    }
+                });
+            });
+        }
+    });
+
+    function getSelecionadas() {
+        return Array.from(document.querySelectorAll('.prescricao-select:checked')).map(function (cb) { return cb.value; });
+    }
+
+    function updateSelectedCount() {
+        var n = getSelecionadas().length;
+        var span = document.getElementById('count-selecionadas');
+        if (span) { span.textContent = n; }
+        var spanSusp = document.getElementById('count-selecionadas-susp');
+        if (spanSusp) { spanSusp.textContent = n; }
+        var btnRen = document.getElementById('btn-renovar-lote');
+        if (btnRen) { btnRen.disabled = (n === 0); }
+        var btnSusp = document.getElementById('btn-suspender-lote');
+        if (btnSusp) { btnSusp.disabled = (n === 0); }
+    }
+
+    function suspenderSelecionadas() {
+        var ids = getSelecionadas();
+        if (!ids.length) {
+            alert('Selecione pelo menos uma prescrição para suspender.');
+            return;
+        }
+        if (!window.confirm('Isto irá suspender as ' + ids.length + ' prescrição(ões) selecionada(s). Deseja continuar?')) {
+            return;
+        }
+        var btn = document.getElementById('btn-suspender-lote');
+        btn.disabled = true;
+        $.ajax({
+            type: "POST",
+            url: "/prontuarios/prescricao_suspender_lote/",
+            data: {
+                'ids': ids.join(','),
+                'csrfmiddlewaretoken': getCookie('csrftoken')
+            },
+            dataType: 'json',
+            success: function (data) {
+                if (data.success) {
+                    var msg = data.suspensas + ' prescrição(ões) suspensa(s) com sucesso.';
+                    if (data.message) { msg += '\n' + data.message; }
+                    alert(msg);
+                    location.reload();
+                } else {
+                    alert(data.message || 'Não foi possível suspender as prescrições.');
+                    btn.disabled = false;
+                }
+            },
+            error: function () {
+                alert('Erro ao suspender prescrições.');
+                btn.disabled = false;
+            }
+        });
+    }
 </script>
 
 <script>

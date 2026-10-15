@@ -955,6 +955,8 @@ class AdepForm(forms.ModelForm):
 
 
 class PrescricaoForm(forms.ModelForm):
+    id = None  # exclui o campo 'id' (pk) do form: 'id' oculto vazio quebrava o POST do update
+
     class Meta:
         model = Prescricao
         exclude = [

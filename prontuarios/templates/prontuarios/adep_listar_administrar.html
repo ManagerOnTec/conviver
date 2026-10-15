@@ -32,11 +32,14 @@
                         </button>
                     </div>
                 </div>
-                <div class="justify-content-center mt-2">
-                    <button class="col-md-12 btn btn-outline-danger justify-content-center" name="limpar" value="1">
-                        <i class="fas fa-times-circle" style="transition: color 0.3s;"></i>
-                        Limpar
-                    </button>
+
+                <div class="col-md-12">
+                    <div class="justify-content-center mt-2">
+                        <button class="col-md-12 btn btn-outline-danger justify-content-center" name="limpar" value="1">
+                            <i class="fas fa-times-circle" style="transition: color 0.3s;"></i>
+                            Limpar
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -48,14 +51,7 @@
 {% endblock %}
 
 {% block cabdados %}
-
-<div class="p-2" data-bs-toggle="tooltip" data-bs-placement="top"
-    title="Esta função lista todos os horários de ADEPs para gerar a administração de enfermagem!">
-    <i class="fas fa-syringe me-2"></i>
-    <span>Lista de ADEPs para administrar</span>
-    <i class="fas fa-pencil-alt text-warning me-2"></i>
-</div>
-<!-- FIM DADOS DO OBJETO -->
+{% include 'parciais/_list_header.html' with icon_class='fas fa-syringe' title='Lista de ADEPs para administrar' subtitle='Lista os horários de ADEPs para gerar a administração de enfermagem.' %}
 {% endblock %}
 
 {% block lista %}

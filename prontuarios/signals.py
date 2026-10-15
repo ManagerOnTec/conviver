@@ -174,7 +174,16 @@ def update_adep_status(sender, instance, **kwargs):
 def update_pres_adep_status(sender, instance, **kwargs):
     """
     Atualiza os Adeps quando o status da prescrição muda para 'S'.
+
+    Se a suspensão faz parte de uma edição/renovação (a view marca a
+    instância com _skip_adep_suspensao), este signal NAO suspende os adeps:
+    quem faz o corte correto (data/hora inicial da NOVA prescricao em
+    diante, mantendo os adeps anteriores) é o signal update_adep_status,
+    disparado no save da nova prescrição.
     """
+    if getattr(instance, '_skip_adep_suspensao', False):
+        return
+
     if kwargs.get('update_fields') is None or 'fase' in kwargs['update_fields']:
         if instance.fase == 'S':
             combined_datetime = instance.dt_inicio

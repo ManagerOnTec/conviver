@@ -2,7 +2,7 @@ from . import views
 from django.urls import path
 from . views import (AdepListarAdministrarView, AdepListarAssinarView, DiagnosticoCreateView, DiagnosticoDetailView, DiagnosticoListView, DiagnosticoUpdateView, GestaoPacientesListView, ItensPrescricaoListView, PassagemPlantaoCreateView, PassagemPlantaoDetailView, PassagemPlantaoListView, PrescricaoCreateView, PrescricaoListView, PrescricaoUpdateView, ProntuarioAcessosCreateView, PsicoterapiaCreateView, PsicoterapiaDetailView, PsicoterapiaListView, PsicoterapiaUpdateView, combine_pdfs_specific, download_filtered_pdfs, get_aspecto_analisado, get_evidencia, PerdasGanhosCreateView, PerdasGanhosDetailView, PerdasGanhosListView, PerdasGanhosUpdateView, PlanoCuidadosCreateView, PlanoCuidadosDetailView,
                      PlanoCuidadosListView, PlanoCuidadosUpdateView, ProntuarioDetailView, EvolucaoListView, EvolucaoCreateView, EvolucaoDetailView, EvolucaoUpdateView, ProntuarioListView, SAECreateView, SAEDetailView, SAEListView, SAEUpdateView, SinaisVitaisCreateView, SinaisVitaisDetailView, SinaisVitaisListView, SinaisVitaisUpdateView, TextoPadraoFiltradoView, AdepListView,
-                     SuspendPrescriptionView, PrescricaoGeralListView, check_adeps)
+                     SuspendPrescriptionView, PrescricaoGeralListView, RenovarPrescricoesLoteView, SuspenderPrescricoesLoteView, check_adeps)
 from . utils import buscar_diagnosticos
 
 
@@ -91,6 +91,12 @@ urlpatterns = [
 
     path('prescricao_geral_listar/',
          PrescricaoGeralListView.as_view(), name='prescricao_geral_listar'),
+
+    path('prescricao_renovar_lote/',
+         RenovarPrescricoesLoteView.as_view(), name='prescricao_renovar_lote'),
+
+    path('prescricao_suspender_lote/',
+         SuspenderPrescricoesLoteView.as_view(), name='prescricao_suspender_lote'),
 
 
     path('itens_prescricao_listar/<int:prescricao_id>/',

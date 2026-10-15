@@ -49,19 +49,7 @@ tz %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
     <i class="fas fa-capsules me-2"></i>Prescrições
   </a>
 
-  <a
-    href="{% url 'prescricao_geral_listar' %}"
-    class="mt-2 list-group-item list-group-item-action custom-link rounded"
-  >
-    <i class="fas fa-pills me-2"></i>Gestão de Prescrições
-  </a>
 
-  <a
-    href="{% url 'gestao_pacientes' %}"
-    class="mt-2 list-group-item list-group-item-action custom-link rounded"
-  >
-    <i class="fas fa-hospital-user me-2"></i>Gestão de Pacientes
-  </a>
 
   <a
     href="{% url 'adep_listar' atendimento.id %}"

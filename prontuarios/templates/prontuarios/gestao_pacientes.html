@@ -66,13 +66,13 @@
 {% endblock %}
 
 
+
 {% block cabdados %}
-<div class="p-2" data-bs-toggle="tooltip" data-bs-placement="top"
-    title="Esta função lista todas as administrações de medicamentos da enfermagem que precisam ser gerados os relatórios em PDF e suas respectivas assinaturas. Para gerar basta selecionar os itens e clicar em gerar!">
-    <i class="fas fa-hospital-user me-2"></i>
-    <span>Gestão de Pacientes</span>
-</div>
+{% include 'parciais/_list_header.html' with icon_class='fas fa-hospital-user' title='Gestão de Pacientes' subtitle='Gerencie os pacientes cadastrados, consulte seus dados e acesse as informações necessárias para o acompanhamento e atendimento.' %}
 {% endblock %}
+
+
+
 {% block lista %}
 <div>
     {% for atendimento in atendimentos %}

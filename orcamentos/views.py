@@ -260,10 +260,9 @@ class OrcamentosUpdateView(LoginRequiredMixin, CustomPermissionRequiredMixin, Fi
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['titulo'] = "orcamentos"
         context['title'] = 'orcamentos_editar'
 
-        context['titulo'] = "orcamentoss"
+        context['titulo'] = "Orçamentos"
         context['title'] = 'orcamentos_editar'
 
         estabelecimento_id = self.request.session.get("estabelecimento_id")

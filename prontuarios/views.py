@@ -3080,7 +3080,7 @@ class PrescricaoGeralListView(LoginRequiredMixin, CustomPermissionRequiredMixin,
             context['atendimento_id'] = None
 
         context['cad_index'] = reverse_lazy('cadastros_index')
-        context['list_index'] = reverse_lazy('prontuario_listar')
+        context['list_index'] = reverse_lazy('prescricao_geral_listar')
 
         context['prescricao'] = None
         prescricoes = self.get_queryset()
@@ -3383,6 +3383,11 @@ class PrescricaoUpdateView(LoginRequiredMixin, CustomPermissionRequiredMixin,  C
                 prescricao_anterior.us_suspensao = self.request.user
                 prescricao_anterior.dt_suspensao = timezone.now()
                 prescricao_anterior.fase = "S"
+                # Nao deixa o signal update_pres_adep_status suspender os
+                # adeps usando o dt_inicio ANTIGO como corte: o corte correto
+                # (>= dt_inicio da NOVA prescricao) e feito pelo signal
+                # update_adep_status no save da nova prescricao abaixo.
+                prescricao_anterior._skip_adep_suspensao = True
                 prescricao_anterior.save()
 
                 prescricao = form.save(commit=False)
@@ -3390,6 +3395,7 @@ class PrescricaoUpdateView(LoginRequiredMixin, CustomPermissionRequiredMixin,  C
                 prescricao.estabelecimento = prescricao_anterior.estabelecimento
                 prescricao.us_prescricao_inicial = prescricao_anterior.us_prescricao_inicial
                 prescricao.us_registro = self.request.user
+                prescricao.us_atualizacao = self.request.user   
                 prescricao.prescricao_anterior_id = prescricao_anterior.id
                 prescricao.save()
 
@@ -3703,7 +3709,7 @@ class AdepListView(LoginRequiredMixin, CustomPermissionRequiredMixin, FilterObje
         context = super().get_context_data(**kwargs)
         context['titulo'] = "Prontuários"
         context['title'] = "adep_listar"
-        context['func'] = 'Adep'
+        context['func'] = 'ADEP'
         context['atendimento_id'] = self.kwargs['atendimento_id']
         estabelecimento_id = self.request.session.get("estabelecimento_id")
         estabelecimento = Estabelecimento.objects.get(pk=estabelecimento_id)
@@ -3843,6 +3849,253 @@ class SuspendPrescriptionView(LoginRequiredMixin, View):
             return JsonResponse({'success': True, 'message': 'Prescricao suspensa com sucesso.'})
         except Prescricao.DoesNotExist:
             return JsonResponse({'success': False, 'message': 'Prescricao nao encontrada.'})
+
+
+###################### RENOVACAO DE PRESCRICOES EM LOTE ######################
+# Replica, para varias prescricoes selecionadas na prescricao_geral_listar,
+# o mesmo fluxo da edicao individual (PrescricaoUpdateView.form_valid):
+# suspende a prescricao anterior, cria nova prescricao na data informada,
+# recria os produtos (signals geram os novos ADEPs) e gera o PDF.
+class SuspenderPrescricoesLoteView(LoginRequiredMixin, View):
+    permission_required = 'prontuarios.change_prescricao'
+
+    def _usuario_pode_suspender(self, request, prescricao):
+        # Mesma regra do SuspendPrescriptionView.dispatch: dono do registro
+        # ou profissional com permite_suspender_outras.
+        if prescricao.us_registro == request.user:
+            return True
+        try:
+            profissional = CadastroProfissional.objects.get(
+                profissional=request.user, status='A')
+        except CadastroProfissional.DoesNotExist:
+            profissional = None
+        if profissional:
+            estabelecimento_id = request.session.get("estabelecimento_id")
+            parametros = ParametrosPrescricao.objects.filter(
+                Q(profissao=profissional.profissao, status='A', estabelecimento=estabelecimento_id) |
+                Q(profissional=profissional.profissional,
+                  status='A', estabelecimento=estabelecimento_id)
+            )
+            if parametros.exists() and any(param.permite_suspender_outras for param in parametros):
+                return True
+        return False
+
+    def post(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return JsonResponse({'logout': True, 'message': 'Sessão expirada. Por favor, faça login novamente.'})
+
+        if not request.user.has_perm(self.permission_required):
+            return JsonResponse({'success': False, 'message': 'Usuario nao autorizado para suspender prescricoes.'})
+
+        ids_raw = request.POST.get('ids', '')
+        ids = [i for i in ids_raw.split(',') if i.strip().isdigit()]
+        if not ids:
+            return JsonResponse({'success': False, 'message': 'Nenhuma prescrição selecionada.'})
+
+        prescricoes = Prescricao.objects.filter(pk__in=ids)
+
+        suspensas = 0
+        ignoradas = []
+        for prescricao in prescricoes:
+            if prescricao.fase in ['S', 'F']:
+                ignoradas.append(f'#{prescricao.pk} (suspensa/finalizada)')
+                continue
+            if not self._usuario_pode_suspender(request, prescricao):
+                ignoradas.append(f'#{prescricao.pk} (sem permissão)')
+                continue
+
+            # Mesma logica do SuspendPrescriptionView.post: os signals
+            # update_pres_adep_status suspendem os adeps pendentes.
+            prescricao.fase = 'S'
+            prescricao.us_suspensao = request.user
+            prescricao.us_atualizacao = request.user
+            prescricao.dt_atualizacao = timezone.now()
+            prescricao.dt_suspensao = timezone.now()
+            prescricao.save()
+            suspensas += 1
+
+        resposta = {'success': True, 'suspensas': suspensas}
+        if ignoradas:
+            resposta['message'] = 'Ignoradas: ' + ', '.join(ignoradas)
+        return JsonResponse(resposta)
+
+
+class RenovarPrescricoesLoteView(LoginRequiredMixin, CustomPermissionRequiredMixin, View):
+    permission_required = 'prontuarios.change_prescricao'
+
+    def _usuario_pode_renovar(self, request, prescricao):
+        # Mesma regra do PrescricaoUpdateView.dispatch: dono do registro
+        # ou profissional com permite_editar_outras.
+        if prescricao.us_registro == request.user:
+            return True
+        try:
+            profissional = CadastroProfissional.objects.get(
+                profissional=request.user, status='A')
+        except CadastroProfissional.DoesNotExist:
+            profissional = None
+        if profissional:
+            estabelecimento_id = request.session.get("estabelecimento_id")
+            parametros = ParametrosPrescricao.objects.filter(
+                Q(profissao=profissional.profissao, status='A', estabelecimento=estabelecimento_id) |
+                Q(profissional=profissional.profissional,
+                  status='A', estabelecimento=estabelecimento_id)
+            )
+            if parametros.exists() and any(param.permite_editar_outras for param in parametros):
+                return True
+        return False
+
+    def _get_selecionadas(self, request):
+        ids_raw = request.GET.get('ids') or request.POST.get('ids') or ''
+        ids = [i for i in ids_raw.split(',') if i.strip().isdigit()]
+        qs = Prescricao.objects.none()
+        if ids:
+            qs = Prescricao.objects.filter(pk__in=ids).select_related(
+                'atendimento', 'atendimento__pessoa').order_by('-dt_final')
+        return qs, ids_raw
+
+    def _montar_contexto(self, request, prescricoes, ids_raw, nao_permitidas, nao_editaveis):
+        # Mesmo contexto base da PrescricaoGeralListView (titulo, title, func,
+        # estabelecimento, cad_index, list_index, etc.)
+        estabelecimento_id = request.session.get("estabelecimento_id")
+        if estabelecimento_id:
+            estabelecimento = Estabelecimento.objects.get(pk=estabelecimento_id)
+        else:
+            estabelecimento = None
+
+        return {
+            'titulo': "Gestão de Prescrições",
+            'title': "prescricao_renovar_lote",
+            'func': 'Gestão de Prescrições',
+            'estabelecimento': estabelecimento,
+            'cad_index': reverse_lazy('cadastros_index'),
+            'list_index': reverse_lazy('prescricao_geral_listar'),
+            'prescricoes': prescricoes,
+            'ids_raw': ids_raw,
+            'nao_permitidas': nao_permitidas,
+            'nao_editaveis': nao_editaveis,
+        }
+
+    def get(self, request, *args, **kwargs):
+        prescricoes, ids_raw = self._get_selecionadas(request)
+
+        if not prescricoes:
+            messages.error(request, 'Nenhuma prescrição selecionada para renovação.')
+            return redirect('prescricao_geral_listar')
+
+        nao_permitidas = [p for p in prescricoes
+                          if not self._usuario_pode_renovar(request, p)]
+        nao_editaveis = [p for p in prescricoes if p.fase in ['S', 'F']]
+
+        ids_raw = ','.join(str(p.pk) for p in prescricoes)
+        context = self._montar_contexto(
+            request, prescricoes, ids_raw, nao_permitidas, nao_editaveis)
+        return render(request, 'prontuarios/prescricao_renovar_lote.html', context)
+
+    def post(self, request, *args, **kwargs):
+        prescricoes, ids_raw = self._get_selecionadas(request)
+
+        if not prescricoes:
+            messages.error(request, 'Nenhuma prescrição selecionada para renovação.')
+            return redirect('prescricao_geral_listar')
+
+        dt_inicio = request.POST.get('dt_inicio')
+        dt_final = request.POST.get('dt_final')
+
+        if not dt_inicio or not dt_final:
+            messages.error(request, 'Informe a data de início e a data final da renovação.')
+            return redirect(f'{reverse("prescricao_renovar_lote")}?ids={ids_raw}')
+
+        try:
+            dt_inicio = make_aware(datetime.strptime(dt_inicio, '%Y-%m-%dT%H:%M'))
+            dt_final = make_aware(datetime.strptime(dt_final, '%Y-%m-%dT%H:%M'))
+        except (ValueError, TypeError):
+            messages.error(request, 'Data inválida.')
+            return redirect(f'{reverse("prescricao_renovar_lote")}?ids={ids_raw}')
+
+        if dt_final <= dt_inicio:
+            messages.error(request, 'A data final deve ser maior que a data de início.')
+            return redirect(f'{reverse("prescricao_renovar_lote")}?ids={ids_raw}')
+
+        renovadas = []
+        ignoradas = []
+        novas_prescricoes = []
+
+        for prescricao_anterior in prescricoes:
+            if not self._usuario_pode_renovar(request, prescricao_anterior):
+                ignoradas.append((prescricao_anterior, 'Sem permissão para editar esta prescrição.'))
+                continue
+
+            if prescricao_anterior.fase in ['S', 'F']:
+                ignoradas.append((prescricao_anterior, 'Prescrições suspensas ou finalizadas não podem ser renovadas.'))
+                continue
+
+            try:
+                with transaction.atomic():
+                    # 1. Suspende a prescricao anterior (mesma logica do update individual)
+                    prescricao_anterior.us_atualizacao = request.user
+                    prescricao_anterior.dt_atualizacao = timezone.now()
+                    prescricao_anterior.us_suspensao = request.user
+                    prescricao_anterior.dt_suspensao = timezone.now()
+                    prescricao_anterior.fase = 'S'
+                    # Nao deixa o signal update_pres_adep_status suspender os
+                    # adeps usando o dt_inicio ANTIGO como corte: o corte correto
+                    # (>= dt_inicio da NOVA prescricao) e feito pelo signal
+                    # update_adep_status no save da nova prescricao abaixo.
+                    prescricao_anterior._skip_adep_suspensao = True
+                    prescricao_anterior.save()
+
+                    # 2. Clona a prescricao com as novas datas
+                    nova = Prescricao()
+                    for field in Prescricao._meta.fields:
+                        if field.name not in ['id', 'us_registro', 'dt_registro',
+                                              'dt_atualizacao', 'us_atualizacao',
+                                              'dt_suspensao', 'us_suspensao', 'fase']:
+                            setattr(nova, field.name,
+                                    getattr(prescricao_anterior, field.name))
+                    nova.dt_inicio = dt_inicio
+                    nova.dt_final = dt_final
+                    nova.fase = 'U'
+                    nova.status = 'A'
+                    nova.us_registro = request.user
+                    nova.us_prescricao_inicial = prescricao_anterior.us_prescricao_inicial
+                    nova.prescricao_anterior_id = prescricao_anterior.id
+                    nova.save()
+
+                    # 3. Clona os produtos: post_save gera os ADEPs da nova
+                    # prescricao (dose unica ou aprazamento por intervalo)
+                    for produto_anterior in prescricao_anterior.produtos.all():
+                        novo_produto = ProdutoPrescricao()
+                        for field in ProdutoPrescricao._meta.fields:
+                            if field.name not in ['id', 'prescricao', 'dt_registro',
+                                                  'us_registro', 'dt_final']:
+                                setattr(novo_produto, field.name,
+                                        getattr(produto_anterior, field.name))
+                        novo_produto.prescricao = nova
+                        novo_produto.us_registro = request.user
+                        novo_produto.dt_inicio = dt_inicio
+                        novo_produto.dt_final = dt_final
+                        novo_produto.save()
+
+                novas_prescricoes.append(nova)
+                renovadas.append(prescricao_anterior)
+            except Exception as e:
+                ignoradas.append((prescricao_anterior, f'Erro ao renovar: {e}'))
+
+        # PDFs ficam FORA das transacoes (mesma justificativa do update individual)
+        for nova in novas_prescricoes:
+            try:
+                salvar_pdf_prontuario(request.user, nova, assinar=nova.assinar)
+            except Exception:
+                pass
+
+        if renovadas:
+            messages.success(
+                request, f'{len(renovadas)} prescrição(ões) renovada(s) com sucesso!')
+        for prescricao, motivo in ignoradas:
+            messages.warning(
+                request, f'Prescrição #{prescricao.pk} não renovada: {motivo}')
+
+        return redirect('prescricao_geral_listar')
 
 
 ###################### PSICOTERAPIAS#######################################
@@ -4308,9 +4561,9 @@ class AdepListarAssinarView(LoginRequiredMixin, CustomPermissionRequiredMixin, F
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['titulo'] = "Adeps"
+        context['titulo'] = "ADEP Assinar"
         context['title'] = "adep_listar_assinar"
-        context['func'] = 'ADEPs'
+        context['func'] = 'ADEP'
         estabelecimento_id = self.request.session.get("estabelecimento_id")
         estabelecimento = Estabelecimento.objects.get(pk=estabelecimento_id)
 
@@ -4443,9 +4696,9 @@ class AdepListarAdministrarView(LoginRequiredMixin, CustomPermissionRequiredMixi
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context.update({
-            'titulo': "Adeps/Turno",
+            'titulo': "ADEP Administrar",
             'title': "adep_listar_administrar",
-            'func': 'ADEPs/Turno',
+            'func': 'ADEPs Turno',
             'cad_index': reverse_lazy('cadastros_index'),
             'list_index': reverse_lazy('adep_listar_administrar'),
             'filter': self.filter,

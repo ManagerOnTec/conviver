@@ -38,28 +38,13 @@ templatetags %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
     <i class="fas fa-brain me-2"></i>Psicoterapias
   </a>
 
-  <a
-    href="{% url 'prescricao_listar' atendimento_id=atendimento_id %}"
-    class="mt-2 list-group-item list-group-item-action custom-link rounded"
-  >
-    <i class="fas fa-capsules me-2"></i>Prescrições
-  </a>
-
-  <a
-    href="{% url 'itens_prescricao_listar' prescricao_id=prescricao_id %}"
-    class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded"
-  >
-    <i class="fas fa-pills me-2"></i>Itens da Prescrição
+  <a href=""
+    class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded">
+  <i class="fas fa-capsules me-2"></i>Prescrições
   </a>
 
 
-
-  <a
-    href="{% url 'prescricao_geral_listar' %}"
-    class="mt-2 list-group-item list-group-item-action custom-link rounded"
-  >
-    <i class="fas fa-list-alt me-2"></i>Gestão de Prescrições
-  </a>
+  
 
   <a
     href="{% url 'adep_listar' atendimento_id=atendimento_id %}"
