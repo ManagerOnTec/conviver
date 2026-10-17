@@ -227,8 +227,10 @@ def gerar_pdf_prontuario(obj, user, assinar=False, assinatura_texto=None):
                 # Usamos '<br/>' internamente para separar descrição/unidade/via
                 # dentro da própria célula do produto.
                 produto_str = produto_prescricao.produto.descricao
-                um = produto_prescricao.produto.unidade_medida
-                via = produto_prescricao.produto.via
+                # Primeira coluna: exibir sempre a DESCRIÇÃO da unidade de medida
+                # e da via de administração (nunca a abreviação/código).
+                um = produto_prescricao.produto.unidade_medida.descricao
+                via = produto_prescricao.produto.via.descricao
                 intervalo_horas_display = produto_prescricao.intervalo_horas.get_intervalo_horas_display()
 
                 # Datas efetivamente marcadas (uma por linha dentro da célula).
@@ -265,14 +267,16 @@ def gerar_pdf_prontuario(obj, user, assinar=False, assinatura_texto=None):
 
         elif produtos.exists() and not adeps:
             # Adiciona o cabeçalho das colunas para produtos sem registros de ADEP
-            texto_cabecalho = f"Vigência: {inicio} à {final}\tIntervalos\tSN\tÚnica\tObs\tAdep\n"
+            texto_cabecalho = f"Vigência: {inicio} à {final}\tIntervalos\tSN\tÚnica\tObservações\tAdministração de Enfermagem\n"
             texto_produtos += texto_cabecalho
 
             for produto_prescricao in produtos:
                 # Extrai as informações do produto prescrito
                 produto_str = produto_prescricao.produto.descricao
-                um = produto_prescricao.produto.unidade_medida
-                via = produto_prescricao.produto.via
+                # Primeira coluna: exibir sempre a DESCRIÇÃO da unidade de medida
+                # e da via de administração (nunca a abreviação/código).
+                um = produto_prescricao.produto.unidade_medida.descricao
+                via = produto_prescricao.produto.via.descricao
                 intervalo_horas_display = produto_prescricao.intervalo_horas.get_intervalo_horas_display()
                 se_necessario = 'SN' if produto_prescricao.se_necessario else ' '
                 dose_unica = 'Sim' if produto_prescricao.dose_unica else ' '

@@ -2,7 +2,7 @@ from django.core.exceptions import ValidationError
 from django import forms
 from admin_cadastros.forms import BaseModelForm
 from dominios.utils import FilterByStatusMixin
-from .models import Categoria, Grupo, Classe, SubClasse, TipoProduto, Produto
+from .models import Categoria, Grupo, Classe, SubClasse, TipoProduto, Produto, ViaAdministracao
 
 
 class TipoProdutoForm(FilterByStatusMixin, BaseModelForm):
@@ -57,6 +57,18 @@ class UnidadeMedidaForm(FilterByStatusMixin, BaseModelForm):
 
     def clean_unidade_medida(self):
         return self.cleaned_data['unidade_medida'].upper()
+
+    def clean_descricao(self):
+        return self.cleaned_data['descricao'].title()
+
+
+class ViaAdministracaoForm(FilterByStatusMixin, BaseModelForm):
+    class Meta(BaseModelForm.Meta):
+        model = ViaAdministracao
+        fields = '__all__'
+
+    def clean_codigo(self):
+        return self.cleaned_data['codigo'].upper()
 
     def clean_descricao(self):
         return self.cleaned_data['descricao'].title()

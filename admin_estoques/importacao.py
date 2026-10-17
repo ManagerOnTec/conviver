@@ -144,16 +144,35 @@ def ler_planilha(caminho_arquivo):
     return linhas, avisos
 
 
-# Mapeamento de via de administração -> choice de Produto.via
+# Mapeamento de via de administração -> registro de ViaAdministracao
+VIAS_PADRAO = (
+    ('VO', 'Via Oral'),
+    ('EV', 'Via Endovenosa'),
+    ('IM', 'Via Intramuscular'),
+    ('--', 'Não informada'),
+)
+
+
+def _mapa_vias():
+    """Monta um dicionário normalizado de sinônimos -> código da via padrão."""
+    mapa = {}
+    for codigo, descricao in VIAS_PADRAO:
+        mapa[normalizar_texto(codigo)] = codigo
+        mapa[normalizar_texto(descricao)] = codigo
+    mapa[normalizar_texto('VIA ORAL')] = 'VO'
+    mapa[normalizar_texto('ORAL')] = 'VO'
+    mapa[normalizar_texto('IV')] = 'EV'
+    mapa[normalizar_texto('VIA ENDOVENOSA')] = 'EV'
+    mapa[normalizar_texto('ENDOVENOSA')] = 'EV'
+    mapa[normalizar_texto('INTRAVENOSA')] = 'EV'
+    mapa[normalizar_texto('VIA INTRAMUSCULAR')] = 'IM'
+    mapa[normalizar_texto('INTRAMUSCULAR')] = 'IM'
+    return mapa
+
+
 def mapear_via(valor):
-    """Converte o texto da planilha no valor da choice `via_administracao_choices`."""
+    """Converte o texto da planilha no código da via de administração."""
     texto = normalizar_texto(valor)
     if not texto:
         return '--'
-    if texto in ('VO', 'VIA ORAL', 'ORAL'):
-        return 'vo'
-    if texto in ('EV', 'IV', 'VIA ENDOVENOSA', 'ENDOVENOSA', 'INTRAVENOSA'):
-        return 'ev'
-    if texto in ('IM', 'VIA INTRAMUSCULAR', 'INTRAMUSCULAR'):
-        return 'im'
-    return '--'
+    return _mapa_vias().get(texto, '--')

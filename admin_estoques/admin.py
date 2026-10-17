@@ -1,8 +1,8 @@
 from smart_selects.form_fields import ChainedModelChoiceField
 from django.contrib import admin
-from .models import Categoria, Grupo, Classe, SubClasse, TipoProduto, Produto, UnidadeMedida
+from .models import Categoria, Grupo, Classe, SubClasse, TipoProduto, Produto, UnidadeMedida, ViaAdministracao
 from dominios.utils import StatusFilterAdminMixin, ExportToXLSMixin
-from .forms import CategoriaForm, GrupoForm, ClasseForm, SubClasseForm, TipoProdutoForm, ProdutoForm, UnidadeMedidaForm
+from .forms import CategoriaForm, GrupoForm, ClasseForm, SubClasseForm, TipoProdutoForm, ProdutoForm, UnidadeMedidaForm, ViaAdministracaoForm
 from django.utils import timezone
 
 
@@ -113,21 +113,38 @@ class UnidadeMedidaAdmin(ExportToXLSMixin, BaseModelAdmin):
     search_fields = ['id', 'unidade_medida', 'descricao']
 
 
+class ViaAdministracaoAdmin(ExportToXLSMixin, BaseModelAdmin):
+    form = ViaAdministracaoForm
+
+    actions = ['export_as_xls']
+
+    list_display = ('id', 'codigo', 'descricao', 'status', 'dt_registro', 'us_registro',
+                    'dt_atualizacao', 'us_atualizacao')
+
+    list_display_links = ['id', 'descricao', ]
+    search_fields = ['id', 'codigo', 'descricao']
+
+
 class ProdutoAdmin(ExportToXLSMixin, BaseModelAdmin):
     form = ProdutoForm
 
     actions = ['export_as_xls']
-    
+
     change_list_template = 'admin_estoques/produto/change_list.html'
 
     autocomplete_fields = ['classe',]
 
-    list_display = ('id', 'descricao', 'unidade_medida', 'principio_ativo', 'produto_referencia',
+    list_display = ('id', 'descricao', 'unidade_medida_descricao', 'via', 'principio_ativo', 'produto_referencia',
                     'pode_ser_prescrito', 'grupo', 'get_grupo_prescricao', 'classe', 'subclasse', 'categoria', 'status')
 
-    search_fields = ['id', 'descricao', 'unidade_medida']
+    search_fields = ['id', 'descricao', 'unidade_medida__unidade_medida',
+                     'unidade_medida__descricao']
     list_display_links = ['id', 'descricao', ]
     list_editable = ['status']
+
+    @admin.display(description='Unidade de Medida')
+    def unidade_medida_descricao(self, obj):
+        return obj.unidade_medida.descricao
 
     def get_grupo_prescricao(self, obj):
         return obj.grupo.pode_ser_prescrito
@@ -150,4 +167,5 @@ admin.site.register(Classe, ClasseAdmin)
 admin.site.register(SubClasse, SubClasseAdmin)
 admin.site.register(Categoria, CategoriaAdmin)
 admin.site.register(UnidadeMedida, UnidadeMedidaAdmin)
+admin.site.register(ViaAdministracao, ViaAdministracaoAdmin)
 admin.site.register(Produto, ProdutoAdmin)

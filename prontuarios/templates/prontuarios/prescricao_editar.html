@@ -260,7 +260,7 @@ templatetags %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
     var formsetPrefix = "{{ formset.prefix }}";
     var emptyFormHTML = $("#" + formsetPrefix + "-empty").html();
     var totalForms = $("#id_" + formsetPrefix + "-TOTAL_FORMS");
-    var maxItems = 20; // Define o limite máximo como 5
+    var maxItems = 200; // Define o limite máximo de itens
     // A contagem inicial é baseada nos itens já presentes na página.
     var initialItemCount = $("#itens-prescricao .row").length;
 

@@ -224,7 +224,7 @@
       var formsetPrefix = "{{ formset.prefix }}"; // Prefixo do formset
       var emptyFormHTML = $("#" + formsetPrefix + "-empty").html(); // HTML para um form vazio
       var totalForms = $("#id_" + formsetPrefix + "-TOTAL_FORMS"); // Campo que armazena o total de forms
-      var maxItems = 20; // Número máximo de itens que podem ser adicionados
+      var maxItems = 200; // Número máximo de itens que podem ser adicionados
   
       // Atualiza o índice de um elemento do formulário (usado ao adicionar ou remover um item)
       function updateElementIndex(el, prefix, index) {

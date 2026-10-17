@@ -311,6 +311,7 @@ def _build_tabela_prescricao_adep(parag, width, estilo_paragrafo, estilo_cabecal
 
 def genParagrafosRel(parag, width, height, p, tipo="evolucao"):
     margem_lateral = width * 5 / 100
+    margem_lateral_presc =  20 
 
     estilo_paragrafo = ParagraphStyle(
         name='ParagrafoStyle',
@@ -327,11 +328,11 @@ def genParagrafosRel(parag, width, height, p, tipo="evolucao"):
         name='CabecalhoStyle',
         fontSize=10,
         alignment=1,  # Centralizado
-        leftIndent=margem_lateral,
-        rightIndent=margem_lateral,
+        leftIndent=margem_lateral_presc,
+        rightIndent=margem_lateral_presc,
         wordWrap=True,
         leading=15,
-        spaceAfter=6,
+        spaceAfter=2,
     )
 
     if tipo in {"evolucao", "atas", "oficios", "orcamentos"}:

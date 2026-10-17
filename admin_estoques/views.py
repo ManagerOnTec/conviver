@@ -9,7 +9,7 @@ from django.utils import timezone
 from .forms import ImportarMedicamentosForm
 from .importacao import ler_planilha, mapear_via, normalizar_texto
 from .models import (
-    Classe, Grupo, Produto, SubClasse, TipoProduto, UnidadeMedida,
+    Classe, Grupo, Produto, SubClasse, TipoProduto, UnidadeMedida, ViaAdministracao,
 )
 
 # Chave de sessão onde a pré-visualização da importação é guardada
@@ -94,6 +94,19 @@ def _get_unidade_medida(codigo, criar=True):
             descricao='Unidade' if codigo.upper() == UM_PADRAO else codigo.upper(),
         )
     return um
+
+
+# Unidade de medida de via usada quando a planilha não informa a via
+VIA_PADRAO = '--'
+
+
+def _get_via_administracao(valor, criar=True):
+    """Localiza a ViaAdministracao pelo código mapeado a partir do texto da planilha."""
+    codigo = mapear_via(valor)
+    via = ViaAdministracao.objects.filter(codigo__iexact=codigo).first()
+    if via is None:
+        via = ViaAdministracao.objects.filter(codigo__iexact=VIA_PADRAO).first()
+    return via
 
 
 def _resolver_vinculos(linhas):
@@ -287,7 +300,8 @@ def _executar_importacao(itens, criar_automatico, usuario):
             produto.subclasse = subclasse
         if um is not None:
             produto.unidade_medida = um
-        produto.via = mapear_via(via)
+        if via is not None:
+            produto.via = via
         produto.principio_ativo = principio_ativo
         if produto_referencia is not None:
             produto.produto_referencia = produto_referencia
@@ -309,13 +323,14 @@ def _executar_importacao(itens, criar_automatico, usuario):
                 subclasse = _get_subclasse(
                     item.get('subclasse'), classe, criar=criar_automatico)
                 um = _get_unidade_medida(item.get('um'), criar=criar_automatico)
+                via = _get_via_administracao(item.get('via'), criar=criar_automatico)
 
                 # 1) Produtos comerciais (referência)
                 produtos_comerciais = []
                 for nome_com in item.get('comerciais', []):
                     produto, criado = _criar_ou_atualizar(
                         nome_com, grupo_comercial, classe, subclasse, um,
-                        item.get('via'), principio_ativo=False)
+                        via, principio_ativo=False)
                     if produto is not None:
                         produtos_comerciais.append(produto)
                         resultado['criados' if criado else 'atualizados'] += 1
@@ -326,7 +341,7 @@ def _executar_importacao(itens, criar_automatico, usuario):
                     referencia = produtos_comerciais[0] if produtos_comerciais else None
                     produto, criado = _criar_ou_atualizar(
                         generico, grupo_generico, classe, subclasse, um,
-                        item.get('via'), principio_ativo=True,
+                        via, principio_ativo=True,
                         produto_referencia=referencia)
                     if produto is not None:
                         resultado['criados' if criado else 'atualizados'] += 1

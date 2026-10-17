@@ -1,7 +1,6 @@
 from django.db import models
 from admin_cadastros.models import BaseModel
 from smart_selects.db_fields import ChainedForeignKey
-from dominios.choices import via_administracao_choices
 
 
 class TipoProduto(BaseModel):
@@ -82,7 +81,9 @@ class Categoria(BaseModel):
 class UnidadeMedida(BaseModel):
 
     unidade_medida = models.CharField(
-        max_length=3, verbose_name='Unidade de Medida', help_text='Unidade de medida do produto. Ex: ml, mg, g, etc.')
+        max_length=3, verbose_name='Unidade de Medida',
+        help_text='Unidade de medida do produto. Ex: ml, mg, g, etc.')
+
     descricao = models.CharField(max_length=255, verbose_name='Descrição',
                                  help_text='Descrição da unidade de medida. Ex: mililitro, miligrama, grama, etc.')
 
@@ -91,7 +92,31 @@ class UnidadeMedida(BaseModel):
         verbose_name_plural = '6. Unidades de Medidas'
 
     def __str__(self):
-        return f'{self.unidade_medida}'
+        return f'{self.descricao}'
+
+class ViaAdministracao(BaseModel):
+    """Via de administração do produto (ex.: Via Oral, Endovenosa, Intramuscular).
+
+    Substitui a antiga `via_administracao_choices`. O campo `codigo` mantém a
+    compatibilidade com os valores antes gravados em `Produto.via` (vo, ev,
+    im, --) e `descricao` é o texto por extenso exibido nos relatórios.
+    """
+
+    codigo = models.CharField(
+        max_length=10, verbose_name='Código', unique=True,
+        help_text='Código interno da via de administração. Ex: VO, EV, IM, --.')
+
+    descricao = models.CharField(
+        max_length=255, verbose_name='Descrição', unique=True,
+        help_text='Descrição da via de administração. Ex: Via Oral, Via Endovenosa, Via Intramuscular, Não informada.')
+
+    class Meta:
+        verbose_name = 'Via de Administração'
+        verbose_name_plural = '7. Vias de Administração'
+        ordering = ['descricao']
+
+    def __str__(self):
+        return f'{self.descricao}'
 
 
 class Produto(BaseModel):
@@ -101,8 +126,8 @@ class Produto(BaseModel):
     unidade_medida = models.ForeignKey(
         UnidadeMedida, on_delete=models.PROTECT, verbose_name='Unidade de Medida')
 
-    via = models.CharField(
-        max_length=50, choices=via_administracao_choices, verbose_name='Via Administração')
+    via = models.ForeignKey(
+        ViaAdministracao, on_delete=models.PROTECT, verbose_name='Via Administração')
 
     grupo = models.ForeignKey(
         Grupo,
@@ -152,15 +177,22 @@ class Produto(BaseModel):
 
     class Meta:
         verbose_name = 'Produto'
-        verbose_name_plural = '7. Produtos'
+        verbose_name_plural = '8. Produtos'
 
         constraints = [
             models.UniqueConstraint(
                 fields=['descricao', 'status'], name='unique_produto_status')
         ]
 
+            
     def __str__(self):
-        produto_referencia = self.produto_referencia if self.produto_referencia else "Sim"
-        unidade_medida = self.unidade_medida if self.unidade_medida else " "
-        via = self.via if self.via else " "
-        return f'{self.descricao} / REF: {produto_referencia} / UM: {unidade_medida} / VIA: {via}'
+        unidade_medida = self.unidade_medida
+        via = self.via
+
+        if self.produto_referencia:
+            return (
+                f'{self.descricao}'
+                f'→ {self.produto_referencia.descricao} / UM: {unidade_medida} / VIA: {via}'
+            )
+
+        return f'{self.descricao} / UM: {unidade_medida} / VIA: {via}'
