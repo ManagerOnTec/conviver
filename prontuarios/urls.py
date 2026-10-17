@@ -1,6 +1,6 @@
 from . import views
 from django.urls import path
-from . views import (AdepListarAdministrarView, AdepListarAssinarView, DiagnosticoCreateView, DiagnosticoDetailView, DiagnosticoListView, DiagnosticoUpdateView, GestaoPacientesListView, ItensPrescricaoListView, PassagemPlantaoCreateView, PassagemPlantaoDetailView, PassagemPlantaoListView, PrescricaoCreateView, PrescricaoListView, PrescricaoUpdateView, ProntuarioAcessosCreateView, PsicoterapiaCreateView, PsicoterapiaDetailView, PsicoterapiaListView, PsicoterapiaUpdateView, combine_pdfs_specific, download_filtered_pdfs, get_aspecto_analisado, get_evidencia, PerdasGanhosCreateView, PerdasGanhosDetailView, PerdasGanhosListView, PerdasGanhosUpdateView, PlanoCuidadosCreateView, PlanoCuidadosDetailView,
+from . views import (AdepListarAdministrarView, AdepListarAssinarView, DiagnosticoCreateView, DiagnosticoDetailView, DiagnosticoListView, DiagnosticoUpdateView, GestaoPacientesListView, ItensPrescricaoListView, PassagemPlantaoCreateView, PassagemPlantaoDetailView, PassagemPlantaoListView, PrescricaoCreateView, PrescricaoListView, PrescricaoUpdateView, ProntuarioAcessosCreateView, PsicoterapiaCreateView, PsicoterapiaDetailView, PsicoterapiaListView, PsicoterapiaUpdateView, combine_pdfs_specific, download_filtered_pdfs, download_adep_pdfs, get_aspecto_analisado, get_evidencia, PerdasGanhosCreateView, PerdasGanhosDetailView, PerdasGanhosListView, PerdasGanhosUpdateView, PlanoCuidadosCreateView, PlanoCuidadosDetailView,
                      PlanoCuidadosListView, PlanoCuidadosUpdateView, ProntuarioDetailView, EvolucaoListView, EvolucaoCreateView, EvolucaoDetailView, EvolucaoUpdateView, ProntuarioListView, SAECreateView, SAEDetailView, SAEListView, SAEUpdateView, SinaisVitaisCreateView, SinaisVitaisDetailView, SinaisVitaisListView, SinaisVitaisUpdateView, TextoPadraoFiltradoView, AdepListView,
                      SuspendPrescriptionView, PrescricaoGeralListView, RenovarPrescricoesLoteView, SuspenderPrescricoesLoteView, check_adeps)
 from . utils import buscar_diagnosticos
@@ -123,6 +123,9 @@ urlpatterns = [
 
     path('download_filtered_pdfs/<int:atendimento_id>/<str:model_name>/',
          download_filtered_pdfs, name='download_filtered_pdfs'),
+
+    path('download_adep_pdfs/<int:prescricao_id>/',
+         download_adep_pdfs, name='download_adep_pdfs'),
 
     path('combine-pdfs-specific/<int:object_id>/<str:tipo>/',
          combine_pdfs_specific, name='combine_pdfs_specific'),

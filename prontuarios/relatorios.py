@@ -169,13 +169,9 @@ def gerar_pdf_prontuario(obj, user, assinar=False, assinatura_texto=None):
             pdf=False
         )
 
-        print(f'adepsa:[adeps_a]')
-        print(f'adepsn:[adeps_n]')
-        print(f'adeps:[adeps]')
-
         texto_produtos = ""
         # Adiciona cabeçalhos das colunas
-        inicio = obj.dt_inicio.strftime('%d/%m') if obj.dt_inicio else ' '
+        inicio = obj.dt_inicio.strftime('%d/%m/%Y') if obj.dt_inicio else ' '
         final = timezone.localtime(obj.dt_final).strftime(
             '%d/%m/%Y %H:%M') if obj.dt_final else ' '
         texto_cabecalho = ""
@@ -185,7 +181,7 @@ def gerar_pdf_prontuario(obj, user, assinar=False, assinatura_texto=None):
 
         if adeps.exists() and produtos.exists():
 
-            texto_cabecalho = f"Vigência: {inicio} até: {final}\tH\tSN\tUnica\tAdministrado\tNão Admin...\n"
+            texto_cabecalho = f"Vigência: {inicio} à {final}\tIntervalos\tSN\tÚnica\tAdm. Enfermagem\tNão administrados\n"
             texto_produtos += texto_cabecalho
 
             # Antes do loop dos produtos, inicialize as variáveis para coletar as datas
@@ -195,36 +191,55 @@ def gerar_pdf_prontuario(obj, user, assinar=False, assinatura_texto=None):
             # Durante a iteração de adeps_a e adeps_n, colete as datas
             for adepa in adeps_a:
                 dt_a = timezone.localtime(
-                    adepa.data_hora).strftime('%d/%m %H:%M')
+                    adepa.data_hora).strftime('%d/%m/%Y %H:%M')
                 if adepa.produto_prescricao_id not in datas_administrados:
                     datas_administrados[adepa.produto_prescricao_id] = []
                 datas_administrados[adepa.produto_prescricao_id].append(dt_a)
 
             for adepn in adeps_n:
                 dt_n = timezone.localtime(
-                    adepn.data_hora).strftime('%d/%m %H:%M')
+                    adepn.data_hora).strftime('%d/%m/%Y %H:%M')
                 if adepn.produto_prescricao_id not in datas_nao_administrados:
                     datas_nao_administrados[adepn.produto_prescricao_id] = []
                 datas_nao_administrados[adepn.produto_prescricao_id].append(
                     dt_n)
 
-            # Durante a geração do texto do produto, inclua as datas de administração e não administração
+            # Durante a geração do texto do produto, inclua as datas de administração e não administração.
+            #
+            # Importante: no PDF de ADEP só devem entrar os itens que possuem
+            # marcação de administrado ou não administrado. Produtos sem
+            # nenhuma dessas marcações são ignorados para não ocupar linhas
+            # (e páginas) desnecessárias no relatório assinado.
             for produto_prescricao in produtos:
-                # Defina as variáveis com base no objeto produto_prescricao atual
+                produto_prescricao_id = produto_prescricao.id
+                datas_do_produto = datas_administrados.get(
+                    produto_prescricao_id) or []
+                datas_do_produto_n = datas_nao_administrados.get(
+                    produto_prescricao_id) or []
+
+                # Só compõe o ADEP se houver ao menos uma marcação
+                # (administrado ou não administrado) para este produto.
+                if not datas_do_produto and not datas_do_produto_n:
+                    continue
+
+                # Coluna 1 = produto (única coluna que pode quebrar em várias
+                # linhas). As demais colunas são dados curtos, sempre em linha.
+                # Usamos '<br/>' internamente para separar descrição/unidade/via
+                # dentro da própria célula do produto.
                 produto_str = produto_prescricao.produto.descricao
                 um = produto_prescricao.produto.unidade_medida
                 via = produto_prescricao.produto.via
                 intervalo_horas_display = produto_prescricao.intervalo_horas.get_intervalo_horas_display()
 
-                # Use o ID do produto_prescricao para buscar as datas
-                produto_prescricao_id = produto_prescricao.id
-                dt_ah = ', '.join(datas_administrados.get(
-                    produto_prescricao_id, [' ']))
-                dt_nh = ', '.join(datas_nao_administrados.get(
-                    produto_prescricao_id, [' ']))
+                # Datas efetivamente marcadas (uma por linha dentro da célula).
+                dt_ah = '<br/>'.join(datas_do_produto) if datas_do_produto else ' '
+                dt_nh = '<br/>'.join(datas_do_produto_n) if datas_do_produto_n else ' '
 
-                # Gere o texto do produto incluindo todas as datas relevantes
-                texto_produto = f"{produto_str}:{um}:{via}\t" \
+                # Gere o texto do produto incluindo todas as datas relevantes.
+                # A primeira célula concentra todo o medicamento (pode estourar
+                # em múltiplas linhas); as colunas de administração e não
+                # administração quebram em uma linha por data/hora registrada.
+                texto_produto = f"{produto_str}<br/>{um} - {via}\t" \
                                 f"{intervalo_horas_display}\t" \
                                 f"{'SN' if produto_prescricao.se_necessario else ' '}\t" \
                                 f"{'Sim' if produto_prescricao.dose_unica else ' '}\t" \
@@ -250,7 +265,7 @@ def gerar_pdf_prontuario(obj, user, assinar=False, assinatura_texto=None):
 
         elif produtos.exists() and not adeps:
             # Adiciona o cabeçalho das colunas para produtos sem registros de ADEP
-            texto_cabecalho = f"Vigência: {inicio} até: {final}\tH\tSN\tÚnica\tObs\tAdep\n"
+            texto_cabecalho = f"Vigência: {inicio} à {final}\tIntervalos\tSN\tÚnica\tObs\tAdep\n"
             texto_produtos += texto_cabecalho
 
             for produto_prescricao in produtos:
@@ -263,8 +278,11 @@ def gerar_pdf_prontuario(obj, user, assinar=False, assinatura_texto=None):
                 dose_unica = 'Sim' if produto_prescricao.dose_unica else ' '
                 observacao = produto_prescricao.observacao if produto_prescricao.observacao else ' '
 
-                # Monta a linha de texto para o produto seguindo o formato tabular
-                linha_produto = f"{produto_str}:{um}:{via}\t{intervalo_horas_display}\t{se_necessario}\t{dose_unica}\t{observacao}\n"
+                # Coluna 1 = produto (pode quebrar em várias linhas); as demais
+                # colunas permanecem em linha única. Mantemos as 6 colunas do
+                # cabeçalho (mesmo quando o campo Obs fica vazio) para que a
+                # tabela não fique desalinhada em relação ao cabeçalho.
+                linha_produto = f"{produto_str}<br/>{um} - {via}\t{intervalo_horas_display}\t{se_necessario}\t{dose_unica}\t{observacao}\t\n"
                 texto_produtos += linha_produto
                 nome_modelo = 'prescricao'
         else:
@@ -378,18 +396,18 @@ def gerar_pdf_prontuario(obj, user, assinar=False, assinatura_texto=None):
 
     # Fim relatório Perdas e Ganhos #####################################################
 
-    if nome_modelo == 'atas':
-        texto_parag = obj.ata or ''
-        atendimento = None
-        pessoa = None
-
-    if nome_modelo == 'orcamentos':
-        texto_parag = obj.orcamento or ''
-        atendimento = None
-        pessoa = None
-
-    if nome_modelo == 'oficios':
-        texto_parag = obj.oficio or ''
+    # Documentos que não possuem vínculo com atendimento (Atas/Ofícios/
+    # Orçamentos). O bloco anterior era um ``else`` preso ao ``if`` de ofícios,
+    # o que fazia Atas/Orçamentos caírem no acesso a ``atendimento`` e quebrava
+    # a geração do PDF (AttributeError: 'Atas'/'Orcamentos' object has no
+    # attribute 'atendimento').
+    if nome_modelo in ('atas', 'orcamentos', 'oficios'):
+        if nome_modelo == 'atas':
+            texto_parag = obj.ata or ''
+        elif nome_modelo == 'orcamentos':
+            texto_parag = obj.orcamento or ''
+        else:
+            texto_parag = obj.oficio or ''
         atendimento = None
         pessoa = None
 

@@ -113,6 +113,22 @@ templatetags %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
             </button>
           </div>
         </div>
+
+        {% if adep_pdfs %}
+        <div class="col-md-12">
+          <div class="justify-content-center mt-2">
+            <a
+              href="{% url 'download_adep_pdfs' prescricao_id=prescricao_id %}"
+              target="_blank"
+              title="Download dos ADEPs assinados"
+              class="col-md-12 btn btn-outline-success justify-content-center"
+            >
+              <i class="fas fa-syringe" style="transition: color 0.3s"></i>
+              Download ADEPs ({{ adep_pdfs|length }})
+            </a>
+          </div>
+        </div>
+        {% endif %}
       </div>
     </div>
   </form>

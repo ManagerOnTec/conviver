@@ -169,8 +169,11 @@ def _montar_resposta_download_pdfs(pdf_paths, download_name, inline_single=False
 
 def combine_pdfs_specific(request, object_id, tipo):
     content_type = ContentType.objects.get(model=tipo.lower())
+    # Filtra também pelo tipo do Relatorio: sem isso, os PDFs de ADEP
+    # (gravados com tipo='adep') entravam na visualização da prescrição.
     relatorios = Relatorio.objects.filter(
-        content_type=content_type, object_id=object_id, status='A')
+        content_type=content_type, object_id=object_id,
+        tipo=tipo.lower(), status='A')
 
     pdf_paths = [relatorio.relatorio.name for relatorio in relatorios]
     return _montar_resposta_download_pdfs(
@@ -257,10 +260,13 @@ def download_filtered_pdfs(request, atendimento_id, model_name):
     object_ids = [obj.id for obj in filtered_objects]
 
     # Obtém apenas o relatório ativo mais recente de cada objeto filtrado
+    # Filtra também pelo tipo do relatório (ex.: 'prescricao') para não incluir
+    # os PDFs de ADEP, que são gravados com o mesmo content_type/object_id.
     content_type = ContentType.objects.get_for_model(model)
     latest_relatorio_ids = Relatorio.objects.filter(
         content_type=content_type,
         object_id__in=object_ids,
+        tipo=model_name,
         status='A',
     ).values('object_id').annotate(max_id=Max('id')).values('max_id')
 
@@ -272,6 +278,81 @@ def download_filtered_pdfs(request, atendimento_id, model_name):
     return _montar_resposta_download_pdfs(
         pdf_paths,
         f'{model_name}_filtered_reports',
+    )
+
+
+def download_adep_pdfs(request, prescricao_id):
+    """Baixa os PDFs de ADEP assinados de uma prescrição.
+
+    Cada Adep possui o seu relatório assinado (``tipo='adep'``,
+    ``content_type=Adep``). Como um mesmo lote assinado referencia o mesmo
+    arquivo para todos os ADEPs do lote, o download remove arquivos repetidos.
+
+    O download respeita os filtros aplicados em ``itens_prescricao_listar``:
+    os itens (``ProdutoPrescricao``) filtrados determinam quais ADEPs entram no
+    pacote (``produto_prescricao_id``).
+    """
+
+    # Reproduz a montagem de filtros de ItensPrescricaoListView.
+    params = request.GET.copy()
+
+    if 'limpar' in params:
+        params.clear()
+    else:
+        session_filters = request.session.get('itens_prescricao_filters')
+        if session_filters:
+            params.update(session_filters)
+
+    params.setdefault('status', 'A')
+    params.setdefault('fase', 'U')
+
+    # Restringe sempre à prescrição aberta na tela.
+    params['prescricao'] = prescricao_id
+
+    # Os itens exibidos na listagem (ProdutoPrescricao) já vêm filtrados.
+    produtos_filtrados = ItensPrescricaoFilter(
+        params,
+        queryset=ProdutoPrescricao.objects.filter(prescricao_id=prescricao_id),
+    ).qs
+    produto_ids = list(produtos_filtrados.values_list('id', flat=True))
+
+    # ADEPs dos itens filtrados que já tiveram o PDF gerado/assinado.
+    adep_ids = list(
+        Adep.objects.filter(
+            prescricao_id=prescricao_id,
+            produto_prescricao_id__in=produto_ids,
+        ).values_list('id', flat=True)
+    )
+
+    if not adep_ids:
+        return HttpResponse(
+            'Nenhum ADEP assinado encontrado para os filtros aplicados.',
+            status=404,
+        )
+
+    content_type = ContentType.objects.get_for_model(Adep)
+
+    # Apenas os relatórios de ADEP ativos dos ADEPs filtrados.
+    relatorios = Relatorio.objects.filter(
+        content_type=content_type,
+        object_id__in=adep_ids,
+        tipo='adep',
+        status='A',
+    ).order_by('id')
+
+    # Remove arquivos repetidos: todos os ADEPs de um mesmo lote apontam para o
+    # mesmo PDF, logo basta uma ocorrência de cada caminho.
+    pdf_paths = []
+    vistos = set()
+    for relatorio in relatorios:
+        caminho = relatorio.relatorio.name
+        if caminho and caminho not in vistos:
+            vistos.add(caminho)
+            pdf_paths.append(caminho)
+
+    return _montar_resposta_download_pdfs(
+        pdf_paths,
+        f'adep_filtered_reports_{prescricao_id}',
     )
 
 
@@ -3618,6 +3699,33 @@ class ItensPrescricaoListView(LoginRequiredMixin, CustomPermissionRequiredMixin,
 
         context['filter'] = self.filter
 
+        # PDFs de ADEP assinados vinculados à prescrição exibida.
+        # Cada Adep pode ter o seu relatório assinado (tipo='adep'); uma
+        # prescrição pode ter vários PDFs de ADEP.
+        if prescricao_id:
+            adep_relatorios = Relatorio.objects.filter(
+                content_type=ContentType.objects.get_for_model(Adep),
+                object_id__in=Adep.objects.filter(
+                    prescricao_id=prescricao_id,
+                ).values_list('id', flat=True),
+                tipo='adep',
+                status='A',
+            ).order_by('id')
+
+            # Remove arquivos repetidos (um mesmo lote assinado é referenciado
+            # por todos os ADEPs do lote).
+            adep_pdfs = []
+            vistos = set()
+            for relatorio in adep_relatorios:
+                caminho = relatorio.relatorio.name
+                if caminho and caminho not in vistos:
+                    vistos.add(caminho)
+                    adep_pdfs.append(relatorio)
+
+            context['adep_pdfs'] = adep_pdfs
+        else:
+            context['adep_pdfs'] = []
+
         return context
 
     def dispatch(self, request, *args, **kwargs):
@@ -4617,13 +4725,27 @@ class AdepListarAssinarView(LoginRequiredMixin, CustomPermissionRequiredMixin, F
 
             prescricao = Prescricao.objects.get(id=prescricao_id)
 
-            # Marca os Adep processados como assinados
-            Adep.objects.filter(us_adep=self.request.user, prescricao_id=prescricao_id, fase_adep__in=[
-                                'N', 'A'], assinar=False, id__in=[adep.id for adep in adeps_list]).update(assinar=True)
+            # Seleciona o lote de ADEPs que será impresso. Precisa ser feito
+            # antes de marcar ``assinar=True``, pois a geração do relatório
+            # usa o estado anterior do campo.
+            adeps_do_lote = Adep.objects.filter(
+                us_adep=self.request.user,
+                prescricao_id=prescricao_id,
+                fase_adep__in=['N', 'A'],
+                assinar=False,
+                id__in=[adep.id for adep in adeps_list],
+            )
 
-            # Chama a funcao de gerar o pdf e assinar dentro do loop.
+            # Marca os Adep processados como assinados (o relatório de ADEP
+            # considera os ADEPs já com assinar=True).
+            Adep.objects.filter(
+                id__in=[adep.id for adep in adeps_list]).update(assinar=True)
+
+            # Gera o PDF do lote de ADEPs selecionados e o assina. O PDF é
+            # gravado em cada Adep do lote (tipo='adep'), sem alterar o PDF
+            # próprio da prescrição.
             rel = salvar_pdf_prontuario(
-                request.user, prescricao, assinar=True)
+                request.user, prescricao, assinar=True, adeps=adeps_do_lote)
 
             if rel:
                 messages.success(

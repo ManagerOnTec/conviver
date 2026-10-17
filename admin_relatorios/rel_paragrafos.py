@@ -189,6 +189,126 @@ def _build_html_flowables(parag, estilo):
     return flowables
 
 
+def _build_tabela_prescricao_adep(parag, width, estilo_paragrafo, estilo_cabecalho):
+    """Monta a tabela de prescrição/ADEP de forma paginável.
+
+    Devolve uma **única** ``Table`` com o cabeçalho na primeira linha e
+    ``repeatRows=1``. Assim o ReportLab repete o cabeçalho **apenas** quando a
+    tabela é quebrada entre páginas, garantindo exatamente um cabeçalho no
+    início de cada página.
+
+    Antes a tabela era fatiada manualmente em blocos, cada bloco com o seu
+    próprio cabeçalho. Isso fazia o cabeçalho reaparecer uma vez por bloco,
+    inclusive no meio de uma página, gerando cabeçalhos repetidos (ex.: duas
+    páginas com três cabeçalhos).
+
+    Colunas:
+      * ``produto``      -> única coluna que aceita quebrar em várias linhas;
+      * ``intervalo``, ``sn``, ``dose``, ``observacoes``, ``administrado``
+                         -> dados curtos, sempre em linha (uma linha só).
+
+    O conteúdo de cada célula é interpretado como HTML pelo ``Paragraph``,
+    então é possível enviar marcações simples (``<b>``, ``<i>``, ``<br/>``).
+    O separador de linhas da tabela é o fim de linha (``\\n``); o ``<br/>``
+    fica restrito ao interior da célula (quebra dentro do produto).
+    """
+    # Remove tags HTML incompatíveis com o ReportLab, preservando <br/>,
+    # <b>, <i> e <u> (que o Paragraph entende).
+    parag = limpar_html_para_pdf(parag)
+
+    # Normaliza CRLF e separa as linhas da tabela por fim de linha.
+    linhas = [linha for linha in parag.replace('\r\n', '\n').split('\n')]
+
+    # A soma das larguras deve caber na largura útil da página (A4 = 210mm
+    # menos as margens laterais de 12mm de cada lado = 186mm). A versão
+    # anterior somava 189mm e forçava o ReportLab a comprimir/quebrar as
+    # células do cabeçalho em várias linhas.
+    #
+    # Somente a coluna do produto pode quebrar em várias linhas. As demais
+    # colunas (H, SN, Única/Sim, Obs/Administrado, Adep/Não Adm.) têm largura
+    # dimensionada para caber o conteúdo em uma única linha por produto.
+    #
+    # Ajuste de proporção: Intervalos/SN/Única reduzidos, Administrados e Não
+    # administrados reduzidos levemente e Vigência (coluna do produto, que traz
+    # "Vigência: início à fim") ampliada para exibir o período com folga.
+    coluna_produto = 72 * mm
+    coluna_intervalo = 18 * mm
+    coluna_sn = 12 * mm
+    coluna_dose = 12 * mm
+    coluna_observacoes = 33 * mm
+    coluna_admin = 39 * mm
+    col_widths = [coluna_produto, coluna_intervalo, coluna_sn,
+                  coluna_dose, coluna_observacoes, coluna_admin]
+
+    col_style = TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        # A coluna de produto é alinhada à esquerda e aceita quebra de linha;
+        # as demais permanecem centralizadas e em uma única linha.
+        ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+        ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.black),
+        ('BOX', (0, 0), (-1, -1), 0.25, colors.black),
+    ])
+
+    # Estilo do cabeçalho: fonte um pouco menor para que descrições como
+    # "Vigência", "Administrado" e "Não Adm." caibam em uma única linha.
+    estilo_cabecalho = ParagraphStyle(
+        name='CabecalhoTabelaStyle',
+        parent=estilo_cabecalho,
+        fontSize=8,
+        leading=10,
+        spaceAfter=0,
+        wordWrap=False,
+        splitLongWords=False,
+    )
+
+    # Estilo das células de dados: nunca quebra linha (uma linha por produto).
+    estilo_dados = ParagraphStyle(
+        name='DadosTabelaStyle',
+        parent=estilo_paragrafo,
+        fontSize=9,
+        leading=11,
+        spaceAfter=0,
+        leftIndent=0,
+        rightIndent=0,
+        wordWrap=False,
+        splitLongWords=False,
+    )
+
+    # Converte cada linha textual (separada por tabulações) em células Paragraph.
+    linhas_celulas = []
+    for indice, linha in enumerate(linhas):
+        if not linha.strip():
+            continue
+        eh_cabecalho = not linhas_celulas
+        celulas = []
+        for coluna in linha.split('\t'):
+            # O cabeçalho usa o estilo compacto; as demais células usam o
+            # estilo de dados que não quebra linha. A coluna do produto
+            # (índice 0) continua podendo quebrar em várias linhas.
+            if eh_cabecalho:
+                celulas.append(Paragraph(coluna, estilo_cabecalho))
+            else:
+                celulas.append(Paragraph(coluna, estilo_dados))
+        linhas_celulas.append(celulas)
+
+    if not linhas_celulas:
+        return [Paragraph('Nenhum item prescrito.', estilo_paragrafo)]
+
+    cabecalho = linhas_celulas[0]
+    corpo = linhas_celulas[1:]
+
+    # Uma única ``Table`` contínua com ``repeatRows=1``: o próprio ReportLab
+    # pagina o conteúdo (via ``split``) e repete o cabeçalho APENAS nas quebras
+    # de página. A versão anterior dividia em blocos de 14 linhas e cada bloco
+    # carregava o seu próprio cabeçalho, o que fazia o cabeçalho aparecer no
+    # meio da página (2 ou 3 cabeçalhos por página) — o bug relatado.
+    dados = [cabecalho] + corpo
+    tabela = Table(dados, colWidths=col_widths, repeatRows=1)
+    tabela.setStyle(col_style)
+    return [tabela]
+
+
 def genParagrafosRel(parag, width, height, p, tipo="evolucao"):
     margem_lateral = width * 5 / 100
 
@@ -216,6 +336,13 @@ def genParagrafosRel(parag, width, height, p, tipo="evolucao"):
 
     if tipo in {"evolucao", "atas", "oficios", "orcamentos"}:
         return _build_html_flowables(parag, estilo_paragrafo)
+
+    # Prescrição/ADEP precisam manter as quebras internas de célula (<br/>)
+    # e usar o fim de linha (\n) como separador de linhas da tabela. Por isso
+    # são tratados antes do split global por '<br/>' abaixo.
+    if tipo in ["prescricao", "adep"]:
+        return _build_tabela_prescricao_adep(
+            parag, width, estilo_paragrafo, estilo_cabecalho)
 
     parag = limpar_html_para_pdf(parag)  # Limpa o HTML antes de processar
 
@@ -255,26 +382,9 @@ def genParagrafosRel(parag, width, height, p, tipo="evolucao"):
         widthList = [width * 5 / 100, width * 90 / 100, width * 5 / 100]
 
     elif tipo in ["prescricao", "adep"]:
-        coluna_produto, coluna_intervalo, coluna_sn, coluna_dose, coluna_observacoes, coluna_admin = [
-            75 * mm, 20 * mm, 17 * mm, 17 * mm, 30 * mm, 30 * mm]
-
-        for i, linha in enumerate(linhas):
-            # Determina o estilo baseado na linha ser cabeçalho ou conteúdo
-            estilo_atual = estilo_cabecalho if i == 0 else estilo_paragrafo
-            celulas = [Paragraph(c, estilo_atual) for c in linha.split('\t')]
-            data_sub_table.append(celulas)
-
-        sub_table = Table(data_sub_table, colWidths=[
-                          coluna_produto, coluna_intervalo, coluna_sn, coluna_dose, coluna_observacoes, coluna_admin])
-        sub_table.setStyle(TableStyle([
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.black),
-            ('BOX', (0, 0), (-1, -1), 0.25, colors.black),
-        ]))
-
-        data = [['', sub_table, '']]
-        widthList = [width * 5 / 100, width * 90 / 100, width * 5 / 100]
+        # Tratado acima (antes do split global), mantido apenas por segurança.
+        return _build_tabela_prescricao_adep(
+            linhas, width, estilo_paragrafo, estilo_cabecalho)
 
     elif tipo == "sinaisvitais":
         # Primeiro, dividimos o parágrafo por linhas

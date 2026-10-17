@@ -21,7 +21,7 @@ tz %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
 </div>
 <!--FIM MENU LATERAL-->
 {% endblock %} {% block cabdados %}
-{% include 'parciais/_patient_context_header.html' with module_icon='fas fa-hospital-user' module_title='Atendimento' module_subtitle='Resumo do atendimento e do paciente em modo leitura.' primary_label='Atendimento' primary_value=object.pk secondary_label='Tela' secondary_value='Detalhe' show_cpf=True %}
+{% include 'parciais/_patient_context_header.html' with module_icon='fas fa-hospital' module_title='Atendimento' module_subtitle='Resumo do atendimento e do paciente em modo leitura.' primary_label='Atendimento' primary_value=object.pk secondary_label='Tela' secondary_value='Detalhe' show_cpf=True %}
 
 <!-- FIM DADOS DO OBJETO -->
 {% endblock %} {% block lista %}

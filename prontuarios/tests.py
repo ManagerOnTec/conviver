@@ -4,6 +4,8 @@ from io import BytesIO
 import zipfile
 
 import PyPDF2
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Table
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -19,9 +21,12 @@ from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.exceptions import ValidationError
 from django.test import RequestFactory, TestCase
+from django.utils import timezone
 
 from admin_cadastros.models import Estabelecimento, Pessoa, Empresa, TipoAtendimento
+from admin_estoques.models import Grupo, Produto, TipoProduto, UnidadeMedida
 from admin_evolucoes.models import TipoEvolucao
+from admin_prescricoes.models import InicioPlanoTerapeutico, IntervaloHoras
 from admin_relatorios.models import GerenciadorRelatorioGeral
 from admin_relatorios.models import Relatorio
 from admin_relatorios.rel_paragrafos import genParagrafosRel
@@ -31,9 +36,22 @@ from contas.models import Perfil
 from oficios.models import Oficios
 from orcamentos.models import Orcamentos
 from prontuarios.forms import EvolucaoCreateForm, EvolucaoUpdateForm
-from prontuarios.models import Evolucao, MAX_EVOLUCAO_TEXT_LENGTH, validate_evolucao_texto
+from prontuarios.models import (
+    Adep,
+    Evolucao,
+    MAX_EVOLUCAO_TEXT_LENGTH,
+    Prescricao,
+    ProdutoPrescricao,
+    validate_evolucao_texto,
+)
 from prontuarios.relatorios import gerar_pdf_prontuario
-from prontuarios.views import EvolucaoCreateView, download_filtered_pdfs
+from prontuarios.utils import _salvar_relatorios_pdf, salvar_pdf_prontuario
+from prontuarios.views import (
+    EvolucaoCreateView,
+    combine_pdfs_specific,
+    download_adep_pdfs,
+    download_filtered_pdfs,
+)
 from admin_relatorios.utils import (
     _validar_certificado_para_assinatura,
     assinar_pdf,
@@ -797,3 +815,370 @@ class EvolucaoValidationAndPdfTests(TestCase):
 
         self.assertFalse(form.is_valid())
         self.assertIn('evolucao', form.errors)
+
+
+
+class PrescricaoAdepPdfTests(TestCase):
+    """Testes de layout e paginação da tabela de prescrição/ADEP.
+
+    Cobrem:
+      * a tabela não invade o campo de assinatura (quebra em páginas);
+      * a coluna de produto é única e aceita quebrar em várias linhas;
+      * as demais colunas permanecem em linha;
+      * o conteúdo aceita HTML simples (similar ao modelo de evolução).
+    """
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username='medico_presc',
+            email='medico_presc@example.com',
+            password='senha123',
+        )
+        self.profissional = Pessoa.objects.create(
+            nome='Médico Presc',
+            classificacao_pessoa='P',
+            nacionalidade='b',
+            sexo='F',
+            dt_nascimento=None,
+            rg=None,
+            cpf=None,
+            email='medico_presc_prof@example.com',
+            status='A',
+        )
+        self.empresa = Empresa.objects.create(
+            nacionalidade='b',
+            razao_social='Empresa Presc',
+            fantasia='Empresa Presc',
+            empresa='EMP PRESC',
+            status='A',
+        )
+        self.estabelecimento = Estabelecimento.objects.create(
+            estabelecimento='Estab Presc',
+            tipo='H',
+            empresa=self.empresa,
+            status='A',
+        )
+        self.perfil = Perfil.objects.create(
+            user=self.user,
+            pessoa=self.profissional,
+            estabelecimento_padrao=self.estabelecimento,
+        )
+        self.perfil.estabelecimento.add(self.estabelecimento)
+        self.tipo_produto = TipoProduto.objects.create(
+            descricao='Medicamento',
+            status='A',
+        )
+        self.grupo = Grupo.objects.create(
+            descricao='Analgésicos',
+            tipo_produto=self.tipo_produto,
+            pode_ser_prescrito=True,
+            grupo_de_medicamento=True,
+            status='A',
+        )
+        self.unidade_medida = UnidadeMedida.objects.create(
+            unidade_medida='mg',
+            descricao='Miligrama',
+            status='A',
+        )
+        self.produto = Produto.objects.create(
+            descricao='Dipirona 500mg',
+            unidade_medida=self.unidade_medida,
+            via='O',
+            grupo=self.grupo,
+            pode_ser_prescrito=True,
+            status='A',
+        )
+        self.intervalo = IntervaloHoras.objects.create(
+            intervalo_horas=8,
+            padrao=True,
+            estabelecimento=self.estabelecimento,
+            status='A',
+        )
+        self.inicio_plano = InicioPlanoTerapeutico.objects.create(
+            hora_inicio=datetime.strptime('08:00', '%H:%M').time(),
+            padrao=True,
+            estabelecimento=self.estabelecimento,
+            status='A',
+        )
+        self.pessoa = Pessoa.objects.create(
+            nome='Paciente Presc',
+            classificacao_pessoa='P',
+            nacionalidade='b',
+            sexo='M',
+            dt_nascimento=None,
+            rg=None,
+            cpf=None,
+            email='paciente_presc@example.com',
+            status='A',
+        )
+        self.tipo_atendimento = TipoAtendimento.objects.create(
+            tipo_atendimento='Consulta',
+            status='A',
+        )
+        self.atendimento = Atendimento.objects.create(
+            pessoa=self.pessoa,
+            tipo_atendimento=self.tipo_atendimento,
+            estabelecimento=self.estabelecimento,
+            carater_atendimento='E',
+            entidade_encaminhamento='N',
+            cert_nascimento=False,
+            rg=False,
+            cpf=False,
+            titulo_eleitor=False,
+            carteira_vacina=False,
+            cartao_sus=False,
+            cartao_banco=False,
+            carteira_trabalho=False,
+            foto=False,
+            outros=False,
+            status='A',
+        )
+
+    # ------------------------------------------------------------------
+    # Estrutura de colunas
+    # ------------------------------------------------------------------
+    def test_prescricao_retorna_lista_de_flowables_paginaveis(self):
+        """A tabela deve voltar como lista (paginação natural), não tabela aninhada."""
+        texto = (
+            'Vigência: 01/10 até: 05/10/2026\tH\tSN\tÚnica\tObs\tAdep\n'
+            'Dipirona 500mg<br/>comprimido - Oral\t8h\tSN\t \t \t \n'
+        )
+        flowables = genParagrafosRel(
+            texto, 500, 0, None, tipo='prescricao')
+
+        self.assertIsInstance(flowables, list)
+        # Pelo menos uma Table de verdade (não sub-tabela aninhada numa célula).
+        tabelas = [f for f in flowables if isinstance(f, Table)]
+        self.assertGreaterEqual(len(tabelas), 1)
+
+        primeira = tabelas[0]
+        # A primeira tabela deve ter o cabeçalho + as linhas de corpo.
+        self.assertGreaterEqual(len(primeira._cellvalues), 2)
+
+    def test_adep_retorna_lista_de_flowables_paginaveis(self):
+        """ADEP deve seguir o mesmo caminho de prescrição (lista paginável)."""
+        texto = (
+            'Vigência: 01/10 até: 05/10/2026\tH\tSN\tUnica\tAdministrado\tNão Admin...\n'
+            'Dipirona 500mg<br/>comprimido - Oral\t8h\tSN\t \t01/10 08:00\t \n'
+        )
+        flowables = genParagrafosRel(texto, 500, 0, None, tipo='adep')
+
+        self.assertIsInstance(flowables, list)
+        self.assertTrue(any(isinstance(f, Table) for f in flowables))
+
+    def test_coluna_produto_aceita_quebra_e_demais_em_linha(self):
+        """O produto concentra as quebras; as demais colunas ficam em linha única."""
+        texto = (
+            'Vigência: 01/10 até: 05/10/2026\tH\tSN\tÚnica\tObs\tAdep\n'
+            'Medicamento com nome bem extenso<br/>apresentacao detalhada - via oral'
+            '\t8h\tSN\t \t01/10 08:00, 01/10 16:00\t \n'
+        )
+        flowables = genParagrafosRel(
+            texto, 500, 0, None, tipo='prescricao')
+        tabela = next(f for f in flowables if isinstance(f, Table))
+
+        # Cabeçalho tem 6 colunas; cada linha de corpo também deve ter 6.
+        for linha in tabela._cellvalues:
+            self.assertEqual(len(linha), 6)
+
+        # A célula de produto (coluna 0) contém <br/> na altura de layout.
+        produto_cell = tabela._cellvalues[1][0]
+        self.assertIn('<br/>', produto_cell.text)
+
+        # As demais colunas não devem conter quebras internas (<br/>).
+        for coluna in range(1, 6):
+            self.assertNotIn('<br/>', tabela._cellvalues[1][coluna].text)
+
+    def test_conteudo_aceita_html_simples(self):
+        """Células interpretam HTML simples (b/i/u) como no modelo de evolução."""
+        texto = (
+            'Vigência: 01/10 até: 05/10/2026\tH\tSN\tÚnica\tObs\tAdep\n'
+            '<b>Dipirona</b> <i>500mg</i><br/><u>comprimido</u> - Oral'
+            '\t8h\tSN\t \t \t \n'
+        )
+        flowables = genParagrafosRel(
+            texto, 500, 0, None, tipo='prescricao')
+        tabela = next(f for f in flowables if isinstance(f, Table))
+        produto_cell = tabela._cellvalues[1][0]
+
+        # As tags de formatação são preservadas para o Paragraph interpretar.
+        self.assertIn('<b>', produto_cell.text)
+        self.assertIn('<i>', produto_cell.text)
+        self.assertIn('<u>', produto_cell.text)
+
+    # ------------------------------------------------------------------
+    # Paginação / assinatura
+    # ------------------------------------------------------------------
+    def test_tabela_prescricao_quebra_em_multiplas_paginas(self):
+        """Muitos itens devem gerar múltiplas páginas (não invadir a assinatura)."""
+        linhas = [
+            'Vigência: 01/10 até: 05/10/2026\tH\tSN\tÚnica\tObs\tAdep'
+        ]
+        for indice in range(40):
+            linhas.append(
+                f'Medicamento {indice} com descricao longa que estoura varias '
+                f'linhas nesta celula<br/>apresentacao - via'
+                '\t8h\tSN\t \t \t '
+            )
+        texto = '\n'.join(linhas)
+        flowables = genParagrafosRel(
+            texto, 500, 0, None, tipo='prescricao')
+
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4)
+        doc.build(list(flowables))
+        buffer.seek(0)
+
+        reader = PyPDF2.PdfReader(buffer)
+        self.assertGreaterEqual(len(reader.pages), 2)
+
+    def test_assinatura_reserva_espaco_apos_ultima_pagina(self):
+        """A última página deve terminar antes da faixa reservada à assinatura.
+
+        A faixa de assinatura é a mesma definida em
+        ``prontuarios.relatorios.gerar_pdf_prontuario`` (signature_bottom=62,
+        signature_height=50, ou seja, o conteúdo não pode ultrapassar y=112pt
+        a partir da base, com uma pequena margem de segurança).
+        """
+        from prontuarios.relatorios import gerar_pdf_prontuario
+        from prontuarios.models import Prescricao
+
+        prescricao = Prescricao.objects.create(
+            atendimento=self.atendimento,
+            estabelecimento=self.estabelecimento,
+            us_registro=self.user,
+            dt_inicio=timezone.now(),
+            dt_final=timezone.now() + timedelta(days=5),
+            assinar=True,
+            status='A',
+        )
+        # Cria vários itens na prescrição
+        for indice in range(30):
+            ProdutoPrescricao.objects.create(
+                prescricao=prescricao,
+                produto=self.produto,
+                intervalo_horas=self.intervalo,
+                hora_inicio_produto=self.inicio_plano,
+                se_necessario=False,
+                dose_unica=False,
+                dt_inicio=timezone.now(),
+                atendimento=self.atendimento,
+                estabelecimento=self.estabelecimento,
+                us_registro=self.user,
+                status='A',
+            )
+
+        buffer = gerar_pdf_prontuario(prescricao, self.user, assinar=True)
+        buffer.seek(0)
+        reader = PyPDF2.PdfReader(buffer)
+        self.assertGreaterEqual(len(reader.pages), 2)
+
+
+    def _criar_produto_prescricao(self, prescricao, descricao=None):
+        """Cria um ProdutoPrescricao simples ligado à prescrição informada.
+
+        ``descricao`` permite criar produtos distintos para identificar cada
+        item no texto extraído do PDF.
+        """
+        produto = self.produto
+        if descricao:
+            produto = Produto.objects.create(
+                descricao=descricao,
+                unidade_medida=self.unidade_medida,
+                via='O',
+                grupo=self.grupo,
+                pode_ser_prescrito=True,
+                status='A',
+            )
+        return ProdutoPrescricao.objects.create(
+            prescricao=prescricao,
+            produto=produto,
+            intervalo_horas=self.intervalo,
+            hora_inicio_produto=self.inicio_plano,
+            se_necessario=False,
+            dose_unica=False,
+            dt_inicio=timezone.now(),
+            atendimento=self.atendimento,
+            estabelecimento=self.estabelecimento,
+            us_registro=self.user,
+            status='A',
+        )
+
+    def _criar_adep(self, prescricao, produto_prescricao, fase):
+        """Cria um Adep marcado para assinatura (fase 'A' ou 'N')."""
+        from prontuarios.models import Adep
+
+        return Adep.objects.create(
+            prescricao=prescricao,
+            produto_prescricao=produto_prescricao,
+            data_hora=timezone.now(),
+            fase_adep=fase,
+            assinar=True,
+            pdf=False,
+            atendimento=self.atendimento,
+            estabelecimento=self.estabelecimento,
+            us_adep=self.user,
+            us_registro=self.user,
+            status='A',
+        )
+
+    def _linhas_da_tabela(self, buffer):
+        """Extrai as linhas de texto visíveis de todas as páginas do PDF."""
+        buffer.seek(0)
+        reader = PyPDF2.PdfReader(buffer)
+        linhas = []
+        for pagina in reader.pages:
+            texto = pagina.extract_text() or ''
+            linhas.extend(texto.splitlines())
+        return [linha.strip() for linha in linhas if linha.strip()]
+
+    def test_adep_exibe_apenas_itens_com_marcacao(self):
+        """No PDF de ADEP só entram itens administrados ou não administrados.
+
+        Produtos prescritos sem nenhuma marcação de ADEP não devem gerar
+        linhas no relatório, evitando páginas desnecessárias.
+        """
+        from prontuarios.relatorios import gerar_pdf_prontuario
+        from prontuarios.models import Prescricao
+
+        prescricao = Prescricao.objects.create(
+            atendimento=self.atendimento,
+            estabelecimento=self.estabelecimento,
+            us_registro=self.user,
+            dt_inicio=timezone.now(),
+            dt_final=timezone.now() + timedelta(days=5),
+            assinar=True,
+            status='A',
+        )
+
+        # Produto 1: recebe marcação de administrado.
+        produto_1 = self._criar_produto_prescricao(
+            prescricao, descricao='MarcadoAdministrado')
+        # Produto 2: recebe marcação de não administrado.
+        produto_2 = self._criar_produto_prescricao(
+            prescricao, descricao='MarcadoNaoAdministrado')
+        # Produto 3: fica SEM marcação alguma (não deve aparecer no ADEP).
+        produto_3 = self._criar_produto_prescricao(
+            prescricao, descricao='SemMarcacaoNaoDeveAparecer')
+        self.assertIsNotNone(produto_3.id)
+
+        self._criar_adep(prescricao, produto_1, 'A')
+        self._criar_adep(prescricao, produto_2, 'N')
+
+        buffer = gerar_pdf_prontuario(prescricao, self.user, assinar=False)
+        texto = '\n'.join(self._linhas_da_tabela(buffer))
+
+        # Itens com marcação de administrado/não administrado aparecem.
+        self.assertIn(
+            'MarcadoAdministrado', texto,
+            'Item administrado deve constar no ADEP.'
+        )
+        self.assertIn(
+            'MarcadoNaoAdministrado', texto,
+            'Item não administrado deve constar no ADEP.'
+        )
+        # Item sem marcação alguma NÃO deve constar no relatório.
+        self.assertNotIn(
+            'SemMarcacaoNaoDeveAparecer', texto,
+            'Item sem marcação de ADEP não deve constar no relatório.'
+        )

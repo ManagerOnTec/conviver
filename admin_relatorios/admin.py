@@ -1,7 +1,7 @@
 from .forms import TextoDocumentoPadraoForm
 from .models import TextoDocumentoPadrao
 from django.contrib import admin
-from .models import GerenciadorRelatorioGeral, GerenciadorRelatorioPersonalizado
+from .models import GerenciadorRelatorioGeral, GerenciadorRelatorioPersonalizado, Relatorio
 from .forms import GerenciadorRelatorioGeralForm, GerenciadorRelatorioPersonalizadoForm
 from django.utils import timezone
 
@@ -91,6 +91,23 @@ class TextoDocumentoPadraoAdmin(admin.ModelAdmin):
         if not obj.us_registro_id:
             obj.us_registro = request.user
         obj.us_atualizacao = request.user
+        super().save_model(request, obj, form, change)
+
+
+@admin.register(Relatorio)
+class RelatorioAdmin(admin.ModelAdmin):
+    list_display = ('id', 'tipo', 'relatorio', 'atendimento', 'pessoa',
+                    'dt_registro', 'us_registro', 'status')
+    list_filter = ('tipo', 'status', 'dt_registro', 'us_registro')
+    search_fields = ('tipo', 'relatorio', 'atendimento__id', 'pessoa__nome')
+    readonly_fields = ('dt_registro', 'us_registro')
+    date_hierarchy = 'dt_registro'
+
+    def save_model(self, request, obj, form, change):
+        if not obj.us_registro_id:
+            obj.us_registro = request.user
+        if not obj.dt_registro:
+            obj.dt_registro = timezone.now()
         super().save_model(request, obj, form, change)
 
 

@@ -15,7 +15,7 @@ tz %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
 </div>
 <!--FIM MENU LATERAL-->
 {% endblock %} {% block cabdados %}
-{% include 'parciais/_patient_context_header.html' with module_icon='fas fa-hospital-user' module_title='Editar Atendimento' module_subtitle='Atualize o atendimento com o contexto do paciente sempre acessível.' primary_label='Atendimento' primary_value=object.pk secondary_label='Fluxo' secondary_value='Edição' show_cpf=True %}
+{% include 'parciais/_patient_context_header.html' with module_icon='fas fa-hospital' module_title='Editar Atendimento' module_subtitle='Atualize o atendimento com o contexto do paciente sempre acessível.' primary_label='Atendimento' primary_value=object.pk secondary_label='Fluxo' secondary_value='Edição' show_cpf=True %}
 
 <!-- FIM DADOS DO OBJETO -->
 {% endblock %} {% block lista %}

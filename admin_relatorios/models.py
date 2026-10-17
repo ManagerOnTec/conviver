@@ -124,8 +124,18 @@ class Relatorio(models.Model):
     pessoa = models.ForeignKey(
         Pessoa, on_delete=models.PROTECT, blank=True, null=True)
 
+    # Campos de auditoria (usuário e data em que o PDF foi gerado)
+    dt_registro = models.DateTimeField(
+        default=timezone.now, null=True, verbose_name='Dt.Registro')
+    us_registro = models.ForeignKey(
+        User, on_delete=models.PROTECT, null=True, related_name='relatorio_criado_por', verbose_name='Us.Registro')
+
     status = models.CharField(
         max_length=1, choices=status_choices, default='A')
+
+    class Meta:
+        verbose_name = 'Relatório Gerado'
+        verbose_name_plural = '4. Relatórios Gerados'
 
     def __str__(self):
         return f"{self.tipo} - {self.content_object}"
