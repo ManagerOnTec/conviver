@@ -253,28 +253,39 @@ def download_filtered_pdfs(request, atendimento_id, model_name):
     filters.update(session_filters)
     filters['atendimento_id'] = atendimento_id
 
+    # A tela de prescrições aplica defaults que não são persistidos na sessão
+    # (status='A' e fase='U'). Sem replicá-los aqui, o download traz também
+    # prescrições inativas e de outras fases, cujos PDFs não aparecem na tela.
+    if model_name == 'prescricao':
+        filters.setdefault('status', 'A')
+        filters.setdefault('fase', 'U')
+
     filtered_objects = model_filter(filters, queryset=model.objects.filter(
         atendimento_id=atendimento_id)).qs
 
     # Obtém os IDs dos objetos filtrados
     object_ids = [obj.id for obj in filtered_objects]
 
-    # Obtém apenas o relatório ativo mais recente de cada objeto filtrado
-    # Filtra também pelo tipo do relatório (ex.: 'prescricao') para não incluir
-    # os PDFs de ADEP, que são gravados com o mesmo content_type/object_id.
+    # Prescrição e ADEP são gravados no modelo Relatorio com o MESMO tipo,
+    # mesmo content_type e mesmo object_id; só mudam o id e a data. Não dá
+    # para distinguir um do outro por tipo: basta pegar TODOS os relatórios
+    # ativos dos objetos filtrados (um deles é o PDF da prescrição e o outro
+    # é o PDF do lote de ADEP) e deduplicar pelo caminho do arquivo.
     content_type = ContentType.objects.get_for_model(model)
-    latest_relatorio_ids = Relatorio.objects.filter(
+    relatorios_obj = Relatorio.objects.filter(
         content_type=content_type,
         object_id__in=object_ids,
-        tipo=model_name,
         status='A',
-    ).values('object_id').annotate(max_id=Max('id')).values('max_id')
+    ).order_by('object_id', '-id')
 
-    relatorios = Relatorio.objects.filter(
-        id__in=Subquery(latest_relatorio_ids)
-    ).order_by('object_id')
+    pdf_paths = []
+    vistos = set()
+    for relatorio in relatorios_obj:
+        caminho = relatorio.relatorio.name
+        if caminho and caminho not in vistos:
+            vistos.add(caminho)
+            pdf_paths.append(caminho)
 
-    pdf_paths = [relatorio.relatorio.name for relatorio in relatorios]
     return _montar_resposta_download_pdfs(
         pdf_paths,
         f'{model_name}_filtered_reports',
@@ -282,7 +293,7 @@ def download_filtered_pdfs(request, atendimento_id, model_name):
 
 
 def download_adep_pdfs(request, prescricao_id):
-    """Baixa os PDFs de ADEP assinados de uma prescrição.
+    """Baixa os PDFs de ADEP assinados de uma prescrição, junto do PDF dela.
 
     Cada Adep possui o seu relatório assinado (``tipo='adep'``,
     ``content_type=Adep``). Como um mesmo lote assinado referencia o mesmo
@@ -291,6 +302,10 @@ def download_adep_pdfs(request, prescricao_id):
     O download respeita os filtros aplicados em ``itens_prescricao_listar``:
     os itens (``ProdutoPrescricao``) filtrados determinam quais ADEPs entram no
     pacote (``produto_prescricao_id``).
+
+    Além dos ADEPs, o PDF da própria prescrição é incluído no pacote: a tela
+    lista as prescrições com ``status='A'`` e ``fase='U'``, logo esses mesmos
+    relatórios (``tipo='prescricao'``) acompanham os ADEPs no download.
     """
 
     # Reproduz a montagem de filtros de ItensPrescricaoListView.
@@ -316,6 +331,17 @@ def download_adep_pdfs(request, prescricao_id):
     ).qs
     produto_ids = list(produtos_filtrados.values_list('id', flat=True))
 
+    # O PDF da própria prescrição também entra no pacote. Aplica o mesmo filtro
+    # de prescrições da tela: a prescrição precisa casar com os filtros de
+    # status/fase salvos na sessão, senão o PDF dela não é incluído.
+    prescricao_filtrada = PrescricaoFilter(
+        params,
+        queryset=Prescricao.objects.filter(
+            id=prescricao_id,
+            atendimento_id=params.get('atendimento_id') or None,
+        ) if params.get('atendimento_id') else Prescricao.objects.filter(id=prescricao_id),
+    ).qs.exists()
+
     # ADEPs dos itens filtrados que já tiveram o PDF gerado/assinado.
     adep_ids = list(
         Adep.objects.filter(
@@ -324,31 +350,53 @@ def download_adep_pdfs(request, prescricao_id):
         ).values_list('id', flat=True)
     )
 
-    if not adep_ids:
+    if not adep_ids and not prescricao_filtrada:
         return HttpResponse(
             'Nenhum ADEP assinado encontrado para os filtros aplicados.',
             status=404,
         )
 
-    content_type = ContentType.objects.get_for_model(Adep)
-
-    # Apenas os relatórios de ADEP ativos dos ADEPs filtrados.
-    relatorios = Relatorio.objects.filter(
-        content_type=content_type,
-        object_id__in=adep_ids,
-        tipo='adep',
-        status='A',
-    ).order_by('id')
-
-    # Remove arquivos repetidos: todos os ADEPs de um mesmo lote apontam para o
-    # mesmo PDF, logo basta uma ocorrência de cada caminho.
     pdf_paths = []
     vistos = set()
-    for relatorio in relatorios:
-        caminho = relatorio.relatorio.name
-        if caminho and caminho not in vistos:
-            vistos.add(caminho)
-            pdf_paths.append(caminho)
+
+    # 1) PDF da própria prescrição (se ela passou nos filtros da tela).
+    if prescricao_filtrada:
+        content_type_prescricao = ContentType.objects.get_for_model(Prescricao)
+        relatorio_prescricao = (
+            Relatorio.objects.filter(
+                content_type=content_type_prescricao,
+                object_id=prescricao_id,
+                tipo='prescricao',
+                status='A',
+            )
+            .order_by('-id')
+            .first()
+        )
+        if relatorio_prescricao and relatorio_prescricao.relatorio:
+            caminho = relatorio_prescricao.relatorio.name
+            if caminho and caminho not in vistos:
+                vistos.add(caminho)
+                pdf_paths.append(caminho)
+
+    # 2) PDFs de ADEP ativos dos ADEPs dos itens filtrados.
+    if adep_ids:
+        content_type = ContentType.objects.get_for_model(Adep)
+
+        # Apenas os relatórios de ADEP ativos dos ADEPs filtrados.
+        relatorios = Relatorio.objects.filter(
+            content_type=content_type,
+            object_id__in=adep_ids,
+            tipo='adep',
+            status='A',
+        ).order_by('id')
+
+        # Remove arquivos repetidos: todos os ADEPs de um mesmo lote apontam para
+        # o mesmo PDF, logo basta uma ocorrência de cada caminho.
+        for relatorio in relatorios:
+            caminho = relatorio.relatorio.name
+            if caminho and caminho not in vistos:
+                vistos.add(caminho)
+                pdf_paths.append(caminho)
 
     return _montar_resposta_download_pdfs(
         pdf_paths,
