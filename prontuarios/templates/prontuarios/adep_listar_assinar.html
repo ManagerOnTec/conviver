@@ -120,7 +120,13 @@
                 <tr>
                     <td>
                         <input type="checkbox" name="adep_ids" value="{{ adep.id }}" class="adep-checkbox"
-                            id="adep_{{ adep.id }}">
+                            id="adep_{{ adep.id }}"
+                            data-prescricao-id="{{ adep.prescricao_id }}"
+                            data-hora="{{ adep.data_hora|date:'Y-m-d\TH:i:s' }}"
+                            data-dt-adep="{{ adep.dt_adep|date:'Y-m-d\TH:i:s' }}"
+                            data-dt-suspensao="{{ adep.dt_suspensao|date:'Y-m-d\TH:i:s' }}"
+                            data-fase-adep="{{ adep.fase_adep|default_if_none:'' }}"
+                            data-status="{{ adep.status }}">
                     </td>
                     <td>{{ adep.atendimento.pessoa }}</td>
 
@@ -198,13 +204,63 @@
     // JavaScript para manipular a seleção dos checkboxes
     document.addEventListener('DOMContentLoaded', function () {
         var selectAllCheckbox = document.getElementById('select-all');
-        var adepCheckboxes = document.querySelectorAll('.adep-checkbox');
+        var adepCheckboxes = Array.from(document.querySelectorAll('.adep-checkbox'));
 
         selectAllCheckbox.addEventListener('change', function () {
             for (var checkbox of adepCheckboxes) {
                 checkbox.checked = this.checked;
             }
         });
+
+        // Validador: bloqueia gerar PDF/assinar prescricao com ADEPs retroativos pendentes.
+        // Regra: para a prescricao de um ADEP selecionado, se existirem outros ADEPs
+        // ATIVOS (status='A'), SEM dt_suspensao, com data_hora inferior a dt_adep do
+        // selecionado e em fase_adep checavel ('P' pendente, 'A' assinado pendente,
+        // 'N' nao administrado) — incluindo os nao administrados listados — a
+        // assinatura e o PDF sao bloqueados: a prescricao ainda tem pendencias
+        // retroativas que precisam ser checadas/administradas/assinadas antes.
+        var MSG_BLOQUEIO = 'Existem produtos de prescrições anteriores que necessitam ser checados! Verifique os ADEPs retroativos pendentes (não suspensos) da prescrição antes de gerar o PDF e assinar.';
+
+        function temPendenciaRetroativa(adep) {
+            if (!adep.dataset.dtAdep) return false;
+            var dtAdep = new Date(adep.dataset.dtAdep);
+
+            return adepCheckboxes.some(function (outro) {
+                if (outro === adep) return false;
+                if (outro.dataset.prescricaoId !== adep.dataset.prescricaoId) return false;
+
+                // Ja administrado (por qualquer usuario) -> nao e pendencia.
+                // ADEPs administrados por outro usuario nem aparecem nesta
+                // listview (que filtra por us_adep), o que esta correto.
+                if (outro.dataset.dtAdep) return false;
+
+                var dtSuspe = outro.dataset.dtSuspensao;
+                if (dtSuspe) return false;                       // suspenso -> ignora
+                if (outro.dataset.status !== 'A') return false;  // inativo -> ignora
+
+                var fasesValidas = ['P', 'A', 'N'];
+                if (fasesValidas.indexOf(outro.dataset.faseAdep) === -1) return false;
+
+                // data_hora inferior a dt_adep do selecionado (retroativo pendente)
+                return new Date(outro.dataset.hora) < dtAdep;
+            });
+        }
+
+        var formAssinar = document.querySelector('form[method="post"]');
+        if (formAssinar) {
+            formAssinar.addEventListener('submit', function (e) {
+                var selecionados = adepCheckboxes.filter(function (cb) { return cb.checked; });
+                if (!selecionados.length) return; // mensagem de minimo vem do servidor
+
+                for (var adep of selecionados) {
+                    if (temPendenciaRetroativa(adep)) {
+                        e.preventDefault();
+                        alert(MSG_BLOQUEIO);
+                        return;
+                    }
+                }
+            });
+        }
     });
 </script>
 

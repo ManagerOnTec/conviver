@@ -4777,6 +4777,33 @@ class AdepListarAssinarView(LoginRequiredMixin, CustomPermissionRequiredMixin, F
         adeps = Adep.objects.filter(
             id__in=selected_adep_ids).select_related('prescricao')
 
+        # Validador: não pode gerar PDF/assinar uma prescrição que ainda tem
+        # ADEPs retroativos pendentes de checagem/administração — ou seja,
+        # ADEPs ATIVOS (status='A'), SEM dt_suspensao, SEM dt_adep preenchida,
+        # fase_adep='P' (pendente de administração), cuja data_hora é INFERIOR
+        # à dt_adep de algum ADEP selecionado da mesma prescrição.
+        # (também cobre fases checáveis 'A'/'N' pendentes de assinatura).
+        for adep in adeps:
+            if not adep.dt_adep:
+                continue
+
+            pendentes = Adep.objects.filter(
+                prescricao_id=adep.prescricao_id,
+                status='A',
+                dt_suspensao__isnull=True,
+                data_hora__lt=adep.dt_adep,
+                fase_adep__in=['P', 'A', 'N'],
+                dt_adep__isnull=True,
+            ).exclude(id=adep.id)
+
+            if pendentes.exists():
+                messages.warning(
+                    request,
+                    f'Existem produtos de prescrição anterior (nº {adep.prescricao_id}) '
+                    f'que necessitam ser checados! Verifique os ADEPs retroativos '
+                    f'pendentes (não suspensos) antes de gerar o PDF e assinar.')
+                return redirect('adep_listar_assinar')
+
         # Agrupa Adeps por Prescricao
         prescricao_to_adeps = {}
         for adep in adeps:
@@ -4785,11 +4812,6 @@ class AdepListarAssinarView(LoginRequiredMixin, CustomPermissionRequiredMixin, F
             prescricao_to_adeps[adep.prescricao_id].append(adep)
 
         for prescricao_id, adeps_list in prescricao_to_adeps.items():
-            if len(adeps_list) > 33:
-                messages.warning(
-                    request, 'Por favor, selecione no máximo 33 itens por número de prescrição!')
-                return redirect('adep_listar_assinar')
-
             prescricao = Prescricao.objects.get(id=prescricao_id)
 
             # Seleciona o lote de ADEPs que será impresso. Precisa ser feito
