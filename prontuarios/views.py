@@ -3134,7 +3134,7 @@ class PrescricaoGeralListView(LoginRequiredMixin, CustomPermissionRequiredMixin,
     template_name = "prontuarios/prescricao_geral_listar.html"
     model = Prescricao
     context_object_name = "prescricao_listar"
-    paginate_by = 15
+    paginate_by = 150
     return_url_session_key = 'prescricao_geral_return_url'
 
     def _get_return_url(self):
@@ -3806,6 +3806,16 @@ class AdepFilter(filters.FilterSet):
     us_atualizacao = django_filters.ModelChoiceFilter(
         queryset=User.objects.all()
     )
+    # Filtro de data/hora do próprio modelo Adep (não da prescrição).
+    # data_hora_max é fixo no momento atual: somente ADEPs retroativos.
+    data_hora_max = django_filters.DateTimeFilter(
+        field_name='data_hora',
+        lookup_expr='lte',
+        label='Data e Hora Máxima',
+        widget=forms.DateTimeInput(
+            attrs={'type': 'datetime-local', 'class': 'form-control', 'readonly': 'readonly'}, format='%Y-%m-%dT%H:%M')
+    )
+
     fase_prescricao = django_filters.ChoiceFilter(
         choices=fase_prescricao_choices)
     fase_adep = django_filters.ChoiceFilter(choices=fase_adep_choices)
@@ -3814,7 +3824,7 @@ class AdepFilter(filters.FilterSet):
     class Meta:
         model = Adep
         fields = ['id', 'prescricao', 'us_registro', 'dt_registro', 'fase_adep', 'fase_prescricao',
-                  'us_atualizacao', 'dt_atualizacao', 'status']
+                  'us_atualizacao', 'dt_atualizacao', 'status', 'data_hora_max']
 
     def filter_by_date(self, queryset, name, value):
         start_day = datetime.combine(value, datetime.min.time())
@@ -3857,6 +3867,15 @@ class AdepListView(LoginRequiredMixin, CustomPermissionRequiredMixin, FilterObje
         # Pass the updated GET request to the filter
         params.setdefault('status', 'A')
         params.setdefault('fase_adep', 'P')
+
+        # Filtro não negociável: apenas ADEPs retroativos.
+        # datahora_maxima == datahoraatual, usando data_hora do modelo Adep
+        # (não a data da prescrição). Sempre sobrepõe qualquer valor vindo
+        # da requisição/sessão para impedir ADEPs futuros.
+        # timezone.localtime() respeita o fuso do settings (UTC-3).
+        params['data_hora_max'] = timezone.localtime(
+            timezone.now()).strftime('%Y-%m-%dT%H:%M')
+
         self.filter = AdepFilter(params, queryset=queryset)
 
         return self.filter.qs
@@ -4682,7 +4701,7 @@ class AdepListarAssinarView(LoginRequiredMixin, CustomPermissionRequiredMixin, F
     context_object_name = 'adeps'
     permission_required = 'prontuarios.view_adep'
     modelo_parametros = ParametrosAdep
-    paginate_by = 33
+    paginate_by = 1000
 
     def get_queryset(self):
         # atendimento_id = self.kwargs.get('atendimento_id')
@@ -4694,7 +4713,7 @@ class AdepListarAssinarView(LoginRequiredMixin, CustomPermissionRequiredMixin, F
             assinar=False,
             status='A',
             # atendimento_id=atendimento_id
-        ).select_related('prescricao').distinct().order_by('data_hora')
+        ).select_related('prescricao').distinct().order_by('data_hora', 'prescricao')
 
         # Copia os parâmetros GET de forma mutável
         params = self.request.GET.copy()
@@ -4832,7 +4851,9 @@ class AdepAdministrarFilter(django_filters.FilterSet):
 
     def __init__(self, *args, **kwargs):
         super(AdepAdministrarFilter, self).__init__(*args, **kwargs)
-        now = timezone.now().strftime('%Y-%m-%dT%H:%M')
+        # timezone.localtime() converte para o fuso configurado no settings
+        # (evita exibir UTC quando TIME_ZONE é UTC-3).
+        now = timezone.localtime(timezone.now()).strftime('%Y-%m-%dT%H:%M')
         # Define o valor de data_hora_max para agora se não for fornecido
         self.filters['data_hora_max'].field.widget.attrs['value'] = now
 
@@ -4843,22 +4864,25 @@ class AdepListarAdministrarView(LoginRequiredMixin, CustomPermissionRequiredMixi
     context_object_name = 'adeps'
     permission_required = 'prontuarios.view_adep'
     modelo_parametros = ParametrosAdep
-    paginate_by = 33
+    paginate_by = 500
 
     def get_queryset(self):
         queryset = Adep.objects.filter(
-            fase_adep='P', assinar=False, status='A').distinct().order_by('data_hora')
+            fase_adep='P', assinar=False, status='A').distinct().order_by('data_hora', 'prescricao')
         params = self.request.GET.copy()
 
         if 'limpar' in params:
             self.request.session.pop('adep_administrar_filters', None)
             params.clear()
-        else:
-            # Verifica se data_hora_max está presente nos parâmetros; se não, define para o momento atual
-            if 'data_hora_max' not in params or not params['data_hora_max']:
-                params['data_hora_max'] = timezone.now().strftime(
-                    '%Y-%m-%dT%H:%M')
-            self.request.session['adep_administrar_filters'] = params
+
+        # Filtro não negociável: apenas ADEPs retroativos.
+        # datahora_maxima == datahoraatual, usando data_hora do modelo Adep
+        # (não a data da prescrição). Sempre sobrepõe qualquer valor vindo
+        # da requisição/sessão para impedir ADEPs futuros.
+        # timezone.localtime() respeita o fuso do settings (UTC-3).
+        params['data_hora_max'] = timezone.localtime(
+            timezone.now()).strftime('%Y-%m-%dT%H:%M')
+        self.request.session['adep_administrar_filters'] = params
 
         self.filter = AdepAdministrarFilter(params, queryset=queryset)
         return self.filter.qs
