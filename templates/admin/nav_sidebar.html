@@ -1,0 +1,17 @@
+{% load i18n %}
+<button class="sticky toggle-nav-sidebar" id="toggle-nav-sidebar" aria-label="{% translate 'Toggle navigation' %}"></button>
+<nav class="sticky" id="nav-sidebar" aria-label="{% translate 'Sidebar' %}">
+  <div class="nav-sidebar-header">
+    <span class="nav-sidebar-title">
+      <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13" style="vertical-align: middle; margin-right: 4px;">
+        <path d="M4 3a2 2 0 100 4h12a2 2 0 100-4H4zM4 9a2 2 0 100 4h12a2 2 0 100-4H4zM4 15a2 2 0 100 4h12a2 2 0 100-4H4z" />
+      </svg>
+      Módulos & Modelos
+    </span>
+    <button type="button" class="btn-close-sidebar-pane" id="btn-close-nav-sidebar" title="Recolher menu lateral (Alt+M)">◀</button>
+  </div>
+  <input type="search" id="nav-filter"
+         placeholder="{% translate 'Start typing to filter…' %}"
+         aria-label="{% translate 'Filter navigation items' %}">
+  {% include 'admin/app_list.html' with app_list=available_apps show_changelinks=False %}
+</nav>

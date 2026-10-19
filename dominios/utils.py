@@ -609,27 +609,138 @@ class AdminSaveModelAuditMixin:
 
 
 class ExportToXLSMixin:
+    """
+    Exportador corporativo avançado para Excel (.xlsx) e CSV (UTF-8 com BOM).
+    Utiliza openpyxl para gerar planilhas estilizadas com cabeçalho institucional,
+    auto-ajuste de colunas, formatação de datas e linhas zebradas.
+    Mantém compatibilidade com xlwt como fallback.
+    """
+
     def export_as_xls(self, request, queryset):
+        """Exporta queryset para arquivo Excel moderno (.xlsx) estilizado."""
         meta = self.model._meta
         field_names = [field.name for field in meta.fields]
+        verbose_names = [field.verbose_name.title() if hasattr(field, 'verbose_name') else field.name for field in meta.fields]
 
-        response = HttpResponse(content_type='application/ms-excel')
-        response['Content-Disposition'] = f'attachment; filename={meta.verbose_name_plural}.xls'
+        try:
+            import io
+            import datetime as dt_mod
+            import openpyxl
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            from openpyxl.utils import get_column_letter
 
-        wb = xlwt.Workbook(encoding='utf-8')
-        ws = wb.add_sheet(meta.verbose_name_plural)
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = str(meta.verbose_name_plural)[:31]
 
-        # Write header row
-        for col_num, field_name in enumerate(field_names):
-            ws.write(0, col_num, field_name)
+            # Estilos
+            fill_header = PatternFill(start_color="1B3A57", end_color="1B3A57", fill_type="solid")
+            font_header = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+            font_normal = Font(name="Calibri", size=9)
+            border_thin = Border(
+                left=Side(style='thin', color='E0E0E0'),
+                right=Side(style='thin', color='E0E0E0'),
+                top=Side(style='thin', color='E0E0E0'),
+                bottom=Side(style='thin', color='E0E0E0')
+            )
+            fill_zebra = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
 
-        # Write data rows
-        for row_num, obj in enumerate(queryset, start=1):
+            # Cabeçalho
+            ws.row_dimensions[1].height = 24
+            for col_num, v_name in enumerate(verbose_names, start=1):
+                cell = ws.cell(row=1, column=col_num, value=str(v_name))
+                cell.font = font_header
+                cell.fill = fill_header
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                cell.border = border_thin
+
+            # Dados
+            for row_num, obj in enumerate(queryset, start=2):
+                ws.row_dimensions[row_num].height = 19
+                is_even = (row_num % 2 == 0)
+
+                for col_num, field_name in enumerate(field_names, start=1):
+                    val = getattr(obj, field_name, '')
+                    # Formata datas e relações
+                    if isinstance(val, (dt_mod.datetime, dt_mod.date)):
+                        val_str = val.strftime('%d/%m/%Y %H:%M') if isinstance(val, dt_mod.datetime) else val.strftime('%d/%m/%Y')
+                    elif hasattr(val, '__str__') and not isinstance(val, (str, int, float, bool)):
+                        val_str = str(val)
+                    else:
+                        val_str = str(val) if val is not None else ''
+
+                    cell = ws.cell(row=row_num, column=col_num, value=val_str)
+                    cell.font = font_normal
+                    cell.border = border_thin
+                    if is_even:
+                        cell.fill = fill_zebra
+                    cell.alignment = Alignment(vertical="center")
+
+            # Largura automática das colunas
+            for col in ws.columns:
+                max_len = max(len(str(cell.value or '')) for cell in col)
+                col_letter = get_column_letter(col[0].column)
+                ws.column_dimensions[col_letter].width = max(max_len + 3, 11)
+
+            buffer = io.BytesIO()
+            wb.save(buffer)
+            buffer.seek(0)
+
+            response = HttpResponse(
+                buffer.getvalue(),
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            response['Content-Disposition'] = f'attachment; filename="{meta.verbose_name_plural}.xlsx"'
+            return response
+
+        except Exception as e:
+            # Fallback seguro para xlwt se openpyxl falhar
+            response = HttpResponse(content_type='application/ms-excel')
+            response['Content-Disposition'] = f'attachment; filename="{meta.verbose_name_plural}.xls"'
+            wb = xlwt.Workbook(encoding='utf-8')
+            ws = wb.add_sheet(str(meta.verbose_name_plural)[:31])
+
             for col_num, field_name in enumerate(field_names):
-                value = getattr(obj, field_name)
-                ws.write(row_num, col_num, str(value))
+                ws.write(0, col_num, field_name)
 
-        wb.save(response)
+            for row_num, obj in enumerate(queryset, start=1):
+                for col_num, field_name in enumerate(field_names):
+                    value = getattr(obj, field_name)
+                    ws.write(row_num, col_num, str(value))
+
+            wb.save(response)
+            return response
+
+    export_as_xls.short_description = "📊 Exportar Selecionados para Excel (XLSX Formatado)"
+
+    def export_as_csv(self, request, queryset):
+        """Exporta queryset para CSV com codificação UTF-8 e BOM (compatível com Excel)."""
+        import csv
+        import datetime as dt_mod
+        meta = self.model._meta
+        field_names = [field.name for field in meta.fields]
+        verbose_names = [field.verbose_name.title() if hasattr(field, 'verbose_name') else field.name for field in meta.fields]
+
+        response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+        response['Content-Disposition'] = f'attachment; filename="{meta.verbose_name_plural}.csv"'
+
+        writer = csv.writer(response, delimiter=';')
+        writer.writerow(verbose_names)
+
+        for obj in queryset:
+            row = []
+            for field_name in field_names:
+                val = getattr(obj, field_name, '')
+                if isinstance(val, dt_mod.datetime):
+                    val = val.strftime('%d/%m/%Y %H:%M')
+                elif isinstance(val, dt_mod.date):
+                    val = val.strftime('%d/%m/%Y')
+                elif hasattr(val, '__str__') and not isinstance(val, (str, int, float, bool)):
+                    val = str(val)
+                row.append(str(val) if val is not None else '')
+            writer.writerow(row)
+
         return response
 
-    export_as_xls.short_description = "Exportar para XLS"
+    export_as_csv.short_description = "📄 Exportar Selecionados para CSV (UTF-8)"
+

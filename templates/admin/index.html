@@ -1,0 +1,82 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static "admin/css/dashboard.css" %}">{% endblock %}
+
+{% block coltype %}colMS{% endblock %}
+
+{% block bodyclass %}{{ block.super }} dashboard{% endblock %}
+
+{% block nav-breadcrumbs %}
+<div class="admin-subnav-container">
+  <div class="admin-breadcrumbs-area">
+    <nav aria-label="{% translate 'Breadcrumbs' %}">
+      <div class="breadcrumbs">
+        <span>{% translate 'Painel Principal' %}</span>
+      </div>
+    </nav>
+  </div>
+  <div class="admin-view-controls-bar" id="admin-view-controls-bar" role="toolbar" aria-label="Controles de Exibição">
+    <span class="view-controls-title" title="Painéis de visualização">
+      <svg class="ctrl-svg-icon" viewBox="0 0 20 20" fill="currentColor" width="13" height="13">
+        <path fill-rule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h6a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" />
+      </svg>
+      Exibição:
+    </span>
+    <button type="button" class="view-ctrl-btn" id="btn-toggle-left-sidebar" title="Ocultar/Exibir Menu Lateral de Modelos (Alt+M)">
+      <span class="ctrl-icon">◨</span>
+      <span class="ctrl-label">Menu Lateral</span>
+    </button>
+    <button type="button" class="view-ctrl-btn" id="btn-toggle-breadcrumbs" title="Ocultar/Exibir Linha de Navegação (Alt+B)">
+      <span class="ctrl-icon">⋯</span>
+      <span class="ctrl-label">Breadcrumbs</span>
+    </button>
+    <button type="button" class="view-ctrl-btn view-ctrl-btn-focus" id="btn-toggle-focus-mode" title="Modo Foco (Alt+Z)">
+      <span class="ctrl-icon">⛶</span>
+      <span class="ctrl-label">Foco</span>
+    </button>
+    <button type="button" class="view-ctrl-btn view-ctrl-btn-reset" id="btn-reset-view-layout" title="Restaurar layout original (Alt+R)">
+      <span class="ctrl-icon">↺</span>
+      <span class="ctrl-label">Restaurar</span>
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  {% include "admin/app_list.html" with app_list=app_list show_changelinks=True %}
+</div>
+{% endblock %}
+
+{% block sidebar %}
+<div id="content-related">
+    <div class="module" id="recent-actions-module">
+        <h2>{% translate 'Recent actions' %}</h2>
+        <h3>{% translate 'My actions' %}</h3>
+            {% load log %}
+            {% get_admin_log 10 as admin_log for_user user %}
+            {% if not admin_log %}
+            <p>{% translate 'None available' %}</p>
+            {% else %}
+            <ul class="actionlist">
+            {% for entry in admin_log %}
+            <li class="{% if entry.is_addition %}addlink{% endif %}{% if entry.is_change %}changelink{% endif %}{% if entry.is_deletion %}deletelink{% endif %}">
+                {% if entry.is_deletion or not entry.get_admin_url %}
+                    {{ entry.object_repr }}
+                {% else %}
+                    <a href="{{ entry.get_admin_url }}">{{ entry.object_repr }}</a>
+                {% endif %}
+                <br>
+                {% if entry.content_type %}
+                    <span class="mini quiet">{% filter capfirst %}{{ entry.content_type.name }}{% endfilter %}</span>
+                {% else %}
+                    <span class="mini quiet">{% translate 'Unknown content' %}</span>
+                {% endif %}
+            </li>
+            {% endfor %}
+            </ul>
+            {% endif %}
+    </div>
+</div>
+{% endblock %}

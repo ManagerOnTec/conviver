@@ -1,0 +1,86 @@
+{% if kpi_cards %}
+<div class="admin-dashboard-kpis" id="admin-dashboard-kpis">
+  {% for card in kpi_cards %}
+    <div class="kpi-card {{ card.color_class|default:'kpi-blue' }}">
+      <div class="kpi-icon">{{ card.icon|default:'📊' }}</div>
+      <div class="kpi-body">
+        <span class="kpi-title">{{ card.title }}</span>
+        <span class="kpi-value">{{ card.value }}</span>
+        {% if card.subtitle %}
+          <span class="kpi-subtitle">{{ card.subtitle }}</span>
+        {% endif %}
+      </div>
+    </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if top_filter_config %}
+<div class="admin-top-filter-bar" id="admin-top-filter-bar">
+  <div class="top-filter-header">
+    <span class="top-filter-title">
+      <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
+        <path fill-rule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" clip-rule="evenodd" />
+      </svg>
+      Filtros Analíticos Rápidos
+    </span>
+    {% if has_active_top_filter %}
+      <a href="{{ request.path }}" class="top-filter-quick-clear">
+        <span>✕ Limpar Filtros do Topo</span>
+      </a>
+    {% endif %}
+  </div>
+
+  <div class="top-filter-row">
+    <span class="filter-group-label">Período:</span>
+    <div class="top-filter-presets">
+      {% for preset in top_filter_presets %}
+        <a href="{{ preset.url }}" class="top-preset-btn {% if preset.active %}active{% endif %}">
+          <span>{{ preset.label }}</span>
+        </a>
+      {% endfor %}
+    </div>
+
+    <!-- Filtro de datas customizadas De / Até -->
+    <form method="get" action="{{ request.path }}" class="top-custom-date-box" id="top-date-range-form">
+      {% for k, v in request.GET.items %}
+        {% if k != date_field_gte and k != date_field_lte and k != 'p' and k != 'periodo' %}
+          <input type="hidden" name="{{ k }}" value="{{ v }}">
+        {% endif %}
+      {% endfor %}
+      <span class="filter-group-label">De:</span>
+      <input type="date" name="{{ date_field_gte }}" value="{{ current_date_gte }}" class="top-date-input">
+      <span class="filter-group-label">Até:</span>
+      <input type="date" name="{{ date_field_lte }}" value="{{ current_date_lte }}" class="top-date-input">
+      <button type="submit" class="top-date-btn">Filtrar</button>
+    </form>
+  </div>
+
+    {% if top_extra_filters %}
+    <div class="top-filter-row">
+      <span class="filter-group-label">Status & Módulo:</span>
+      <div class="top-filter-presets">
+        {% for btn in top_extra_filters %}
+        <a href="{{ btn.url }}" class="top-preset-btn {% if btn.active %}active{% endif %}">
+          {% if btn.icon %}<span>{{ btn.icon }}</span>{% endif %}
+          <span>{{ btn.label }}</span>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if top_dropdown_subfilters %}
+    <div class="top-filter-row">
+      {% for sub in top_dropdown_subfilters %}
+        <span class="filter-group-label">{{ sub.label }}:</span>
+        <select class="top-subfilter-select" onchange="window.location.href=this.value;">
+          {% for opt in sub.options %}
+            <option value="{{ opt.url }}" {% if opt.selected %}selected{% endif %}>{{ opt.label }}</option>
+          {% endfor %}
+        </select>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
