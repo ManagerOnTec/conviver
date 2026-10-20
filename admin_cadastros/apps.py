@@ -4,7 +4,7 @@ from django.apps import AppConfig
 class AdminCadastrosAppConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'admin_cadastros'
-    verbose_name = 'Admin Cadastros'
+    verbose_name = 'B.  ADMIN CADASTROS'
 
    # def ready(self):
    #     from cadastros import signals

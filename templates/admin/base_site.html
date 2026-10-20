@@ -3,6 +3,7 @@
 
 {% block extrastyle %}
   {{ block.super }}
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.0/css/all.min.css">
   <link rel="stylesheet" href="{% static 'css/admin_layout_toggles.css' %}">
 {% endblock %}
 
@@ -41,7 +42,7 @@
     <nav aria-label="{% translate 'Breadcrumbs' %}">
       {% block breadcrumbs %}
         <div class="breadcrumbs">
-          <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+          <a href="{% url 'admin:index' %}" class="breadcrumb-home-btn" title="Home"><i class="fas fa-home"></i> <span>Home</span></a>
           {% if title %} &rsaquo; {{ title }}{% endif %}
         </div>
       {% endblock %}

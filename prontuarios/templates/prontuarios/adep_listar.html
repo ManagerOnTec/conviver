@@ -76,7 +76,7 @@
 
                     <div class="justify-content-center mt-2">
                         <button class="col-md-12 btn btn-primary btn-outline-light justify-content-center"
-                            title="Filtrar" type="submit">
+                            title="Filtrar" type="submit" name="filtrar" value="1">
                             <i class="fas fa-check" style="transition: color 0.3s;"></i>
                             Filtrar
                         </button>
@@ -123,14 +123,11 @@
                 <th>Adep</th>
                 <th>Produto</th>
                 <th>Data e Hora</th>
-                <th>S/N</th>
+                <th>Se Necessário</th>
                 <th>Dose/Única</th>
                 <th>Observações</th>
-
+                <th class="text-center" style="min-width: 230px;">Ações de Administração</th>
                 <th>Fase</th>
-
-                <th>Administrar</th>
-                <th>Não Administrar</th>
                 <th>Prescritor</th>
                 <th>Admin.Adep</th>
                 <th>Admin.Data</th>
@@ -141,72 +138,77 @@
             <tr>
                 <td>{{ adep.prescricao }}</td>
                 <td>{{ adep.pk }}</td>
-                <td>{{ adep.produto_prescricao.produto }}</td>
-
+                <td><strong>{{ adep.produto_prescricao.produto }}</strong></td>
                 <td>{{ adep.data_hora|date:"d/m/Y H:i" }}</td>
 
-
-
                 {% if adep.se_necessario %}
-                <td>Sim</td>
+                <td><span class="badge bg-info text-dark fw-semibold px-2 py-1 shadow-sm"><i class="fas fa-hand-holding-medical me-1"></i> Sim</span></td>
                 {% else %}
-                <td></td>
+                <td><span class="text-muted small">-</span></td>
                 {% endif %}
 
                 {% if adep.dose_unica %}
-                <td>Sim</td>
+                <td><span class="badge bg-warning text-dark fw-semibold px-2 py-1 shadow-sm"><i class="fas fa-capsules me-1"></i> Única</span></td>
                 {% else %}
-                <td></td>
+                <td><span class="text-muted small">-</span></td>
                 {% endif %}
 
-                {% if adep.observacao %}
-                <td>{{ adep.observacao }}</td>
-                {% else %}
-                <td></td>
-                {% endif %}
+                <td>{{ adep.observacao|default:"-" }}</td>
 
-                <td>{{ adep.get_fase_adep_display }}</td>
-
-
-
-                {% if adep.fase_adep == 'P' %}
-                <!-- Botões -->
-                <td>
-                    <button class="btn btn-outline-primary update-fase" data-adep-id="{{ adep.id }}" data-new-fase="A"
-                        id="btn-adm">
-                        <i class="fas fa-check"></i> Administrar
-                    </button>
+                <!-- Coluna de Ações entre Observações e Fase -->
+                <td class="text-center align-middle" style="min-width: 230px;">
+                    {% if adep.fase_adep == 'P' %}
+                    <div class="adep-action-buttons-group">
+                        <button type="button" class="btn btn-sm adep-btn-adm update-fase" data-adep-id="{{ adep.id }}" data-new-fase="A" title="Confirmar administração do medicamento">
+                            <i class="fas fa-check-circle me-1"></i> Administrar
+                        </button>
+                        <button type="button" class="btn btn-sm adep-btn-naoadm update-fase" data-adep-id="{{ adep.id }}" data-new-fase="N" title="Registrar não administração">
+                            <i class="fas fa-ban me-1"></i> Recusar
+                        </button>
+                    </div>
+                    {% elif adep.fase_adep == 'A' %}
+                    <span class="badge bg-success text-white px-2 py-1 rounded-pill shadow-sm">
+                        <i class="fas fa-check-double me-1"></i> Administrado
+                    </span>
+                    {% elif adep.fase_adep == 'N' %}
+                    <span class="badge bg-danger text-white px-2 py-1 rounded-pill shadow-sm">
+                        <i class="fas fa-ban me-1"></i> Recusado
+                    </span>
+                    {% elif adep.fase_adep == 'S' %}
+                    <span class="badge bg-secondary text-white px-2 py-1 rounded-pill shadow-sm">
+                        <i class="fas fa-pause-circle me-1"></i> Suspenso
+                    </span>
+                    {% else %}
+                    <span class="text-muted small">-</span>
+                    {% endif %}
                 </td>
+
                 <td>
-                    <button class="btn btn-outline-danger update-fase" data-adep-id="{{ adep.id }}" data-new-fase="N"
-                        id="btn-naoadm">
-                        <i class="fas fa-times"></i>Não Administrar
-                    </button>
+                    {% if adep.fase_adep == 'P' %}
+                    <span class="badge bg-warning text-dark px-2 py-1"><i class="fas fa-clock me-1"></i>Pendente</span>
+                    {% elif adep.fase_adep == 'A' %}
+                    <span class="badge bg-success text-white px-2 py-1"><i class="fas fa-check-double me-1"></i>Administrado</span>
+                    {% elif adep.fase_adep == 'N' %}
+                    <span class="badge bg-danger text-white px-2 py-1"><i class="fas fa-ban me-1"></i>Não Administrado</span>
+                    {% elif adep.fase_adep == 'S' %}
+                    <span class="badge bg-secondary text-white px-2 py-1"><i class="fas fa-pause-circle me-1"></i>Suspenso</span>
+                    {% else %}
+                    {{ adep.get_fase_adep_display }}
+                    {% endif %}
                 </td>
-                {% else %}
-                <td></td>
-                <td></td>
-                {% endif %}
-
-
 
                 <td>{{ adep.us_registro }}</td>
-                {% if adep.us_atualizacao %}
-                <td>{{ adep.us_atualizacao }}</td>
-                {% else %}
-                <td></td>
-                {% endif %}
-                <td>{{ adep.dt_atualizacao|date:"d/m/Y H:i" }}</td>
+                <td>{{ adep.us_atualizacao|default:"-" }}</td>
+                <td>{{ adep.dt_atualizacao|date:"d/m/Y H:i"|default:"-" }}</td>
 
                 {% empty %}
             </tr>
             <tr>
-                <td colspan="8">
-                    Nenhum registro
+                <td colspan="12" class="text-center py-4 text-muted">
+                    <i class="fas fa-inbox fa-2x mb-2 d-block text-secondary"></i>
+                    Nenhum registro de ADEP encontrado.
                 </td>
             </tr>
-
-
 
             {% endfor %}
         </tbody>
@@ -231,11 +233,11 @@
     <ul class="pagination listing-pagination btn-sm mb-0">
         {% if page_obj.has_previous %}
         <li class="page-item">
-            <a href="?{% with filters=request.session.adep_filters|urlencode %}{{ filters }}{% endwith %}&page=1"
+            <a href="?page=1{% if query_params %}&{{ query_params }}{% endif %}"
                 class="page-link"><i class="fas fa-step-backward"></i></a>
         </li>
         <li class="page-item">
-            <a href="?{% with filters=request.session.adep_filters|urlencode %}{{ filters }}{% endwith %}&page={{ page_obj.previous_page_number }}"
+            <a href="?page={{ page_obj.previous_page_number }}{% if query_params %}&{{ query_params }}{% endif %}"
                 class="page-link"><i class="fas fa-arrow-left"></i></a>
         </li>
         {% endif %}
@@ -245,23 +247,24 @@
         <li class="page-item active">
             <span class="page-link">{{ i }}</span>
         </li>
-        {% elif i > page_obj.number|add:"-3" and i < page_obj.number|add:"3" %} <li class="page-item">
-            <a href="?{% with filters=request.session.adep_filters|urlencode %}{{ filters }}{% endwith %}&page={{ i }}"
+        {% elif i > page_obj.number|add:"-3" and i < page_obj.number|add:"3" %}
+        <li class="page-item">
+            <a href="?page={{ i }}{% if query_params %}&{{ query_params }}{% endif %}"
                 class="page-link">{{ i }}</a>
-            </li>
-            {% endif %}
-            {% endfor %}
+        </li>
+        {% endif %}
+        {% endfor %}
 
-            {% if page_obj.has_next %}
-            <li class="page-item">
-                <a href="?{% with filters=request.session.adep_filters|urlencode %}{{ filters }}{% endwith %}&page={{ page_obj.next_page_number }}"
-                    class="page-link"><i class="fas fa-arrow-right"></i></a>
-            </li>
-            <li class="page-item">
-                <a href="?{% with filters=request.session.adep_filters|urlencode %}{{ filters }}{% endwith %}&page={{ page_obj.paginator.num_pages }}"
-                    class="page-link"><i class="fas fa-step-forward"></i></a>
-            </li>
-            {% endif %}
+        {% if page_obj.has_next %}
+        <li class="page-item">
+            <a href="?page={{ page_obj.next_page_number }}{% if query_params %}&{{ query_params }}{% endif %}"
+                class="page-link"><i class="fas fa-arrow-right"></i></a>
+        </li>
+        <li class="page-item">
+            <a href="?page={{ page_obj.paginator.num_pages }}{% if query_params %}&{{ query_params }}{% endif %}"
+                class="page-link"><i class="fas fa-step-forward"></i></a>
+        </li>
+        {% endif %}
     </ul>
 </div>
 {% endif %}
@@ -269,9 +272,56 @@
 {% endblock %}
 
 {% block scriptcustom %}
+<style>
+    /* Estilização moderna dos botões de ação e status de ADEP */
+    .adep-action-buttons-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        justify-content: center;
+        white-space: nowrap;
+    }
 
+    .adep-btn-adm {
+        background: #198754 !important;
+        border: 1.5px solid #198754 !important;
+        color: #ffffff !important;
+        font-weight: 600 !important;
+        padding: 5px 12px !important;
+        border-radius: 6px !important;
+        font-size: 0.8rem !important;
+        box-shadow: 0 2px 4px rgba(25, 135, 84, 0.25) !important;
+        transition: all 0.2s ease !important;
+    }
+
+    .adep-btn-adm:hover {
+        background: #157347 !important;
+        border-color: #146c43 !important;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(25, 135, 84, 0.35) !important;
+        color: #ffffff !important;
+    }
+
+    .adep-btn-naoadm {
+        color: #dc3545 !important;
+        border: 1.5px solid rgba(220, 53, 69, 0.5) !important;
+        background: rgba(220, 53, 69, 0.06) !important;
+        font-weight: 600 !important;
+        padding: 5px 12px !important;
+        border-radius: 6px !important;
+        font-size: 0.8rem !important;
+        transition: all 0.2s ease !important;
+    }
+
+    .adep-btn-naoadm:hover {
+        background: #dc3545 !important;
+        border-color: #dc3545 !important;
+        color: #ffffff !important;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3) !important;
+    }
+</style>
 
 {% csrf_token %}
 <script type="text/javascript" src="{% static 'js/adep_listar_adm.js' %}"></script>
-
 {% endblock %}

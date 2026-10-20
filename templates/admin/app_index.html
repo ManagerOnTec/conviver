@@ -1,0 +1,48 @@
+{% extends "admin/index.html" %}
+{% load i18n static %}
+
+{% block bodyclass %}{{ block.super }} app-{{ app_label }}{% endblock %}
+
+{% if not is_popup %}
+{% block nav-breadcrumbs %}
+<div class="admin-subnav-container">
+  <div class="admin-breadcrumbs-area">
+    <nav aria-label="{% translate 'Breadcrumbs' %}">
+      <div class="breadcrumbs">
+        <a href="{% url 'admin:index' %}" class="breadcrumb-home-btn" title="Home"><i class="fas fa-home"></i> <span>Home</span></a>
+        <span class="breadcrumb-separator">&rsaquo;</span>
+        {% for app in app_list %}
+          <a href="{{ app.app_url }}" class="breadcrumb-item-btn breadcrumb-app-btn" title="{{ app.name }}"><i class="fas fa-layer-group"></i> <span>{{ app.name }}</span></a>
+        {% endfor %}
+      </div>
+    </nav>
+  </div>
+  <div class="admin-view-controls-bar" id="admin-view-controls-bar" role="toolbar" aria-label="Controles de Exibição">
+    <span class="view-controls-title" title="Painéis de visualização">
+      <svg class="ctrl-svg-icon" viewBox="0 0 20 20" fill="currentColor" width="13" height="13">
+        <path fill-rule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h6a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" />
+      </svg>
+      Exibição:
+    </span>
+    <button type="button" class="view-ctrl-btn" id="btn-toggle-left-sidebar" title="Ocultar/Exibir Menu Lateral de Modelos (Alt+M)">
+      <span class="ctrl-icon">◨</span>
+      <span class="ctrl-label">Menu Lateral</span>
+    </button>
+    <button type="button" class="view-ctrl-btn" id="btn-toggle-breadcrumbs" title="Ocultar/Exibir Linha de Navegação (Alt+B)">
+      <span class="ctrl-icon">⋯</span>
+      <span class="ctrl-label">Breadcrumbs</span>
+    </button>
+    <button type="button" class="view-ctrl-btn view-ctrl-btn-focus" id="btn-toggle-focus-mode" title="Modo Foco (Alt+Z)">
+      <span class="ctrl-icon">⛶</span>
+      <span class="ctrl-label">Foco</span>
+    </button>
+    <button type="button" class="view-ctrl-btn view-ctrl-btn-reset" id="btn-reset-view-layout" title="Restaurar layout original (Alt+R)">
+      <span class="ctrl-icon">↺</span>
+      <span class="ctrl-label">Restaurar</span>
+    </button>
+  </div>
+</div>
+{% endblock %}
+{% endif %}
+
+{% block sidebar %}{% endblock %}

@@ -192,7 +192,7 @@ class Produto(BaseModel):
         if self.produto_referencia:
             return (
                 f'{self.descricao}'
-                f'→ {self.produto_referencia.descricao} / UM: {unidade_medida} / VIA: {via}'
+                f'→ {self.produto_referencia.descricao} / {unidade_medida} / {via}'
             )
 
-        return f'{self.descricao} / UM: {unidade_medida} / VIA: {via}'
+        return f'{self.descricao} / {unidade_medida} / {via}'

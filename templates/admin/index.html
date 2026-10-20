@@ -1,11 +1,20 @@
 {% extends "admin/base_site.html" %}
-{% load i18n static %}
+{% load i18n static log %}
 
-{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static "admin/css/dashboard.css" %}">{% endblock %}
+{% block extrastyle %}
+  {{ block.super }}
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.0/css/all.min.css">
+  <link rel="stylesheet" href="{% static 'css/admin_index_custom.css' %}">
+{% endblock %}
 
-{% block coltype %}colMS{% endblock %}
+{% block extrahead %}
+  {{ block.super }}
+  <script src="{% static 'js/admin_index_custom.js' %}" defer></script>
+{% endblock %}
 
-{% block bodyclass %}{{ block.super }} dashboard{% endblock %}
+{% block coltype %}colM{% endblock %}
+
+{% block bodyclass %}{{ block.super }} dashboard admin-index-body{% endblock %}
 
 {% block nav-breadcrumbs %}
 <div class="admin-subnav-container">
@@ -44,39 +53,227 @@
 {% endblock %}
 
 {% block content %}
-<div id="content-main">
-  {% include "admin/app_list.html" with app_list=app_list show_changelinks=True %}
-</div>
-{% endblock %}
+<div class="admin-index-wrapper">
+  <div class="index-shell admin-main-dashboard">
+        <!-- Cabeçalho do Dashboard -->
+        <div class="admin-dashboard-header">
+          <h2 class="admin-dashboard-title">
+            <i class="fas fa-layer-group"></i>
+            Módulos & Funções do Sistema
+          </h2>
+          <p class="admin-dashboard-subtitle">Painel de Administração Integrada - PEP Cloud - Gestor Online</p>
+        </div>
 
-{% block sidebar %}
-<div id="content-related">
-    <div class="module" id="recent-actions-module">
-        <h2>{% translate 'Recent actions' %}</h2>
-        <h3>{% translate 'My actions' %}</h3>
-            {% load log %}
-            {% get_admin_log 10 as admin_log for_user user %}
+        <!-- Barra de Atalhos Rápidos Clínicos & Operacionais -->
+        <div class="admin-quick-launch-strip">
+          <span class="quick-launch-label"><i class="fas fa-bolt"></i> Acesso Rápido:</span>
+          <a href="{% url 'admin:atendimentos_atendimento_add' %}" class="quick-launch-btn" title="Iniciar novo atendimento">
+            <i class="fas fa-hospital-user"></i> Novo Atendimento
+          </a>
+          <a href="{% url 'admin:prontuarios_evolucao_add' %}" class="quick-launch-btn" title="Registrar nova evolução clínica">
+            <i class="fas fa-file-medical-alt"></i> Nova Evolução
+          </a>
+          <a href="{% url 'admin:prontuarios_prescricao_add' %}" class="quick-launch-btn" title="Criar nova prescrição médica">
+            <i class="fas fa-prescription-bottle-alt"></i> Nova Prescrição
+          </a>
+          <a href="{% url 'admin:prontuarios_sinaisvitais_add' %}" class="quick-launch-btn" title="Registrar aferição de sinais vitais">
+            <i class="fas fa-heartbeat"></i> Sinais Vitais
+          </a>
+          <a href="{% url 'admin:admin_relatorios_relatorio_changelist' %}" class="quick-launch-btn" title="Consultar e baixar PDFs e relatórios">
+            <i class="fas fa-file-pdf"></i> Central de PDFs / Dossiês
+          </a>
+          <a href="{% url 'admin:admin_cadastros_pessoa_add' %}" class="quick-launch-btn" title="Cadastrar nova pessoa/paciente">
+            <i class="fas fa-user-plus"></i> Novo Paciente
+          </a>
+        </div>
+
+        <!-- Barra Localizadora JS (Estilo Select Estabelecimento) -->
+        <div class="index-search-container">
+          <div class="index-search-group">
+            <span class="index-search-icon">
+              <i class="fas fa-search"></i>
+            </span>
+            <input type="text"
+                   id="adminModuleSearch"
+                   class="index-search-input"
+                   placeholder="Pesquisar módulos, modelos, tabelas ou funções clínicas (ex: prontuário, evolução, paciente, cid, prescrição)..."
+                   autocomplete="off" />
+            <button type="button" id="adminSearchClear" class="index-search-clear-btn" title="Limpar pesquisa" style="display: none;">✕</button>
+          </div>
+
+          <!-- Barra de Estatísticas & Ações Rápidas -->
+          <div class="index-search-toolbar">
+            <div class="index-search-stats" id="indexSearchStats">
+              <span class="badge-stats"><strong id="statsModuleCount">0</strong> módulos</span>
+              <span class="badge-stats"><strong id="statsModelCount">0</strong> funções</span>
+            </div>
+            <div class="index-search-actions">
+              <button type="button" class="btn-dashboard-action" id="btnExpandAll" title="Expandir todas as listas de funções">
+                <i class="fas fa-chevron-down"></i> Expandir Todas
+              </button>
+              <button type="button" class="btn-dashboard-action" id="btnCollapseAll" title="Recolher todas as listas de funções">
+                <i class="fas fa-chevron-up"></i> Recolher Todas
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Grid Amplo e Espaçoso de Botões Grandes dos Módulos (100% da Largura) -->
+        <div class="admin-modules-grid" id="adminModulesGrid">
+          {% for app in app_list %}
+            <div class="module-card-col" data-app-label="{{ app.app_label }}" data-app-name="{{ app.name|lower }}">
+              <div class="card transition-card module-card">
+
+                <!-- Botão Grande do Módulo (Cabeçalho Clicável) -->
+                <div class="module-card-header" title="Clique para expandir/recolher as funções de {{ app.name }}">
+                  <div class="module-card-icon-box">
+                    {% if app.app_label == 'prontuarios' %}
+                      <i class="fas fa-notes-medical"></i>
+                    {% elif app.app_label == 'admin_relatorios' %}
+                      <i class="fas fa-file-pdf"></i>
+                    {% elif app.app_label == 'atendimentos' %}
+                      <i class="fas fa-hospital-user"></i>
+                    {% elif app.app_label == 'admin_cadastros' %}
+                      <i class="fas fa-user-friends"></i>
+                    {% elif app.app_label == 'admin_cadastros_assistenciais' %}
+                      <i class="fas fa-user-md"></i>
+                    {% elif app.app_label == 'admin_evolucoes' %}
+                      <i class="fas fa-file-medical-alt"></i>
+                    {% elif app.app_label == 'admin_prescricoes' %}
+                      <i class="fas fa-prescription-bottle-alt"></i>
+                    {% elif app.app_label == 'admin_adep' %}
+                      <i class="fas fa-syringe"></i>
+                    {% elif app.app_label == 'admin_estoques' %}
+                      <i class="fas fa-boxes"></i>
+                    {% elif app.app_label == 'documentos_legais' %}
+                      <i class="fas fa-balance-scale"></i>
+                    {% elif app.app_label == 'admin_faturas' %}
+                      <i class="fas fa-file-invoice-dollar"></i>
+                    {% elif app.app_label == 'admin_sae' %}
+                      <i class="fas fa-stethoscope"></i>
+                    {% elif app.app_label == 'admin_plano_cuidados' %}
+                      <i class="fas fa-heartbeat"></i>
+                    {% elif app.app_label == 'admin_perdas_ganhos' %}
+                      <i class="fas fa-weight"></i>
+                    {% elif app.app_label == 'admin_passagem_plantao' %}
+                      <i class="fas fa-clipboard-list"></i>
+                    {% elif app.app_label == 'auth' %}
+                      <i class="fas fa-user-shield"></i>
+                    {% elif app.app_label == 'admin_parametros' %}
+                      <i class="fas fa-cogs"></i>
+                    {% elif app.app_label == 'admin_automacoes' %}
+                      <i class="fas fa-robot"></i>
+                    {% elif app.app_label == 'admin_logs' %}
+                      <i class="fas fa-history"></i>
+                    {% else %}
+                      <i class="fas fa-cubes"></i>
+                    {% endif %}
+                  </div>
+                  <div class="module-card-info">
+                    <h3 class="module-title">{{ app.name }}</h3>
+                    <span class="module-count-badge">{{ app.models|length }} funções</span>
+                  </div>
+                  <button type="button" class="module-accordion-toggle" aria-label="Expandir funções">
+                    <i class="fas fa-chevron-down"></i>
+                  </button>
+                </div>
+
+                <!-- Lista Suspensa de Funções (Accordion / Dropdown) -->
+                <div class="module-functions-body">
+                  <div class="module-functions-list">
+                    {% for model in app.models %}
+                      <div class="function-item" data-model-name="{{ model.name|lower }}">
+                        <div class="function-main">
+                          {% if model.admin_url %}
+                            <a href="{{ model.admin_url }}" class="function-link">
+                              <i class="fas fa-table-list function-icon"></i>
+                              <span class="function-name">{{ model.name }}</span>
+                            </a>
+                          {% else %}
+                            <span class="function-name text-muted">{{ model.name }}</span>
+                          {% endif %}
+                        </div>
+                        <div class="function-actions">
+                          {% if model.add_url %}
+                            <a href="{{ model.add_url }}" class="btn-add-function" title="Adicionar novo registro em {{ model.name }}">
+                              <i class="fas fa-plus"></i>
+                              <span class="btn-add-text">Adicionar</span>
+                            </a>
+                          {% endif %}
+                        </div>
+                      </div>
+                    {% endfor %}
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+
+        <!-- Feedback caso nenhum módulo corresponda à busca -->
+        <div class="no-results-box" id="noResultsBox" style="display: none;">
+          <i class="fas fa-search-minus fa-3x mb-3 text-muted"></i>
+          <h4>Nenhum módulo ou função encontrado</h4>
+          <p class="text-muted">Tente buscar por termos mais genéricos como "prontuário", "paciente", "relatório", "estoque" ou "prescrição".</p>
+          <button type="button" class="btn-clear-search" id="btnResetSearch">Limpar Pesquisa</button>
+        </div>
+
+        <!-- Bloco Independente de Ações Recentes (Abaixo, Espaçoso e em Grade) -->
+        <div class="recent-actions-block" id="recentActionsBlock">
+          <div class="recent-actions-block-header" id="recentActionsBlockToggle" title="Clique para expandir/recolher as atividades recentes">
+            <h3>
+              <i class="fas fa-clock-rotate-left"></i>
+              {% translate 'Recent actions' %} / Atividades Recentes do Sistema
+            </h3>
+            <button type="button" class="recent-actions-toggle-btn">
+              <span id="textRecentToggle">Recolher</span>
+              <i class="fas fa-chevron-up" id="iconRecentToggle"></i>
+            </button>
+          </div>
+
+          <div class="recent-actions-grid" id="recentActionsGrid">
+            {% get_admin_log 15 as admin_log for_user user %}
             {% if not admin_log %}
-            <p>{% translate 'None available' %}</p>
+              <p class="text-muted p-3 mb-0">{% translate 'None available' %}</p>
             {% else %}
-            <ul class="actionlist">
-            {% for entry in admin_log %}
-            <li class="{% if entry.is_addition %}addlink{% endif %}{% if entry.is_change %}changelink{% endif %}{% if entry.is_deletion %}deletelink{% endif %}">
-                {% if entry.is_deletion or not entry.get_admin_url %}
-                    {{ entry.object_repr }}
-                {% else %}
-                    <a href="{{ entry.get_admin_url }}">{{ entry.object_repr }}</a>
-                {% endif %}
-                <br>
-                {% if entry.content_type %}
-                    <span class="mini quiet">{% filter capfirst %}{{ entry.content_type.name }}{% endfilter %}</span>
-                {% else %}
-                    <span class="mini quiet">{% translate 'Unknown content' %}</span>
-                {% endif %}
-            </li>
-            {% endfor %}
-            </ul>
+              {% for entry in admin_log %}
+                <div class="recent-action-card">
+                  <div class="recent-action-badge">
+                    {% if entry.is_addition %}
+                      <i class="fas fa-plus-circle text-success" title="Adicionado"></i>
+                    {% elif entry.is_change %}
+                      <i class="fas fa-pen-to-square text-info" title="Alterado"></i>
+                    {% elif entry.is_deletion %}
+                      <i class="fas fa-trash-can text-danger" title="Excluído"></i>
+                    {% endif %}
+                  </div>
+                  <div class="recent-action-content">
+                    <div class="recent-action-title">
+                      {% if entry.is_deletion or not entry.get_admin_url %}
+                        <span class="text-white-50">{{ entry.object_repr }}</span>
+                      {% else %}
+                        <a href="{{ entry.get_admin_url }}" class="recent-action-link">{{ entry.object_repr }}</a>
+                      {% endif %}
+                    </div>
+                    <div class="recent-action-meta">
+                      <span class="recent-model-tag">
+                        {% if entry.content_type %}
+                          {{ entry.content_type.name|capfirst }}
+                        {% else %}
+                          {% translate 'Unknown content' %}
+                        {% endif %}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              {% endfor %}
             {% endif %}
+          </div>
+        </div>
+
+      </div>
     </div>
-</div>
-{% endblock %}
+    {% endblock %}
+
+{% block sidebar %}{% endblock %}

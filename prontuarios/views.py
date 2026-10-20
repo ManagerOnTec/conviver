@@ -3844,40 +3844,56 @@ class AdepListView(LoginRequiredMixin, CustomPermissionRequiredMixin, FilterObje
     paginate_by = 15
 
     def get_queryset(self):
-        queryset = super().get_queryset()
         atendimento_id = self.kwargs.get('atendimento_id')
-        # Aplicar filtros iniciais para evitar consultar todos os objetos do modelo
-        queryset = Adep.objects.filter(
-            atendimento_id=atendimento_id).order_by('data_hora')
+        queryset = (
+            Adep.objects.filter(atendimento_id=atendimento_id)
+            .select_related(
+                'prescricao',
+                'produto_prescricao',
+                'produto_prescricao__produto',
+                'us_registro',
+                'us_atualizacao'
+            )
+            .order_by('data_hora', 'id')
+        )
 
-        # Get a mutable copy of the request.GET QueryDict
         params = self.request.GET.copy()
 
-        # If the 'limpar' button was clicked, clear the saved filters in the session
-        if 'limpar' in params:
+        # 1. Se o botão 'limpar' foi clicado: limpa os filtros da sessão e do request
+        if 'limpar' in params or 'limpar' in self.request.GET:
+            self.request.session.pop('adep_filters', None)
             self.request.session.pop('addep_filters', None)
-            params.clear()
-        # If there are any filters in the GET request, update the saved filters in the session
-        elif any(field in params for field in AdepFilter.Meta.fields):
-            self.request.session['adep_filters'] = params
-        # If there are no filters in the GET request but there are saved filters in the session, update the GET request with the saved filters
-        elif 'adep_filters' in self.request.session:
-            params.update(self.request.session['adep_filters'])
+            self.request.session.modified = True
+            params = QueryDict('', mutable=True)
 
-        # Pass the updated GET request to the filter
+        # 2. Se o usuário submeteu o formulário de filtros (clicou em 'filtrar' ou enviou campos sem ser apenas paginação)
+        elif 'filtrar' in params or any(field in self.request.GET for field in AdepFilter.Meta.fields if field != 'data_hora_max'):
+            clean_filters = {}
+            for field in AdepFilter.Meta.fields:
+                if field != 'data_hora_max':
+                    val = params.get(field)
+                    if val is not None and val != '':
+                        clean_filters[field] = val
+            self.request.session['adep_filters'] = clean_filters
+            self.request.session.modified = True
+
+        # 3. Se não enviou formulário de filtro mas há filtros salvos na sessão (ex: durante paginação ou navegação direta):
+        elif 'adep_filters' in self.request.session:
+            saved_filters = self.request.session.get('adep_filters', {})
+            if isinstance(saved_filters, dict):
+                for k, v in saved_filters.items():
+                    if k not in params and v != '':
+                        params[k] = v
+
+        # Defaults operacionais
         params.setdefault('status', 'A')
         params.setdefault('fase_adep', 'P')
 
         # Filtro não negociável: apenas ADEPs retroativos.
-        # datahora_maxima == datahoraatual, usando data_hora do modelo Adep
-        # (não a data da prescrição). Sempre sobrepõe qualquer valor vindo
-        # da requisição/sessão para impedir ADEPs futuros.
-        # timezone.localtime() respeita o fuso do settings (UTC-3).
         params['data_hora_max'] = timezone.localtime(
             timezone.now()).strftime('%Y-%m-%dT%H:%M')
 
         self.filter = AdepFilter(params, queryset=queryset)
-
         return self.filter.qs
 
     def get_context_data(self, **kwargs):
@@ -3908,8 +3924,6 @@ class AdepListView(LoginRequiredMixin, CustomPermissionRequiredMixin, FilterObje
         context['cad_index'] = reverse_lazy('cadastros_index')
         context['list_index'] = reverse_lazy('prontuario_listar')
 
-        # Correção do trecho de código para verificar a liberação
-
         context['adep'] = None
         adeps = self.get_queryset()
         if adeps:
@@ -3917,7 +3931,19 @@ class AdepListView(LoginRequiredMixin, CustomPermissionRequiredMixin, FilterObje
 
         context['filter'] = self.filter
 
-        context['is_paginated'] = True
+        # Monta query_params com todos os filtros ativos para os links de paginação
+        active_filters = {}
+        saved = self.request.session.get('adep_filters', {})
+        if isinstance(saved, dict):
+            active_filters.update(saved)
+        for k, v in self.request.GET.items():
+            if k not in ('page', 'limpar') and v != '':
+                active_filters[k] = v
+        active_filters.setdefault('status', 'A')
+        active_filters.setdefault('fase_adep', 'P')
+
+        from urllib.parse import urlencode
+        context['query_params'] = urlencode(active_filters)
 
         return context
 

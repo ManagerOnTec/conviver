@@ -70,22 +70,22 @@
 
 
 <div id="table-container">
-    <table class="table">
-        <!-- Início do formulário de ações de Adep -->
-        <form method="post">
-            {% csrf_token %}
-            <div class="d-flex justify-content-between mb-3">
-                <!-- Botões para marcar como Administrado ou Não Administrado -->
-                <button type="submit" name="acao" value="administrar" class="btn btn-success">
-                    <i class="fas fa-check"></i> Marcar como Administrado
+    <!-- Início do formulário de ações de Adep em Lote -->
+    <form method="post" id="form-adep-batch">
+        {% csrf_token %}
+        <div class="adep-batch-toolbar d-flex align-items-center mb-3">
+            <span class="adep-batch-label me-2"><i class="fas fa-tasks text-primary"></i> Ações:</span>
+            <div class="adep-action-buttons-group">
+                <button type="submit" name="acao" value="administrar" class="btn btn-sm adep-btn-adm" title="Confirmar administração dos itens selecionados">
+                    <i class="fas fa-check-circle me-1"></i> Administrar
                 </button>
-                <button type="submit" name="acao" value="nao_administrar" class="btn btn-danger">
-                    <i class="fas fa-times"></i> Marcar como Não Administrado
+                <button type="submit" name="acao" value="nao_administrar" class="btn btn-sm adep-btn-naoadm" title="Registrar não administração dos itens selecionados">
+                    <i class="fas fa-ban me-1"></i> Recusar
                 </button>
             </div>
+        </div>
 
-
-
+        <table class="table">
             <thead class="sticky-lista listing-table-head text-white">
                 <tr>
                     <th>
@@ -99,7 +99,7 @@
                     <th>Data/Hora Prescrição</th>
 
 
-                    <th>SN</th>
+                    <th>Se Necessário</th>
                     <th>DoseÚnica</th>
                     <th>Us.Prescrição</th>
                     <th>Observação</th>
@@ -118,22 +118,20 @@
                     <td>{{ adep.atendimento.pessoa }}</td>
                     <td>{{ adep.prescricao }}</td>
                     <td>{{ adep.id }}</td>
-                    <td>{{ adep.produto_prescricao }}</td>
+                    <td><strong>{{ adep.produto_prescricao.produto }}</strong></td>
                     <td>{{ adep.data_hora|date:"d/m/Y H:i" }}</td>
 
                     {% if adep.se_necessario %}
-                    <td>SN</td>
+                     <td><span class="badge bg-info text-dark fw-semibold px-2 py-1 shadow-sm"><i class="fas fa-hand-holding-medical me-1"></i> Sim</span></td>
                     {% else %}
-                    <td></td>
+                    <td>-</td>
                     {% endif %}
 
-
-
-                    {% if adep.dose_unica %}
-                    <td>Sim</td>
-                    {% else %}
-                    <td></td>
-                    {% endif %}
+                {% if adep.dose_unica %}
+                <td><span class="badge bg-warning text-dark fw-semibold px-2 py-1 shadow-sm"><i class="fas fa-capsules me-1"></i> Única</span></td>
+                {% else %}
+                <td><span class="text-muted small">-</span></td>
+                {% endif %}
 
                     <td>{{ adep.prescricao.us_registro }}</td>
 
@@ -148,14 +146,16 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="6">Nenhum registro encontrado.</td>
+                    <td colspan="10" class="text-center py-4 text-muted">
+                        <i class="fas fa-inbox fa-2x mb-2 d-block text-secondary"></i>
+                        Nenhum registro encontrado.
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
-        </form>
-        <!-- Fim do formulário de ações de Adep -->
-
-    </table>
+        </table>
+    </form>
+    <!-- Fim do formulário de ações de Adep -->
 </div>
 
 {% endblock %}
@@ -210,26 +210,109 @@
 
 
 {% block scriptcustom %}
+<style>
+    /* Estilização moderna dos botões de ação e status de ADEP em Lote */
+    .adep-batch-toolbar {
+        background: rgba(15, 25, 39, 0.7);
+        border: 1px solid rgba(105, 152, 209, 0.22);
+        border-radius: 8px;
+        padding: 10px 16px;
+    }
+
+    .adep-batch-label {
+        font-size: 0.86rem;
+        font-weight: 700;
+        color: #cbd5e1;
+    }
+
+    .adep-action-buttons-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .adep-btn-adm {
+        background: #198754 !important;
+        border: 1.5px solid #198754 !important;
+        color: #ffffff !important;
+        font-weight: 600 !important;
+        padding: 6px 14px !important;
+        border-radius: 6px !important;
+        font-size: 0.82rem !important;
+        box-shadow: 0 2px 4px rgba(25, 135, 84, 0.25) !important;
+        transition: all 0.2s ease !important;
+    }
+
+    .adep-btn-adm:hover {
+        background: #157347 !important;
+        border-color: #146c43 !important;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(25, 135, 84, 0.35) !important;
+        color: #ffffff !important;
+    }
+
+    .adep-btn-naoadm {
+        color: #dc3545 !important;
+        border: 1.5px solid rgba(220, 53, 69, 0.5) !important;
+        background: rgba(220, 53, 69, 0.06) !important;
+        font-weight: 600 !important;
+        padding: 6px 14px !important;
+        border-radius: 6px !important;
+        font-size: 0.82rem !important;
+        transition: all 0.2s ease !important;
+    }
+
+    .adep-btn-naoadm:hover {
+        background: #dc3545 !important;
+        border-color: #dc3545 !important;
+        color: #ffffff !important;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3) !important;
+    }
+</style>
+
 <script>
-    // JavaScript para manipular a seleção dos checkboxes
     document.addEventListener('DOMContentLoaded', function () {
+        // Manipulação da seleção de todos os checkboxes
         var selectAllCheckbox = document.getElementById('select-all');
         var adepCheckboxes = document.querySelectorAll('.adep-checkbox');
 
-        selectAllCheckbox.addEventListener('change', function () {
-            for (var checkbox of adepCheckboxes) {
-                checkbox.checked = this.checked;
-            }
-        });
+        if (selectAllCheckbox) {
+            selectAllCheckbox.addEventListener('change', function () {
+                for (var checkbox of adepCheckboxes) {
+                    checkbox.checked = this.checked;
+                }
+            });
+        }
+
+        // Validação e confirmação de submissão em lote
+        var batchForm = document.getElementById('form-adep-batch');
+        if (batchForm) {
+            batchForm.addEventListener('submit', function (e) {
+                var checked = document.querySelectorAll('.adep-checkbox:checked');
+                if (checked.length === 0) {
+                    alert('Por favor, selecione pelo menos um item da lista antes de prosseguir.');
+                    e.preventDefault();
+                    return;
+                }
+
+                var clickedBtn = document.activeElement;
+                var acao = (clickedBtn && clickedBtn.value) ? clickedBtn.value : '';
+                var textoAcao = (acao === 'administrar') ? 'a ADMINISTRAÇÃO' : 'a NÃO ADMINISTRAÇÃO';
+
+                if (!confirm('Deseja confirmar ' + textoAcao + ' dos ' + checked.length + ' itens selecionados?')) {
+                    e.preventDefault();
+                }
+            });
+        }
     });
 </script>
 
 <script>
     // Ativar todos os tooltips
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl)
-    })
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
 </script>
-
 {% endblock %}

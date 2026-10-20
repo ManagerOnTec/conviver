@@ -24,11 +24,39 @@
       </svg>
       Filtros Analíticos Rápidos
     </span>
-    {% if has_active_top_filter %}
+    {% if has_active_top_filter or search_query or current_paciente_id %}
       <a href="{{ request.path }}" class="top-filter-quick-clear">
-        <span>✕ Limpar Filtros do Topo</span>
+        <span>✕ Limpar Todos os Filtros</span>
       </a>
     {% endif %}
+  </div>
+
+  <!-- Barra de Digitação e Busca Rápida por Paciente -->
+  <div class="top-patient-search-row">
+    <form method="get" action="{{ request.path }}" class="top-patient-search-form" id="topPatientSearchForm">
+      {% for k, v in request.GET.items %}
+        {% if k != 'q' and k != 'p' %}
+          <input type="hidden" name="{{ k }}" value="{{ v }}">
+        {% endif %}
+      {% endfor %}
+      <div class="top-patient-search-group">
+        <span class="top-patient-search-icon">
+          <i class="fas fa-search"></i> 👤 Paciente:
+        </span>
+        <input type="text"
+               name="q"
+               value="{{ search_query|default:'' }}"
+               class="top-patient-search-input"
+               placeholder="Digitar Nome do Paciente, CPF, RG ou Nº do Atendimento..."
+               autocomplete="off">
+        {% if search_query %}
+          <button type="button" class="top-patient-clear-btn" onclick="document.querySelector('.top-patient-search-input').value=''; document.getElementById('topPatientSearchForm').submit();" title="Limpar busca de paciente">✕</button>
+        {% endif %}
+        <button type="submit" class="top-patient-search-btn">
+          <i class="fas fa-search"></i> Buscar Paciente
+        </button>
+      </div>
+    </form>
   </div>
 
   <div class="top-filter-row">

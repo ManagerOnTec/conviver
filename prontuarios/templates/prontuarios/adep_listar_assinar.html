@@ -73,13 +73,28 @@
 
 
 <div id="table-container">
-    <table class="table">
+    <form method="post" id="form-adep-assinar">
+        {% csrf_token %}
 
-        <form method="post">
-            {% csrf_token %}
+        <!-- Sessão de Botões Superiores Estilo adep_listar_administrar -->
+        <div class="adep-batch-toolbar d-flex align-items-center mb-3">
+            <span class="adep-batch-label me-2"><i class="fas fa-file-signature text-primary"></i> Ações:</span>
+            <div class="adep-action-buttons-group">
+                {% if adep %}
+                <button id="btn-adep-assinar" type="submit" title="Assinar e gerar PDF dos ADEPs selecionados"
+                    class="btn btn-sm adep-btn-adm">
+                    <i class="fas fa-file-signature me-1"></i> Assinar PDFs
+                </button>
+                {% else %}
+                <button id="btn-sem" title="Nada para assinar"
+                    class="btn btn-sm adep-btn-adm">
+                    <i class="fas fa-file me-1"></i> Nada para Assinar
+                </button>
+                {% endif %}
+            </div>
+        </div>
 
-
-
+        <table class="table">
             <thead class="sticky-lista listing-table-head text-white">
                 <tr>
                     <th>
@@ -87,30 +102,12 @@
                         <input type="checkbox" id="select-all">
                         <label for="select-all">Selecionar Todos</label>
                     </th>
-
-                    {% if adep %}
-                    <th>
-                        <button id="btn-adep-assinar" type="submit" title="Salvar"
-                            class="btn btn-success btn-outline-light border border-black mx-2 ml-2">
-                            <i class="fas fa-save" style="transition: color 0.3s;">Gerar PDF Adep</i>
-                        </button>
-                    </th>
-                    {% else %}
-                    <th>
-                        <a href="{% url 'passagem_plantao_listar' %}" id="btn-passagem-plantao" title="Passagem Plantão"
-                            class="btn btn-primary btn-outline-light border border-black mx-2 ml-2">
-                            <i class="fas fa-exchange-alt" style="transition: color 0.3s;">Acessar Passagem Plantão</i>
-                        </a>
-                    </th>
-                    {% endif %}
-
-
+                    <th>Nome do Paciente</th>
                     <th>Prescrição</th>
                     <th>Administração</th>
                     <th>Dt.Prescrição</th>
                     <th>Administrado em</th>
                     <th>Administrado por</th>
-
                 </tr>
             </thead>
 
@@ -138,12 +135,14 @@
 
                 </tr>
                 {% else %}
-                <tr><span>Nenhum registro</span></tr>
+                <tr><td colspan="7" class="text-center py-4 text-muted">Nenhum registro encontrado.</td></tr>
                 {% endif %}
+                {% empty %}
+                <tr><td colspan="7" class="text-center py-4 text-muted">Nenhum registro encontrado.</td></tr>
                 {% endfor %}
 
             </tbody>
-    </table>
+        </table>
     </form>
 </div>
 
@@ -200,6 +199,49 @@
 {% endblock %}
 
 {% block scriptcustom %}
+<style>
+    /* Estilização moderna dos botões de ação superiores de ADEP */
+    .adep-batch-toolbar {
+        background: rgba(15, 25, 39, 0.7);
+        border: 1px solid rgba(105, 152, 209, 0.22);
+        border-radius: 8px;
+        padding: 10px 16px;
+    }
+
+    .adep-batch-label {
+        font-size: 0.86rem;
+        font-weight: 700;
+        color: #cbd5e1;
+    }
+
+    .adep-action-buttons-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .adep-btn-adm {
+        background: #198754 !important;
+        border: 1.5px solid #198754 !important;
+        color: #ffffff !important;
+        font-weight: 600 !important;
+        padding: 6px 16px !important;
+        border-radius: 6px !important;
+        font-size: 0.84rem !important;
+        box-shadow: 0 2px 4px rgba(25, 135, 84, 0.25) !important;
+        transition: all 0.2s ease !important;
+        cursor: pointer;
+    }
+
+    .adep-btn-adm:hover {
+        background: #157347 !important;
+        border-color: #146c43 !important;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(25, 135, 84, 0.35) !important;
+        color: #ffffff !important;
+    }
+</style>
+
 <script>
     // JavaScript para manipular a seleção dos checkboxes
     document.addEventListener('DOMContentLoaded', function () {

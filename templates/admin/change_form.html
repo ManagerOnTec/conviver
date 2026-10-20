@@ -1,0 +1,140 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static admin_modify %}
+
+{% block extrahead %}
+  {{ block.super }}
+  <script src="{% url 'admin:jsi18n' %}"></script>
+  {{ media }}
+{% endblock %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static "admin/css/forms.css" %}">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.0/css/all.min.css">
+  <link rel="stylesheet" href="{% static "css/admin_forms_custom.css" %}">
+{% endblock %}
+
+{% block coltype %}colM{% endblock %}
+{% block bodyclass %}{{ block.super }} app-{{ opts.app_label }} model-{{ opts.model_name }} change-form admin-custom-change-form{% endblock %}
+
+{% if not is_popup %}
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}" class="breadcrumb-home-btn" title="Home"><i class="fas fa-home"></i> <span>Home</span></a>
+  <span class="breadcrumb-separator">&rsaquo;</span>
+  <a href="{% url 'admin:app_list' app_label=opts.app_label %}" class="breadcrumb-item-btn breadcrumb-app-btn" title="{{ opts.app_config.verbose_name }}"><i class="fas fa-layer-group"></i> <span>{{ opts.app_config.verbose_name }}</span></a>
+  <span class="breadcrumb-separator">&rsaquo;</span>
+  {% if has_view_permission %}
+    <a href="{% url opts|admin_urlname:'changelist' %}" class="breadcrumb-item-btn breadcrumb-model-btn" title="{{ opts.verbose_name_plural|capfirst }}"><i class="fas fa-table-list"></i> <span>{{ opts.verbose_name_plural|capfirst }}</span></a>
+  {% else %}
+    <span class="breadcrumb-item-btn breadcrumb-model-btn"><i class="fas fa-table-list"></i> <span>{{ opts.verbose_name_plural|capfirst }}</span></span>
+  {% endif %}
+</div>
+{% endblock %}
+{% endif %}
+
+{% block content %}
+<div id="content-main" class="admin-change-form-wrapper">
+
+  <!-- DIV VISUAL ENVOLVENTE (CARD DO FORMULÁRIO) -->
+  <div class="admin-form-shell">
+
+    <!-- Cabeçalho Visual do Formulário -->
+    <div class="admin-form-shell-header">
+      <div class="admin-form-title-group">
+        <div class="admin-form-icon">
+          {% if add %}
+            <i class="fas fa-circle-plus"></i>
+          {% else %}
+            <i class="fas fa-pen-to-square"></i>
+          {% endif %}
+        </div>
+        <div>
+          <h2 class="admin-form-main-title">
+            {% if add %}
+              Cadastrar Novo: {{ opts.verbose_name|capfirst }}
+            {% else %}
+              Editar: {{ original|default:opts.verbose_name|capfirst }}
+            {% endif %}
+          </h2>
+          <span class="admin-form-subtitle">
+            {% if add %}
+              Preencha os campos obrigatórios abaixo para salvar este registro no sistema.
+            {% else %}
+              Atualize as informações desejadas e clique em Salvar para atualizar o cadastro.
+            {% endif %}
+          </span>
+        </div>
+      </div>
+
+      {% block object-tools %}
+        {% if change and not is_popup %}
+          <ul class="object-tools admin-form-tools">
+            {% block object-tools-items %}
+              {% change_form_object_tools %}
+            {% endblock %}
+          </ul>
+        {% endif %}
+      {% endblock %}
+    </div>
+
+    <!-- Formulário Real do Django com Fieldsets e Inlines -->
+    <form {% if has_file_field %}enctype="multipart/form-data" {% endif %}{% if form_url %}action="{{ form_url }}" {% endif %}method="post" id="{{ opts.model_name }}_form" novalidate class="admin-form-element">
+      {% csrf_token %}
+      {% block form_top %}{% endblock %}
+
+      <div class="admin-form-body">
+        {% if is_popup %}<input type="hidden" name="{{ is_popup_var }}" value="1">{% endif %}
+        {% if to_field %}<input type="hidden" name="{{ to_field_var }}" value="{{ to_field }}">{% endif %}
+        {% if save_on_top %}{% block submit_buttons_top %}{% submit_row %}{% endblock %}{% endif %}
+
+        {% if errors %}
+          <div class="admin-form-errornote">
+            <div class="errornote-header">
+              <i class="fas fa-triangle-exclamation"></i>
+              <strong>{% blocktranslate count counter=errors|length %}Please correct the error below.{% plural %}Please correct the errors below.{% endblocktranslate %}</strong>
+            </div>
+            {{ adminform.form.non_field_errors }}
+          </div>
+        {% endif %}
+
+        {% block field_sets %}
+          {% for fieldset in adminform %}
+            {% include "admin/includes/fieldset.html" %}
+          {% endfor %}
+        {% endblock %}
+
+        {% block after_field_sets %}{% endblock %}
+
+        {% block inline_field_sets %}
+          {% for inline_admin_formset in inline_admin_formsets %}
+            {% include inline_admin_formset.opts.template %}
+          {% endfor %}
+        {% endblock %}
+
+        {% block after_related_objects %}{% endblock %}
+
+        {% block submit_buttons_bottom %}
+          <div class="admin-submit-row-wrapper">
+            {% submit_row %}
+          </div>
+        {% endblock %}
+
+        {% block admin_change_form_document_ready %}
+          <script id="django-admin-form-add-constants"
+                  src="{% static 'admin/js/change_form.js' %}"
+                  {% if adminform and add %}
+                    data-model-name="{{ opts.model_name }}"
+                  {% endif %}
+                  async>
+          </script>
+        {% endblock %}
+
+        {# JavaScript for prepopulated fields #}
+        {% prepopulated_fields_js %}
+      </div>
+    </form>
+  </div>
+
+</div>
+{% endblock %}

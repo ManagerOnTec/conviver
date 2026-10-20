@@ -4,4 +4,4 @@ from django.apps import AppConfig
 class AtendimentoConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'atendimentos'
-    verbose_name = '3. ATENDIMENTOS'
+    verbose_name = 'Z. ATENDIMENTOS'

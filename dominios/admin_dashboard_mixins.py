@@ -133,6 +133,8 @@ class AdminDashboardAndTopFilterMixin:
             'date_field_lte': date_lte_key,
             'current_date_gte': current_date_gte.split(' ')[0] if current_date_gte else '',
             'current_date_lte': current_date_lte.split(' ')[0] if current_date_lte else '',
+            'search_query': request.GET.get('q', ''),
+            'current_paciente_id': request.GET.get('paciente_id', ''),
         })
 
         return super().changelist_view(request, extra_context=extra_context)

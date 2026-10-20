@@ -18,7 +18,6 @@ from prontuarios.models import Evolucao
 from .export_services import (
     gerar_zip_dossie_pacientes,
     gerar_zip_relatorios_selecionados,
-    unificar_pdfs_selecionados,
     exportar_relatorios_xlsx,
     TIPO_LABELS,
 )
@@ -132,6 +131,47 @@ class PDFAtivoFilter(admin.SimpleListFilter):
             return queryset.filter(status='A')
         # Padrão: exibe relatórios ativos
         return queryset.filter(status='A')
+
+
+class PacienteRelatorioFilter(admin.SimpleListFilter):
+    title = 'Paciente (Seletor Rápido)'
+    parameter_name = 'paciente_id'
+
+    def lookups(self, request, model_admin):
+        from admin_cadastros.models import Pessoa
+        pacientes = (
+            Pessoa.objects.filter(
+                Q(relatorio__isnull=False) | Q(atendimento__relatorio__isnull=False)
+            )
+            .distinct()
+            .order_by('nome')[:60]
+        )
+        return [(str(p.id), f"{p.nome} (CPF: {p.cpf})" if p.cpf else p.nome) for p in pacientes]
+
+    def queryset(self, request, queryset):
+        val = self.value()
+        if not val:
+            return queryset
+        return queryset.filter(Q(pessoa_id=val) | Q(atendimento__pessoa_id=val))
+
+
+class SituacaoAtendimentoFilter(admin.SimpleListFilter):
+    title = 'Situação do Atendimento'
+    parameter_name = 'situacao_atend'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('internado', 'Internados Atualmente (Sem Alta)'),
+            ('alta', 'Com Alta Concedida'),
+        )
+
+    def queryset(self, request, queryset):
+        val = self.value()
+        if val == 'internado':
+            return queryset.filter(atendimento__dt_alta__isnull=True)
+        elif val == 'alta':
+            return queryset.filter(atendimento__dt_alta__isnull=False)
+        return queryset
 
 
 class TipoEvolucaoRelatorioFilter(admin.SimpleListFilter):
@@ -316,10 +356,23 @@ class RelatorioAdmin(AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
                 'active': current_modulo == 'documentos_legais',
                 'icon': '⚖️',
             },
+            {
+                'label': 'Internados',
+                'url': build_extra_url('situacao_atend', 'internado'),
+                'active': params.get('situacao_atend') == 'internado',
+                'icon': '🛌',
+            },
+            {
+                'label': 'Com Alta',
+                'url': build_extra_url('situacao_atend', 'alta'),
+                'active': params.get('situacao_atend') == 'alta',
+                'icon': '🏁',
+            },
         ]
 
     def get_top_dropdown_subfilters(self, request):
         params = request.GET.copy()
+        current_paciente = params.get('paciente_id', '')
         current_ev = params.get('sub_tipo_evolucao', '')
         current_doc = params.get('sub_tipo_doc_legal', '')
 
@@ -332,6 +385,24 @@ class RelatorioAdmin(AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
                 p[param_name] = str(val)
             qs_str = p.urlencode()
             return f"{request.path}?{qs_str}" if qs_str else request.path
+
+        # Opções de pacientes com relatórios
+        from admin_cadastros.models import Pessoa
+        pacientes = (
+            Pessoa.objects.filter(
+                Q(relatorio__isnull=False) | Q(atendimento__relatorio__isnull=False)
+            )
+            .distinct()
+            .order_by('nome')[:60]
+        )
+        pac_options = [{'label': 'Todos os Pacientes', 'url': build_sub_url('paciente_id', ''), 'selected': not current_paciente}]
+        for p in pacientes:
+            cpf_txt = f" - CPF: {p.cpf}" if p.cpf else ""
+            pac_options.append({
+                'label': f"👤 {p.nome}{cpf_txt}",
+                'url': build_sub_url('paciente_id', p.id),
+                'selected': current_paciente == str(p.id),
+            })
 
         # Opções de tipo de evolução
         tipos_ev = TipoEvolucao.objects.filter(status='A').values_list('id', 'tipo_evolucao').order_by('tipo_evolucao')
@@ -355,6 +426,10 @@ class RelatorioAdmin(AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
 
         return [
             {
+                'label': 'Filtrar por Paciente',
+                'options': pac_options,
+            },
+            {
                 'label': 'Subfiltro Evolução',
                 'options': ev_options,
             },
@@ -372,6 +447,8 @@ class RelatorioAdmin(AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
     list_filter = (
         PDFAtivoFilter,
         ModuloProntuarioFilter,
+        PacienteRelatorioFilter,
+        SituacaoAtendimentoFilter,
         TipoEvolucaoRelatorioFilter,
         TipoDocumentoLegalRelatorioFilter,
         'tipo',
@@ -392,11 +469,18 @@ class RelatorioAdmin(AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
     actions = [
         'action_baixar_dossie_paciente_zip',
         'action_baixar_selecionados_zip',
-        'action_unificar_pdfs',
         'action_exportar_xlsx',
         'action_ativar',
         'action_inativar',
     ]
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        # Opções de ativar e inativar relatórios somente para usuários administradores (superuser)
+        if not request.user.is_superuser:
+            actions.pop('action_ativar', None)
+            actions.pop('action_inativar', None)
+        return actions
 
     def tipo_badge(self, obj):
         tipo_str = (obj.tipo or '').lower()
@@ -492,21 +576,6 @@ class RelatorioAdmin(AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
         response['Content-Disposition'] = f'attachment; filename="{nome_zip}"'
         return response
 
-    @admin.action(description="📑 Unificar PDFs Selecionados em Arquivo Único (Merge PDF)")
-    def action_unificar_pdfs(self, request, queryset):
-        pdf_bytes, nome_pdf, total = unificar_pdfs_selecionados(queryset, user=request.user)
-        if not pdf_bytes or total == 0:
-            self.message_user(
-                request,
-                "Não foi possível unificar os PDFs selecionados (arquivos ausentes ou inválidos).",
-                level=messages.WARNING
-            )
-            return None
-
-        response = HttpResponse(pdf_bytes, content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="{nome_pdf}"'
-        return response
-
     @admin.action(description="📊 Exportar Selecionados para Excel (XLSX Formatado)")
     def action_exportar_xlsx(self, request, queryset):
         xlsx_bytes, nome_xlsx = exportar_relatorios_xlsx(queryset, user=request.user)
@@ -517,13 +586,19 @@ class RelatorioAdmin(AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
         response['Content-Disposition'] = f'attachment; filename="{nome_xlsx}"'
         return response
 
-    @admin.action(description="⛔ Inativar PDFs Selecionados")
+    @admin.action(description="⛔ Inativar PDFs Selecionados (Apenas Admin)")
     def action_inativar(self, request, queryset):
+        if not request.user.is_superuser:
+            self.message_user(request, "Apenas administradores do sistema podem inativar relatórios.", level=messages.ERROR)
+            return None
         atualizados = queryset.update(status='I')
         self.message_user(request, f"{atualizados} relatório(s) marcado(s) como inativo(s).", level=messages.SUCCESS)
 
-    @admin.action(description="✅ Ativar PDFs Selecionados")
+    @admin.action(description="✅ Ativar PDFs Selecionados (Apenas Admin)")
     def action_ativar(self, request, queryset):
+        if not request.user.is_superuser:
+            self.message_user(request, "Apenas administradores do sistema podem ativar relatórios.", level=messages.ERROR)
+            return None
         atualizados = queryset.update(status='A')
         self.message_user(request, f"{atualizados} relatório(s) marcado(s) como ativo(s).", level=messages.SUCCESS)
 
