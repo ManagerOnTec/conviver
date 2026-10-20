@@ -58,7 +58,7 @@
         <i class="fa fa-weight me-2"></i>Perdas e Ganhos
     </a>
 
-    <form class="mt-2 text-white text-left" method="GET">
+    <form class="mt-2 text-white text-left" method="GET" action="">
 
 
 
@@ -81,16 +81,18 @@
                         </button>
                     </div>
                 </div>
-                <div class="justify-content-center mt-2">
-                    <button class="col-md-12 btn btn-outline-danger justify-content-center" name="limpar" value="1">
-                        <i class="fas fa-times-circle" style="transition: color 0.3s;"></i>
-                        Limpar
-                    </button>
+                <div class="col-md-12">
+                    <div class="justify-content-center mt-2">
+                        <button class="col-md-12 btn btn-outline-danger justify-content-center" name="limpar" value="1">
+                            <i class="fas fa-times-circle" style="transition: color 0.3s;"></i>
+                            Limpar
+                        </button>
+                    </div>
                 </div>
 
 
 
-                {% if plano_cuidados.get_relatorios.exists and not disable_button %}
+                {% if tem_relatorios and not disable_button %}
                 <!-- Exibe o botão de download -->
                 <div class="col-md-12">
                     <div class="justify-content-center mt-2">

@@ -311,9 +311,10 @@ def download_adep_pdfs(request, prescricao_id):
     # Reproduz a montagem de filtros de ItensPrescricaoListView.
     params = request.GET.copy()
 
-    if 'limpar' in params:
-        params.clear()
-    else:
+    # 'limpar' não é campo de filtro; se ele vier na URL sozinho, o download
+    # deve usar os filtros da sessão normalmente, em vez de zerar tudo.
+    params.pop('limpar', None)
+    if not params:
         session_filters = request.session.get('itens_prescricao_filters')
         if session_filters:
             params.update(session_filters)
@@ -415,9 +416,14 @@ class ProntuarioListView(LoginRequiredMixin, CustomPermissionRequiredMixin, Filt
         queryset = super().get_queryset()
         params = self.request.GET.copy()
 
-        if 'limpar' in params:
-            self.request.session.pop('atendimento_filters', None)
+        limpar_clicado = 'limpar' in params
+        params.pop('limpar', None)
+        if limpar_clicado:
+            # Limpar volta ao filtro padrao: descarta tambem os campos que
+            # vieram junto (a tela reenvia os valores atuais do formulario),
+            # deixando apenas os defaults aplicados logo abaixo (ex.: status='A').
             params.clear()
+            self.request.session.pop('atendimento_filters', None)
         elif any(field in params for field in AtendimentoFilter.Meta.fields):
             self.request.session['atendimento_filters'] = params
         elif 'atendimento_filters' in self.request.session:
@@ -588,9 +594,14 @@ class EvolucaoListView(LoginRequiredMixin, CustomPermissionRequiredMixin, Filter
         params = self.request.GET.copy()
 
         # If the 'limpar' button was clicked, clear the saved filters in the session
-        if 'limpar' in params:
-            self.request.session.pop('evolucao_filters', None)
+        limpar_clicado = 'limpar' in params
+        params.pop('limpar', None)
+        if limpar_clicado:
+            # Limpar volta ao filtro padrao: descarta tambem os campos que
+            # vieram junto (a tela reenvia os valores atuais do formulario),
+            # deixando apenas os defaults aplicados logo abaixo (ex.: status='A').
             params.clear()
+            self.request.session.pop('evolucao_filters', None)
         # If there are any filters in the GET request, update the saved filters in the session
         elif any(field in params for field in EvolucaoFilter.Meta.fields):
             self.request.session['evolucao_filters'] = params
@@ -637,13 +648,26 @@ class EvolucaoListView(LoginRequiredMixin, CustomPermissionRequiredMixin, Filter
         if evolucoes:
             context['evolucao'] = evolucoes[0]
 
+        # Flag booleana: existe relatório gerado para os itens listados?
+        # O template não pode usar obj.get_relatorios.exists (é método).
+        itens = context.get(self.context_object_name) or self.object_list
+        try:
+            ids = list(itens.values_list('id', flat=True))
+        except Exception:
+            ids = []
+        context['tem_relatorios'] = Relatorio.objects.filter(
+            content_type=ContentType.objects.get_for_model(Evolucao),
+            object_id__in=ids,
+            status='A',
+        ).exists()
         context['filter'] = self.filter
 
         context['is_paginated'] = True
 
-        current_filters = self.request.GET or self.request.session.get(
-            'evolucao_filters', {})
-        disable_button = current_filters.get('status') == 'I'
+        # Usa os filtros EFETIVAMENTE aplicados (self.filter.data), e nao o
+        # request.GET bruto: apos 'Limpar' o GET ainda traz os campos antigos,
+        # o que mantinha o botao de download oculto ate uma segunda limpeza.
+        disable_button = self.filter.data.get('status') == 'I'
 
         # Adiciona a flag de controle no contexto
         context['disable_button'] = disable_button
@@ -1264,9 +1288,14 @@ class SinaisVitaisListView(LoginRequiredMixin, CustomPermissionRequiredMixin, Fi
         params = self.request.GET.copy()
 
         # If the 'limpar' button was clicked, clear the saved filters in the session
-        if 'limpar' in params:
-            self.request.session.pop('sinais_vitais_filters', None)
+        limpar_clicado = 'limpar' in params
+        params.pop('limpar', None)
+        if limpar_clicado:
+            # Limpar volta ao filtro padrao: descarta tambem os campos que
+            # vieram junto (a tela reenvia os valores atuais do formulario),
+            # deixando apenas os defaults aplicados logo abaixo (ex.: status='A').
             params.clear()
+            self.request.session.pop('sinais_vitais_filters', None)
         # If there are any filters in the GET request, update the saved filters in the session
         elif any(field in params for field in SinaisVitaisFilter.Meta.fields):
             self.request.session['sinais_vitais_filters'] = params
@@ -1312,15 +1341,28 @@ class SinaisVitaisListView(LoginRequiredMixin, CustomPermissionRequiredMixin, Fi
         else:
             context['sinais_vitais'] = None
 
+        # Flag booleana: existe relatório gerado para os itens listados?
+        # O template não pode usar obj.get_relatorios.exists (é método).
+        itens = context.get(self.context_object_name) or self.object_list
+        try:
+            ids = list(itens.values_list('id', flat=True))
+        except Exception:
+            ids = []
+        context['tem_relatorios'] = Relatorio.objects.filter(
+            content_type=ContentType.objects.get_for_model(SinaisVitais),
+            object_id__in=ids,
+            status='A',
+        ).exists()
         context['filter'] = self.filter
 
         us = self.request.user
 
         context['is_paginated'] = True
 
-        current_filters = self.request.GET or self.request.session.get(
-            'sinais_vitais_filters', {})
-        disable_button = current_filters.get('status') == 'I'
+        # Usa os filtros EFETIVAMENTE aplicados (self.filter.data), e nao o
+        # request.GET bruto: apos 'Limpar' o GET ainda traz os campos antigos,
+        # o que mantinha o botao de download oculto ate uma segunda limpeza.
+        disable_button = self.filter.data.get('status') == 'I'
 
         # Adiciona a flag de controle no contexto
         context['disable_button'] = disable_button
@@ -1666,9 +1708,14 @@ class PerdasGanhosListView(LoginRequiredMixin, CustomPermissionRequiredMixin, Fi
         params = self.request.GET.copy()
 
         # If the 'limpar' button was clicked, clear the saved filters in the session
-        if 'limpar' in params:
-            self.request.session.pop('perdas_ganhos_filters', None)
+        limpar_clicado = 'limpar' in params
+        params.pop('limpar', None)
+        if limpar_clicado:
+            # Limpar volta ao filtro padrao: descarta tambem os campos que
+            # vieram junto (a tela reenvia os valores atuais do formulario),
+            # deixando apenas os defaults aplicados logo abaixo (ex.: status='A').
             params.clear()
+            self.request.session.pop('perdas_ganhos_filters', None)
         # If there are any filters in the GET request, update the saved filters in the session
         elif any(field in params for field in PerdasGanhosFilter.Meta.fields):
             self.request.session['perdas_ganhos_filters'] = params
@@ -1714,13 +1761,26 @@ class PerdasGanhosListView(LoginRequiredMixin, CustomPermissionRequiredMixin, Fi
         else:
             context['perdas_ganhos'] = None
 
+        # Flag booleana: existe relatório gerado para os itens listados?
+        # O template não pode usar obj.get_relatorios.exists (é método).
+        itens = context.get(self.context_object_name) or self.object_list
+        try:
+            ids = list(itens.values_list('id', flat=True))
+        except Exception:
+            ids = []
+        context['tem_relatorios'] = Relatorio.objects.filter(
+            content_type=ContentType.objects.get_for_model(PerdasGanhos),
+            object_id__in=ids,
+            status='A',
+        ).exists()
         context['filter'] = self.filter
 
         context['is_paginated'] = True
 
-        current_filters = self.request.GET or self.request.session.get(
-            'perdas_ganhos_filters', {})
-        disable_button = current_filters.get('status') == 'I'
+        # Usa os filtros EFETIVAMENTE aplicados (self.filter.data), e nao o
+        # request.GET bruto: apos 'Limpar' o GET ainda traz os campos antigos,
+        # o que mantinha o botao de download oculto ate uma segunda limpeza.
+        disable_button = self.filter.data.get('status') == 'I'
 
         # Adiciona a flag de controle no contexto
         context['disable_button'] = disable_button
@@ -2079,12 +2139,18 @@ class PlanoCuidadosListView(LoginRequiredMixin, CustomPermissionRequiredMixin, F
         params = self.request.GET.copy()
 
         # If the 'limpar' button was clicked, clear the saved filters in the session
-        if 'limpar' in params:
-            self.request.session.pop('plano_cuidados_filters', None)
+        limpar_clicado = 'limpar' in params
+        params.pop('limpar', None)
+        if limpar_clicado:
+            # Limpar volta ao filtro padrao: descarta tambem os campos que
+            # vieram junto (a tela reenvia os valores atuais do formulario),
+            # deixando apenas os defaults aplicados logo abaixo (ex.: status='A').
             params.clear()
+            self.request.session.pop('plano_cuidados_filters', None)
         # If there are any filters in the GET request, update the saved filters in the session
         elif any(field in params for field in PlanoCuidadosFilter.Meta.fields):
             self.request.session['plano_cuidados_filters'] = params
+            self.request.session.modified = True
         # If there are no filters in the GET request but there are saved filters in the session, update the GET request with the saved filters
         elif 'plano_cuidados_filters' in self.request.session:
             params.update(self.request.session['plano_cuidados_filters'])
@@ -2129,15 +2195,28 @@ class PlanoCuidadosListView(LoginRequiredMixin, CustomPermissionRequiredMixin, F
         else:
             context['plano_cuidados'] = None
 
+        # Flag booleana: existe relatório gerado para os itens listados?
+        # O template não pode usar obj.get_relatorios.exists (é método).
+        itens = context.get(self.context_object_name) or self.object_list
+        try:
+            ids = list(itens.values_list('id', flat=True))
+        except Exception:
+            ids = []
+        context['tem_relatorios'] = Relatorio.objects.filter(
+            content_type=ContentType.objects.get_for_model(PlanoCuidados),
+            object_id__in=ids,
+            status='A',
+        ).exists()
         context['filter'] = self.filter
 
         us = self.request.user
 
         context['is_paginated'] = True
 
-        current_filters = self.request.GET or self.request.session.get(
-            'plano_cuidados_filters', {})
-        disable_button = current_filters.get('status') == 'I'
+        # Usa os filtros EFETIVAMENTE aplicados (self.filter.data), e nao o
+        # request.GET bruto: apos 'Limpar' o GET ainda traz os campos antigos,
+        # o que mantinha o botao de download oculto ate uma segunda limpeza.
+        disable_button = self.filter.data.get('status') == 'I'
 
         # Adiciona a flag de controle no contexto
         context['disable_button'] = disable_button
@@ -2501,9 +2580,14 @@ class SAEListView(LoginRequiredMixin, CustomPermissionRequiredMixin, FilterObjec
         params = self.request.GET.copy()
 
         # If the 'limpar' button was clicked, clear the saved filters in the session
-        if 'limpar' in params:
-            self.request.session.pop('sae_filters', None)
+        limpar_clicado = 'limpar' in params
+        params.pop('limpar', None)
+        if limpar_clicado:
+            # Limpar volta ao filtro padrao: descarta tambem os campos que
+            # vieram junto (a tela reenvia os valores atuais do formulario),
+            # deixando apenas os defaults aplicados logo abaixo (ex.: status='A').
             params.clear()
+            self.request.session.pop('sae_filters', None)
         # If there are any filters in the GET request, update the saved filters in the session
         elif any(field in params for field in SAEFilter.Meta.fields):
             self.request.session['sae_filters'] = params
@@ -2551,13 +2635,23 @@ class SAEListView(LoginRequiredMixin, CustomPermissionRequiredMixin, FilterObjec
         if saes:
             context['sae'] = saes[0]
 
+        # Flag booleana para o template: existe relatório gerado para os SAE
+        # desta listagem? O template não pode chamar `sae.get_relatorios.exists`
+        # porque `sae` é um objeto (ou None) e `get_relatorios` é método.
+        context['tem_relatorios'] = Relatorio.objects.filter(
+            content_type=ContentType.objects.get_for_model(SAE),
+            object_id__in=saes.values_list('id', flat=True),
+            status='A',
+        ).exists()
+
         context['filter'] = self.filter
 
         context['is_paginated'] = True
 
-        current_filters = self.request.GET or self.request.session.get(
-            'sae_filters', {})
-        disable_button = current_filters.get('status') == 'I'
+        # Usa os filtros EFETIVAMENTE aplicados (self.filter.data), e nao o
+        # request.GET bruto: apos 'Limpar' o GET ainda traz os campos antigos,
+        # o que mantinha o botao de download oculto ate uma segunda limpeza.
+        disable_button = self.filter.data.get('status') == 'I'
 
         # Adiciona a flag de controle no contexto
         context['disable_button'] = disable_button
@@ -3047,9 +3141,14 @@ class PrescricaoListView(LoginRequiredMixin, CustomPermissionRequiredMixin, Filt
         params = self.request.GET.copy()
 
         # If the 'limpar' button was clicked, clear the saved filters in the session
-        if 'limpar' in params:
-            self.request.session.pop('prescricao_filters', None)
+        limpar_clicado = 'limpar' in params
+        params.pop('limpar', None)
+        if limpar_clicado:
+            # Limpar volta ao filtro padrao: descarta tambem os campos que
+            # vieram junto (a tela reenvia os valores atuais do formulario),
+            # deixando apenas os defaults aplicados logo abaixo (ex.: status='A').
             params.clear()
+            self.request.session.pop('prescricao_filters', None)
         # If there are any filters in the GET request, update the saved filters in the session
         elif any(field in params for field in PrescricaoFilter.Meta.fields):
             self.request.session['prescricao_filters'] = params
@@ -3100,13 +3199,26 @@ class PrescricaoListView(LoginRequiredMixin, CustomPermissionRequiredMixin, Filt
 
         context['prescricao_listar'] = self.get_queryset()
 
+        # Flag booleana: existe relatório gerado para os itens listados?
+        # O template não pode usar obj.get_relatorios.exists (é método).
+        itens = context.get(self.context_object_name) or self.object_list
+        try:
+            ids = list(itens.values_list('id', flat=True))
+        except Exception:
+            ids = []
+        context['tem_relatorios'] = Relatorio.objects.filter(
+            content_type=ContentType.objects.get_for_model(Prescricao),
+            object_id__in=ids,
+            status='A',
+        ).exists()
         context['filter'] = self.filter
 
         context['is_paginated'] = True
 
-        current_filters = self.request.GET or self.request.session.get(
-            'prescricao_filters', {})
-        disable_button = current_filters.get('status') == 'I'
+        # Usa os filtros EFETIVAMENTE aplicados (self.filter.data), e nao o
+        # request.GET bruto: apos 'Limpar' o GET ainda traz os campos antigos,
+        # o que mantinha o botao de download oculto ate uma segunda limpeza.
+        disable_button = self.filter.data.get('status') == 'I'
 
         # Adiciona a flag de controle no contexto
         context['disable_button'] = disable_button
@@ -3153,9 +3265,14 @@ class PrescricaoGeralListView(LoginRequiredMixin, CustomPermissionRequiredMixin,
         # Get a mutable copy of the request.GET QueryDict
         params = self.request.GET.copy()
 
-        if 'limpar' in params:
-            self.request.session.pop('prescricao_filters', None)
+        limpar_clicado = 'limpar' in params
+        params.pop('limpar', None)
+        if limpar_clicado:
+            # Limpar volta ao filtro padrao: descarta tambem os campos que
+            # vieram junto (a tela reenvia os valores atuais do formulario),
+            # deixando apenas os defaults aplicados logo abaixo (ex.: status='A').
             params.clear()
+            self.request.session.pop('prescricao_filters', None)
         elif any(field in params for field in PrescricaoFilter.Meta.fields):
             self.request.session['prescricao_filters'] = params
         elif 'prescricao_filters' in self.request.session:
@@ -3205,9 +3322,10 @@ class PrescricaoGeralListView(LoginRequiredMixin, CustomPermissionRequiredMixin,
         context['filter'] = self.filter
         context['is_paginated'] = True
 
-        current_filters = self.request.GET or self.request.session.get(
-            'prescricao_filters', {})
-        disable_button = current_filters.get('status') == 'I'
+        # Usa os filtros EFETIVAMENTE aplicados (self.filter.data), e nao o
+        # request.GET bruto: apos 'Limpar' o GET ainda traz os campos antigos,
+        # o que mantinha o botao de download oculto ate uma segunda limpeza.
+        disable_button = self.filter.data.get('status') == 'I'
 
         context['disable_button'] = disable_button
         context['return_to_last_url'] = self._get_return_url()
@@ -3650,9 +3768,14 @@ class ItensPrescricaoListView(LoginRequiredMixin, CustomPermissionRequiredMixin,
         params = self.request.GET.copy()
 
         # If the 'limpar' button was clicked, clear the saved filters in the session
-        if 'limpar' in params:
-            self.request.session.pop('itens_prescricao_filters', None)
+        limpar_clicado = 'limpar' in params
+        params.pop('limpar', None)
+        if limpar_clicado:
+            # Limpar volta ao filtro padrao: descarta tambem os campos que
+            # vieram junto (a tela reenvia os valores atuais do formulario),
+            # deixando apenas os defaults aplicados logo abaixo (ex.: status='A').
             params.clear()
+            self.request.session.pop('itens_prescricao_filters', None)
         # If there are any filters in the GET request, update the saved filters in the session
         elif any(field in params for field in PrescricaoFilter.Meta.fields):
             self.request.session['itens_prescricao_filters'] = params
@@ -3845,14 +3968,19 @@ class AdepListView(LoginRequiredMixin, CustomPermissionRequiredMixin, FilterObje
         params = self.request.GET.copy()
 
         # 1. Se o botão 'limpar' foi clicado: limpa os filtros da sessão e do request
-        if 'limpar' in params or 'limpar' in self.request.GET:
+        # 'limpar' não é campo de filtro: é removido antes para não ser reenviado
+        # pelo próximo 'Filtrar' nem confundir a checagem de filtros abaixo.
+        limpar_clicado = 'limpar' in params or 'limpar' in self.request.GET
+        params.pop('limpar', None)
+        if limpar_clicado:
+            # Volta ao filtro padrao: descarta os campos enviados junto.
+            params.clear()
             self.request.session.pop('adep_filters', None)
             self.request.session.pop('addep_filters', None)
             self.request.session.modified = True
-            params = QueryDict('', mutable=True)
 
         # 2. Se o usuário submeteu o formulário de filtros (clicou em 'filtrar' ou enviou campos sem ser apenas paginação)
-        elif 'filtrar' in params or any(field in self.request.GET for field in AdepFilter.Meta.fields if field != 'data_hora_max'):
+        if 'filtrar' in params or any(field in params for field in AdepFilter.Meta.fields if field != 'data_hora_max'):
             clean_filters = {}
             for field in AdepFilter.Meta.fields:
                 if field != 'data_hora_max':
@@ -4337,9 +4465,14 @@ class PsicoterapiaListView(LoginRequiredMixin, CustomPermissionRequiredMixin, Fi
         params = self.request.GET.copy()
 
         # If the 'limpar' button was clicked, clear the saved filters in the session
-        if 'limpar' in params:
-            self.request.session.pop('psicoterapia_filters', None)
+        limpar_clicado = 'limpar' in params
+        params.pop('limpar', None)
+        if limpar_clicado:
+            # Limpar volta ao filtro padrao: descarta tambem os campos que
+            # vieram junto (a tela reenvia os valores atuais do formulario),
+            # deixando apenas os defaults aplicados logo abaixo (ex.: status='A').
             params.clear()
+            self.request.session.pop('psicoterapia_filters', None)
         # If there are any filters in the GET request, update the saved filters in the session
         elif any(field in params for field in PsicoterapiaFilter.Meta.fields):
             self.request.session['psicoterapia_filters'] = params
@@ -4729,10 +4862,13 @@ class AdepListarAssinarView(LoginRequiredMixin, CustomPermissionRequiredMixin, F
         # Copia os parâmetros GET de forma mutável
         params = self.request.GET.copy()
 
-        if 'limpar' in params:
+        limpar_clicado = 'limpar' in params
+        # 'limpar' não é campo de filtro: removido ANTES da decisão abaixo
+        # para que os campos enviados junto (ex.: status) sejam aplicados.
+        params.pop('limpar', None)
+        if limpar_clicado:
             # Limpa os filtros salvos na sessão se o botão 'limpar' foi clicado
             self.request.session.pop('adep_assinar_filters', None)
-            params.clear()
         elif any(field in params for field in AdepAssinarFilter.Meta.fields):
             # Atualiza os filtros salvos na sessão com os atuais do GET request
             self.request.session['aded_assinar_filters'] = params
@@ -4904,10 +5040,14 @@ class AdepListarAdministrarView(LoginRequiredMixin, CustomPermissionRequiredMixi
             fase_adep='P', assinar=False, status='A').distinct().order_by('data_hora', 'prescricao')
         params = self.request.GET.copy()
 
-        if 'limpar' in params:
-            self.request.session.pop('adep_administrar_filters', None)
+        limpar_clicado = 'limpar' in params
+        params.pop('limpar', None)
+        if limpar_clicado:
+            # Limpar volta ao filtro padrao: descarta tambem os campos que
+            # vieram junto (a tela reenvia os valores atuais do formulario),
+            # deixando apenas os defaults aplicados logo abaixo (ex.: status='A').
             params.clear()
-
+            self.request.session.pop('adep_administrar_filters', None)
         # Filtro não negociável: apenas ADEPs retroativos.
         # datahora_maxima == datahoraatual, usando data_hora do modelo Adep
         # (não a data da prescrição). Sempre sobrepõe qualquer valor vindo
@@ -5039,9 +5179,14 @@ class DiagnosticoListView(LoginRequiredMixin, CustomPermissionRequiredMixin, Fil
         params = self.request.GET.copy()
 
         # If the 'limpar' button was clicked, clear the saved filters in the session
-        if 'limpar' in params:
-            self.request.session.pop('diagnostico_filters', None)
+        limpar_clicado = 'limpar' in params
+        params.pop('limpar', None)
+        if limpar_clicado:
+            # Limpar volta ao filtro padrao: descarta tambem os campos que
+            # vieram junto (a tela reenvia os valores atuais do formulario),
+            # deixando apenas os defaults aplicados logo abaixo (ex.: status='A').
             params.clear()
+            self.request.session.pop('diagnostico_filters', None)
         # If there are any filters in the GET request, update the saved filters in the session
         elif any(field in params for field in DiagnosticoFilter.Meta.fields):
             self.request.session['diagnostico_filters'] = params
@@ -5088,13 +5233,21 @@ class DiagnosticoListView(LoginRequiredMixin, CustomPermissionRequiredMixin, Fil
         if diagnosticos:
             context['diagnostico'] = diagnosticos[0]
 
+        # Flag booleana: existe relatório gerado para os itens listados?
+        context['tem_relatorios'] = Relatorio.objects.filter(
+            content_type=ContentType.objects.get_for_model(Diagnostico),
+            object_id__in=diagnosticos.values_list('id', flat=True),
+            status='A',
+        ).exists()
+
         context['filter'] = self.filter
 
         context['is_paginated'] = True
 
-        current_filters = self.request.GET or self.request.session.get(
-            'diagnostico_filters', {})
-        disable_button = current_filters.get('status') == 'I'
+        # Usa os filtros EFETIVAMENTE aplicados (self.filter.data), e nao o
+        # request.GET bruto: apos 'Limpar' o GET ainda traz os campos antigos,
+        # o que mantinha o botao de download oculto ate uma segunda limpeza.
+        disable_button = self.filter.data.get('status') == 'I'
 
         # Adiciona a flag de controle no contexto
         context['disable_button'] = disable_button
@@ -5537,9 +5690,14 @@ class PassagemPlantaoListView(LoginRequiredMixin, CustomPermissionRequiredMixin,
         params = self.request.GET.copy()
 
         # If the 'limpar' button was clicked, clear the saved filters in the session
-        if 'limpar' in params:
-            self.request.session.pop('passagem_plantao_filters', None)
+        limpar_clicado = 'limpar' in params
+        params.pop('limpar', None)
+        if limpar_clicado:
+            # Limpar volta ao filtro padrao: descarta tambem os campos que
+            # vieram junto (a tela reenvia os valores atuais do formulario),
+            # deixando apenas os defaults aplicados logo abaixo (ex.: status='A').
             params.clear()
+            self.request.session.pop('passagem_plantao_filters', None)
         # If there are any filters in the GET request, update the saved filters in the session
         elif any(field in params for field in PassagemPlantaoFilter.Meta.fields):
             self.request.session['passagem_plantao_filters'] = params

@@ -62,7 +62,7 @@
     </a>
 
 
-    <form class="mt-2 text-white text-left" method="GET">
+    <form class="mt-2 text-white text-left" method="GET" action="">
 
 
 
@@ -85,19 +85,21 @@
                         </button>
                     </div>
                 </div>
-                <div class="justify-content-center mt-2">
-                    <button class="col-md-12 btn btn-outline-danger justify-content-center" name="limpar" value="1">
-                        <i class="fas fa-times-circle" style="transition: color 0.3s;"></i>
-                        Limpar
-                    </button>
+                <div class="col-md-12">
+                    <div class="justify-content-center mt-2">
+                        <button class="col-md-12 btn btn-outline-danger justify-content-center" name="limpar" value="1">
+                            <i class="fas fa-times-circle" style="transition: color 0.3s;"></i>
+                            Limpar
+                        </button>
+                    </div>
                 </div>
 
-                {% if sae.get_relatorios.exists and not disable_button %}
+                {% if tem_relatorios and not disable_button %}
                 <!-- Exibe o botão de download -->
                 <div class="col-md-12">
                     <div class="justify-content-center mt-2">
                         <a href="{% url 'download_filtered_pdfs' atendimento_id=atendimento_id model_name='sae' %}"
-                            target="_blank" title="Visualizar" type="button" class="btn btn-outline-success btn-sm">
+                            target="_blank" title="Visualizar" class="btn btn-outline-success btn-sm download-relatorios-filtrados">
                             <i class="fas fa-print" style="transition: color 0.3s;"></i>
                             Download dos Relatórios Filtrados
                         </a>
@@ -165,12 +167,7 @@
                             <i class="fas fa-folder-open"></i>
                         </a>
 
-                        <a href="{% url 'sae_editar' pk=sae.pk %}" title="Editar" type="button"
-                            class="btn btn-outline-warning btn-sm edit-sinais-vitais-btn" id="btn-edit">
-                            <i class="fas fa-edit"></i>
-                        </a>
-
-
+                  
                         {% if sae.status == 'A' %}
                         <!--CONCATENAR E ABRIR OS PDFS-->
                         <a href="{% url 'combine_pdfs_specific' object_id=sae.pk tipo='sae' %}"

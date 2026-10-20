@@ -63,7 +63,7 @@
         <i class="fa fa-weight me-2"></i>Perdas e Ganhos
     </a>
 
-    <form class="mt-2 text-white text-left" method="GET">
+    <form class="mt-2 text-white text-left" method="GET" action="">
 
 
 
@@ -93,28 +93,22 @@
                             Limpar
                         </button>
                     </div>
-
-
-
-
-                    {% if perdas_ganhos.get_relatorios.exists and not disable_button %}
-                    <!-- Exibe o botão de download -->
-                    <div class="col-md-12">
-                        <div class="justify-content-center mt-2">
-                            <a href="{% url 'download_filtered_pdfs' atendimento_id=atendimento_id model_name='perdas_ganhos' %}"
-                                target="_blank" title="Visualizar" type="button" class="btn btn-outline-success btn-sm">
-                                <i class="fas fa-print" style="transition: color 0.3s;"></i>
-                                Download dos Relatórios Filtrados
-                            </a>
-                        </div>
-                    </div>
-                    {% else %}
-                    <!-- Opcional: Exibir um botão desabilitado ou uma mensagem -->
-                    {% endif %}
-
-
-
                 </div>
+
+                {% if tem_relatorios and not disable_button %}
+                <!-- Exibe o botão de download -->
+                <div class="col-md-12">
+                    <div class="justify-content-center mt-2">
+                        <a href="{% url 'download_filtered_pdfs' atendimento_id=atendimento_id model_name='perdas_ganhos' %}"
+                            target="_blank" title="Visualizar" type="button" class="btn btn-outline-success btn-sm">
+                            <i class="fas fa-print" style="transition: color 0.3s;"></i>
+                            Download dos Relatórios Filtrados
+                        </a>
+                    </div>
+                </div>
+                {% else %}
+                <!-- Opcional: Exibir um botão desabilitado ou uma mensagem -->
+                {% endif %}
             </div>
         </div>
     </form>

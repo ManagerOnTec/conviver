@@ -62,7 +62,7 @@
         <i class="fa fa-weight me-2"></i>Perdas e Ganhos
     </a>
 
-    <form class="mt-2 text-white text-left" method="GET">
+    <form class="mt-2 text-white text-left" method="GET" action="">
 
 
 
@@ -103,7 +103,7 @@
                 </div>
 
 
-                {% if diagnostico.get_relatorios.exists and not disable_button %}
+                {% if tem_relatorios and not disable_button %}
                 <!-- Exibe o botão de download -->
                 <div class="col-md-12">
                     <div class="justify-content-center mt-2">

@@ -164,9 +164,14 @@ class AtendimentoListView(LoginRequiredMixin, CustomPermissionRequiredMixin, Fil
         queryset = super().get_queryset()
         params = self.request.GET.copy()
 
-        if 'limpar' in params:
-            self.request.session.pop('atendimento_filters', None)
+        limpar_clicado = 'limpar' in params
+        params.pop('limpar', None)
+        if limpar_clicado:
+            # Limpar volta ao filtro padrao: descarta tambem os campos que
+            # vieram junto (a tela reenvia os valores atuais do formulario),
+            # deixando apenas os defaults aplicados logo abaixo (ex.: status='A').
             params.clear()
+            self.request.session.pop('atendimento_filters', None)
         elif any(field in params for field in AtendimentoFilter.Meta.fields):
             self.request.session['atendimento_filters'] = params
         elif 'atendimento_filters' in self.request.session:

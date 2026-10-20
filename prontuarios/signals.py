@@ -164,9 +164,9 @@ def update_adep_status(sender, instance, **kwargs):
                 fase_adep='S',
                 fase_prescricao='S',
                 dt_atualizacao=now(),
-                us_atualizacao=instance.us_atualizacao,
+                us_atualizacao_id=instance.us_atualizacao_id,
                 dt_suspensao=now(),
-                us_suspensao=instance.us_atualizacao
+                us_suspensao_id=instance.us_suspensao_id,
             )
 
 
@@ -211,7 +211,7 @@ def update_pres_adep_status(sender, instance, **kwargs):
                     fase_adep='S',
                     fase_prescricao='S',
                     dt_atualizacao=now(),
-                    us_atualizacao=instance.us_atualizacao,
+                    us_atualizacao_id=instance.us_atualizacao_id,
                     dt_suspensao=now(),
-                    us_suspensao=instance.us_atualizacao
+                    us_suspensao_id=instance.us_suspensao_id
                 )

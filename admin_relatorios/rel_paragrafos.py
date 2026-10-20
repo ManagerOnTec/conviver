@@ -309,9 +309,75 @@ def _build_tabela_prescricao_adep(parag, width, estilo_paragrafo, estilo_cabecal
     return [tabela]
 
 
+def _build_tabela_rotulo_valor(linhas, width, estilo_paragrafo):
+    """Monta uma tabela de duas colunas (rótulo | valor) para relatórios de
+    fichas clínicas (sinais vitais, plano de cuidados, perdas e ganhos, SAE).
+
+    Cada item de ``linhas`` é uma tupla ``(rótulo, valor)``. Os rótulos ficam
+    em negrito na primeira coluna e os valores na segunda; itens mais longos
+    (observações, anotações, listas de evidências/intervenções) quebram linha
+    apenas na própria célula, mantendo o resto da tabela alinhado.
+
+    A tabela é única e contínua, com ``repeatRows=0`` (não há linha de
+    cabeçalho a repetir) e ``splitByRow=1``, cabendo ao ReportLab paginar e
+    manter o cabeçalho/rodapé do gerenciador nas páginas seguintes.
+    """
+    if not linhas:
+        return [Paragraph('Nenhum dado disponível.', estilo_paragrafo)]
+
+    estilo_rotulo = ParagraphStyle(
+        name='RotuloTabelaFichaStyle',
+        parent=estilo_paragrafo,
+        fontSize=9,
+        leading=12,
+        spaceAfter=0,
+        leftIndent=0,
+        rightIndent=0,
+        textColor=colors.HexColor('#16324f'),
+    )
+    estilo_valor = ParagraphStyle(
+        name='ValorTabelaFichaStyle',
+        parent=estilo_paragrafo,
+        fontSize=9,
+        leading=12,
+        spaceAfter=0,
+        leftIndent=0,
+        rightIndent=0,
+    )
+
+    largura_util = width * 92 / 100
+    col_rotulo = largura_util * 34 / 100
+    col_valor = largura_util - col_rotulo
+
+    dados = []
+    for rotulo, valor in linhas:
+        rotulo_html = _sanitize_inline_html(str(rotulo or ''))
+        valor_html = _sanitize_inline_html(str(valor or ''))
+        dados.append([
+            Paragraph(f'<b>{rotulo_html}</b>', estilo_rotulo),
+            Paragraph(valor_html or '-', estilo_valor),
+        ])
+
+    tabela = Table(dados, colWidths=[col_rotulo, col_valor], hAlign='CENTER')
+    tabela.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+        ('ALIGN', (1, 0), (1, -1), 'LEFT'),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#eef4fb')),
+        ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.HexColor('#9fb3c8')),
+        ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#16324f')),
+        ('LEFTPADDING', (0, 0), (-1, -1), 5),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+    ]))
+
+    return [tabela, Spacer(1, 3 * mm)]
+
+
 def genParagrafosRel(parag, width, height, p, tipo="evolucao"):
     margem_lateral = width * 5 / 100
-    margem_lateral_presc =  20 
+    margem_lateral_presc =  20
 
     estilo_paragrafo = ParagraphStyle(
         name='ParagrafoStyle',
@@ -337,6 +403,12 @@ def genParagrafosRel(parag, width, height, p, tipo="evolucao"):
 
     if tipo in {"evolucao", "atas", "oficios", "orcamentos"}:
         return _build_html_flowables(parag, estilo_paragrafo)
+
+    # Fichas clínicas em formato de tabela rótulo/valor. O chamador envia uma
+    # lista de tuplas (rótulo, valor); os demais tipos continuam usando o
+    # texto/parágrafo de sempre.
+    if tipo in {"sinaisvitais", "planocuidados", "perdasganhos", "sae"}:
+        return _build_tabela_rotulo_valor(parag, width, estilo_paragrafo)
 
     # Prescrição/ADEP precisam manter as quebras internas de célula (<br/>)
     # e usar o fim de linha (\n) como separador de linhas da tabela. Por isso

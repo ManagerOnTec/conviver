@@ -42,6 +42,22 @@ REPORT_IMAGE_FIELDS = {
     'orcamentos': 'anexo',
 }
 
+# Mapeia o nome da classe do modelo para a chave usada em
+# GerenciadorRelatorioPersonalizado.relatorio (dominios.choices.relatorios_choices).
+# Sem isso, obj.__class__.__name__.lower() gera 'sinaisvitais', 'planocuidados' e
+# 'perdasganhos', que nunca casam com as opções 'sinais_vitais', 'plano_cuidados'
+# e 'perdas_ganhos' do gerenciador personalizado - e o PDF caía no relatório geral.
+RELATORIO_CHAVE_POR_MODELO = {
+    'sinaisvitais': 'sinais_vitais',
+    'planocuidados': 'plano_cuidados',
+    'perdasganhos': 'perdas_ganhos',
+}
+
+
+def _chave_relatorio_personalizado(nome_modelo):
+    """Chave de GerenciadorRelatorioPersonalizado.relatorio para o modelo."""
+    return RELATORIO_CHAVE_POR_MODELO.get(nome_modelo, nome_modelo)
+
 
 def _is_supported_report_image(file_name):
     if not file_name:
@@ -113,7 +129,8 @@ def gerar_pdf_prontuario(obj, user, assinar=False, assinatura_texto=None):
     ##############################################
     # parametros dos gerenciadores de relatorio
     gerenciador_personalizado = GerenciadorRelatorioPersonalizado.objects.filter(
-        relatorio=nome_modelo, estabelecimento_id=estabelecimento_id, status='A').first()
+        relatorio=_chave_relatorio_personalizado(nome_modelo),
+        estabelecimento_id=estabelecimento_id, status='A').first()
 
     gerenciador_geral = GerenciadorRelatorioGeral.objects.filter(
         estabelecimento_id=estabelecimento_id, status='A').first()
@@ -127,12 +144,14 @@ def gerar_pdf_prontuario(obj, user, assinar=False, assinatura_texto=None):
         texto_parag = html.unescape(vardin.evolucao or '')
         tipo_evolucao_id = vardin.tipo_evolucao_id
 
-        if gerenciador_personalizado and nome_modelo == 'evolucao':
+        if gerenciador_personalizado:
+            # Refina o personalizado para o tipo de evolução. Se não houver um
+            # especifico para o tipo, mantém o personalizado já encontrado; só
+            # cai para o geral quando não existe nenhum personalizado de evolução.
             gerenciador_personalizado = GerenciadorRelatorioPersonalizado.objects.filter(
-                relatorio=nome_modelo, estabelecimento_id=estabelecimento_id, tipo_evolucao_id=tipo_evolucao_id, status='A').first()
-        else:
-            gerenciador_geral = GerenciadorRelatorioGeral.objects.filter(
-                estabelecimento_id=estabelecimento_id, status='A').first()
+                relatorio=_chave_relatorio_personalizado(nome_modelo),
+                estabelecimento_id=estabelecimento_id,
+                tipo_evolucao_id=tipo_evolucao_id, status='A').first() or gerenciador_personalizado
     #########################################################################
 
     ###############################
@@ -257,7 +276,8 @@ def gerar_pdf_prontuario(obj, user, assinar=False, assinatura_texto=None):
 
             if nome_modelo == 'adep':
                 gerenciador_personalizado = GerenciadorRelatorioPersonalizado.objects.filter(
-                    relatorio=nome_modelo, estabelecimento_id=estabelecimento_id, status='A').first()
+                    relatorio=_chave_relatorio_personalizado(nome_modelo),
+                    estabelecimento_id=estabelecimento_id, status='A').first()
 
                 usuario_registro = user
 
@@ -320,83 +340,68 @@ def gerar_pdf_prontuario(obj, user, assinar=False, assinatura_texto=None):
 
     # Início do relatório Sinais Vitais ###############################################
     if nome_modelo == 'sinaisvitais':
-        texto_sinal = (
-            f"Temperatura: {obj.temperatura or ''} °C,\t"
-            f"Pressão Arterial: {obj.pressao_arterial or ''},\t"
-            f"Frequência Cardíaca: {obj.frequencia_cardiaca or ''} bpm,\t"
-            f"Frequência Respiratória: {obj.frequencia_respiratoria or ''} rpm,\t"
-            f"Saturação de Oxigênio: {obj.saturacao_oxigenio or ''}%,\t"
-            f"Controle de Glicemia: {obj.controle_glicemia or ''} mg/dL,\t"
-            f"Observações: {obj.observacoes or ''}\n"
-        )
-        texto_parag = texto_sinal
+        # Enviado como lista de (rótulo, valor): genParagrafosRel monta a tabela.
+        texto_parag = [
+            ('Temperatura', f"{obj.temperatura or '-'} °C"),
+            ('Pressão Arterial', obj.pressao_arterial or '-'),
+            ('Frequência Cardíaca', f"{obj.frequencia_cardiaca or '-'} bpm"),
+            ('Frequência Respiratória', f"{obj.frequencia_respiratoria or '-'} rpm"),
+            ('Saturação de Oxigênio', f"{obj.saturacao_oxigenio or '-'}%"),
+            ('Controle de Glicemia', f"{obj.controle_glicemia or '-'} mg/dL"),
+            ('Observações', html.unescape(obj.observacoes or 'Nenhuma observação')),
+        ]
 
     # Fim relatório sinais vitais #####################################################
 
     # INICIO SAE #######################################################################
     if nome_modelo == 'sae':
-        # Inicializa a string com informações básicas do SAE
-        texto_sae = ""
+        # Enviado como lista de (rótulo, valor): genParagrafosRel monta a tabela.
+        evidencias = ', '.join(
+            [evidencia.descricao for evidencia in obj.evidencia.all()]) or '-'
+        fatores_relacionados = ', '.join(
+            [fator.descricao for fator in obj.fator_relacionado.all()]) or '-'
+        intervencoes = ', '.join(
+            [intervencao.descricao for intervencao in obj.intervencao.all()]) or '-'
 
-        # Formatando aspecto, aspecto_analisado, e diagnostico_enfermagem
-        texto_sae += (
-            f"Aspecto: {obj.aspecto},\t"
-            f"Aspecto Analisado: {obj.aspecto_analisado},\t"
-            f"Diagnóstico de Enfermagem: {obj.diagnostico_enfermagem},\t"
-        )
-
-        # Evidências/Características Definidoras
-        evidencias = ", ".join(
-            [evidencia.descricao for evidencia in obj.evidencia.all()])
-        texto_sae += f"Evidências/Características Definidoras: {evidencias},\t"
-
-        # Fatores Relacionados
-        fatores_relacionados = ", ".join(
-            [fator.descricao for fator in obj.fator_relacionado.all()])
-        texto_sae += f"Fatores Relacionados: {fatores_relacionados},\t"
-
-        # Intervenções
-        intervencoes = ", ".join(
-            [intervencao.descricao for intervencao in obj.intervencao.all()])
-        texto_sae += f"Intervenções: {intervencoes},\t"
-
-        # Anotações de Enfermagem
-        texto_sae += f"Anotações de Enfermagem: {obj.anotacao or 'N/A'}\n"
-
-        # Essa string pode ser usada diretamente pelo seu método de geração de relatório
-        texto_parag = texto_sae
+        texto_parag = [
+            ('Aspecto', obj.aspecto or '-'),
+            ('Aspecto Analisado', obj.aspecto_analisado or '-'),
+            ('Diagnóstico de Enfermagem', obj.diagnostico_enfermagem or '-'),
+            ('Evidências/Características Definidoras', evidencias),
+            ('Fatores Relacionados', fatores_relacionados),
+            ('Intervenções', intervencoes),
+            ('Anotações de Enfermagem', html.unescape(obj.anotacao or 'N/A')),
+        ]
 
     # FIM SAE #######################################################################
 
     # Início do relatório Plano de Cuidados ###############################################
     if nome_modelo == 'planocuidados':
-        texto_plano_cuidados = (
-            f"Turnos: {obj.turnos.turnos or ''},\t"
-            f"Eliminações Vesicais: {'Sim' if obj.eliminacoes_vesicais else 'Não'},\t"
-            f"Eliminações Intestinais: {'Sim' if obj.eliminacoes_intestinais else 'Não'},\t"
-            f"Alimentação: {'Sim' if obj.alimentacao else 'Não'},\t"
-            f"Hidratação: {'Sim' if obj.hidratacao else 'Não'},\t"
-            f"Higiene Conforto: {'Sim' if obj.higiene_conforto else 'Não'},\t"
-            f"Higiene Bucal: {'Sim' if obj.higiene_bucal else 'Não'},\t"
-            f"Atividades de Lazer e Recreação: {'Sim' if obj.atividades_lazer else 'Não'},\t"
-            f"Terapia Ocupacional: {'Sim' if obj.terapia_ocupacional else 'Não'},\t"
-            f"Humor: {obj.humor.humor or ''},\t"
-            f"Observações: {obj.observacoes or 'Nenhuma observação'},\n"
-
-        )
-        texto_parag = texto_plano_cuidados
+        # Enviado como lista de (rótulo, valor): genParagrafosRel monta a tabela.
+        texto_parag = [
+            ('Turnos', obj.turnos.turnos or '-'),
+            ('Eliminações Vesicais', 'Sim' if obj.eliminacoes_vesicais else 'Não'),
+            ('Eliminações Intestinais', 'Sim' if obj.eliminacoes_intestinais else 'Não'),
+            ('Alimentação', 'Sim' if obj.alimentacao else 'Não'),
+            ('Hidratação', 'Sim' if obj.hidratacao else 'Não'),
+            ('Higiene e Conforto', 'Sim' if obj.higiene_conforto else 'Não'),
+            ('Higiene Bucal', 'Sim' if obj.higiene_bucal else 'Não'),
+            ('Atividades de Lazer e Recreação', 'Sim' if obj.atividades_lazer else 'Não'),
+            ('Terapia Ocupacional', 'Sim' if obj.terapia_ocupacional else 'Não'),
+            ('Humor', obj.humor.humor or '-'),
+            ('Observações', html.unescape(obj.observacoes or 'Nenhuma observação')),
+        ]
 
     # Fim relatório Plano de Cuidados #####################################################
 
     # Início do relatório Perdas e Ganhos ###############################################
     if nome_modelo == 'perdasganhos':
-
-        texto_perdas_ganhos = (
-            f"Peso: {obj.peso or ''} kg,\t"
-            f"Altura: {obj.altura or ''} cm,\t"
-            f"Observações: {obj.observacoes or 'Nenhuma observação'},\n"
-        )
-        texto_parag = texto_perdas_ganhos
+        # Enviado como lista de (rótulo, valor): genParagrafosRel monta a tabela.
+        texto_parag = [
+            ('Peso', f"{obj.peso or '-'} kg"),
+            ('Altura', f"{obj.altura or '-'} cm"),
+            ('Observações', html.unescape(obj.observacoes or 'Nenhuma observação')),
+        ]
 
     # Fim relatório Perdas e Ganhos #####################################################
 

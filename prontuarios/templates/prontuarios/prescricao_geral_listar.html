@@ -15,7 +15,7 @@
     {% endif %}
 
 
-    <form class="mt-2 text-white text-left" method="GET">
+    <form class="mt-2 text-white text-left" method="GET" action="">
 
 
 
@@ -78,14 +78,18 @@
 {% block lista %}
 
 <!-- BARRA DE ACOES EM LOTE -->
-<div id="bulk-actions-bar" class="d-flex align-items-center gap-2 mb-2">
-    <button type="button" id="btn-renovar-lote" class="btn btn-primary btn-sm" disabled>
-        <i class="fas fa-sync-alt me-1"></i>Renovar Selecionadas (<span id="count-selecionadas">0</span>)
-    </button>
-    <button type="button" id="btn-suspender-lote" class="btn btn-outline-info btn-sm" disabled
-            title="Suspender prescrições selecionadas">
-        <i class="fas fa-pause-circle me-1"></i>Suspender Selecionadas (<span id="count-selecionadas-susp">0</span>)
-    </button>
+<div id="bulk-actions-bar" class="adep-batch-toolbar d-flex align-items-center mb-2">
+    <span class="adep-batch-label me-2"><i class="fas fa-tasks text-primary"></i> Ações:</span>
+    <div class="adep-action-buttons-group">
+        <button type="button" id="btn-renovar-lote" class="btn btn-sm adep-btn-adm" disabled
+                title="Renovar prescrições selecionadas">
+            <i class="fas fa-sync-alt me-1"></i>Renovar Selecionadas (<span id="count-selecionadas">0</span>)
+        </button>
+        <button type="button" id="btn-suspender-lote" class="btn btn-sm adep-btn-naoadm" disabled
+                title="Suspender prescrições selecionadas">
+            <i class="fas fa-pause-circle me-1"></i>Suspender Selecionadas (<span id="count-selecionadas-susp">0</span>)
+        </button>
+    </div>
 </div>
 
 <div id="table-container" class="listing-table-shell">
@@ -241,6 +245,92 @@
 
 
 {% block scriptcustom %}
+<style>
+    /* Estilização moderna dos botões de ação em lote (padrão ADEP) */
+    .adep-batch-toolbar {
+        background: radial-gradient(circle at top, #17304a 0%, #0c1420 42%, #09111b 100%) !important;
+        border: 1px solid rgba(122, 166, 209, 0.28) !important;
+        border-radius: 10px !important;
+        padding: 12px 18px !important;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35) !important;
+    }
+
+    .adep-batch-label {
+        font-size: 0.86rem;
+        font-weight: 700;
+        color: #cbd5e1;
+    }
+
+    .adep-action-buttons-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .adep-btn-adm {
+        background: #198754 !important;
+        border: 1.5px solid #198754 !important;
+        color: #ffffff !important;
+        font-weight: 600 !important;
+        padding: 6px 14px !important;
+        border-radius: 6px !important;
+        font-size: 0.82rem !important;
+        box-shadow: 0 2px 4px rgba(25, 135, 84, 0.25) !important;
+        transition: all 0.2s ease !important;
+    }
+
+    .adep-btn-adm:hover:not(:disabled) {
+        background: #157347 !important;
+        border-color: #146c43 !important;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(25, 135, 84, 0.35) !important;
+        color: #ffffff !important;
+    }
+
+    .adep-btn-adm:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .adep-btn-naoadm {
+        color: #dc3545 !important;
+        border: 1.5px solid rgba(220, 53, 69, 0.5) !important;
+        background: rgba(220, 53, 69, 0.06) !important;
+        font-weight: 600 !important;
+        padding: 6px 14px !important;
+        border-radius: 6px !important;
+        font-size: 0.82rem !important;
+        transition: all 0.2s ease !important;
+    }
+
+    .adep-btn-naoadm:hover:not(:disabled) {
+        background: #dc3545 !important;
+        border-color: #dc3545 !important;
+        color: #ffffff !important;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3) !important;
+    }
+
+    .adep-btn-naoadm:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    /* Botões de ação da linha (ícones) no mesmo padrão */
+    .listing-action-btn.btn-outline-success {
+        color: #198754 !important;
+        border-color: rgba(25, 135, 84, 0.5) !important;
+        background: rgba(25, 135, 84, 0.06) !important;
+        transition: all 0.2s ease !important;
+    }
+
+    .listing-action-btn.btn-outline-success:hover {
+        background: #198754 !important;
+        border-color: #198754 !important;
+        color: #ffffff !important;
+        box-shadow: 0 3px 8px rgba(25, 135, 84, 0.3) !important;
+    }
+</style>
 
 <script>
     // inicio legendas de vencimento da prescricao
