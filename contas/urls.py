@@ -11,6 +11,8 @@ urlpatterns = [
     path('alterar/', views.alterar, name='alterar'),
     path('logout/', views.logout, name='logout'),
     path('esqueci/', views.esqueci, name='esqueci'),
+    path('captcha/desafio/', views.captcha_desafio, name='captcha_desafio'),
+    path('captcha/imagem/', views.captcha_imagem, name='captcha_imagem'),
     path('select_estabelecimento/', views.select_estabelecimento,
          name="select_estabelecimento"),
     path('resetar/<uidb64>/<token>/', views.password_reset_confirm,

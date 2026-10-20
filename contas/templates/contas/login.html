@@ -111,6 +111,45 @@
             />
           </div>
 
+          <div class="auth-field auth-captcha" id="captcha-wrapper"
+               data-desafio-url="{% url 'captcha_desafio' %}"
+               {% if not captcha_svg %}data-auto-load{% endif %}>
+            <label for="id_captcha"><i class="fas fa-shield-halved me-2"></i>Verificação de segurança</label>
+            <div class="auth-captcha-box">
+              <div class="auth-captcha-image" id="captcha-image" aria-live="polite">
+                {% if captcha_svg %}
+                  {{ captcha_svg|safe }}
+                {% else %}
+                  <span class="auth-captcha-loading"><i class="fas fa-spinner fa-spin"></i> Carregando...</span>
+                {% endif %}
+              </div>
+              <button type="button" class="auth-captcha-reload" id="captcha-reload"
+                      title="Gerar novo código" aria-label="Gerar novo código">
+                <i class="fas fa-rotate-right"></i>
+              </button>
+              <input
+                id="id_captcha"
+                type="text"
+                name="captcha_resposta"
+                class="form-control"
+                autocomplete="off"
+                inputmode="text"
+                maxlength="10"
+                placeholder="Digite o código"
+                required
+              />
+              <input type="hidden" name="captcha_token" id="id_captcha_token"
+                     value="{{ captcha_token|default:'' }}" />
+              <!-- Campo armadilha: humanos não o preenchem; fica fora da tela. -->
+              <div class="auth-captcha-honeypot" aria-hidden="true">
+                <label for="id_captcha_site">Não preencha este campo</label>
+                <input id="id_captcha_site" type="text" name="captcha_site" tabindex="-1"
+                       autocomplete="off" value="" />
+              </div>
+            </div>
+            <small class="auth-captcha-hint">Digite os caracteres exibidos (sem espaços, não diferencia maiúsculas).</small>
+          </div>
+
           <div class="auth-meta-row">
             <span class="auth-inline-note">Acesso protegido por autenticação individual.</span>
             <a href="{% url 'esqueci' %}" class="auth-link">Esqueci minha senha</a>
@@ -123,6 +162,8 @@
             </button>
           </div>
         </form>
+
+        <script src="{% static 'js/login_captcha.js' %}"></script>
       </section>
     </div>
   </div>

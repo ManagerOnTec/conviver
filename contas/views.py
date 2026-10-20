@@ -34,6 +34,9 @@ from django.template.response import TemplateResponse
 from django.urls import reverse
 from admin_cadastros.models import Estabelecimento
 from django.http import JsonResponse
+from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.cache import never_cache
+from contas import captcha
 
 basicConfig(
     level=INFO,
@@ -68,12 +71,38 @@ def login(request):
         # Se o usuário já estiver logado, faça logout e redirecione para a página de login novamente
         return redirect('logout')
     elif request.method == 'POST':
-        usuario = request.POST['usuario']
-        senha = request.POST['senha']
+        usuario = request.POST.get('usuario', '')
+        senha = request.POST.get('senha', '')
+
+        # Campo armadilha preenchido => quase sempre robô/parser de formulário.
+        if request.POST.get('captcha_site'):
+            captcha.register_failure(request)
+            messages.error(request, 'Verificação de segurança falhou.')
+            context['captcha_token'], context['captcha_svg'] = captcha.build_challenge(request)
+            return render(request, 'contas/login.html', context)
+
+        captcha_ok, captcha_erro = captcha.validate(
+            request,
+            request.POST.get('captcha_token'),
+            request.POST.get('captcha_resposta'),
+        )
+        if not captcha_ok:
+            messages.error(request, captcha_erro)
+            # Já entregamos um desafio novo junto com a página (sem estado extra).
+            context['captcha_token'], context['captcha_svg'] = captcha.build_challenge(request)
+            return render(request, 'contas/login.html', context)
+
         user = auth.authenticate(request, username=usuario, password=senha)
 
         if not user:
-            messages.error(request, 'Usuário ou senha inválidos!')
+            # Credenciais erradas também alimentam o rate limit por IP, evitando
+            # força bruta "resolvendo" captchas a cada tentativa.
+            if captcha.register_failure(request):
+                messages.error(
+                    request, 'Muitas tentativas. Aguarde alguns minutos e tente novamente.')
+            else:
+                messages.error(request, 'Usuário ou senha inválidos!')
+            context['captcha_token'], context['captcha_svg'] = captcha.build_challenge(request)
             return render(request, 'contas/login.html', context)
 
         # Verificar se a senha foi alterada
@@ -97,6 +126,33 @@ def login(request):
             return redirect('select_estabelecimento')
     else:
         return render(request, 'contas/login.html', context)
+
+
+@never_cache
+@require_GET
+def captcha_desafio(request):
+    """Retorna um novo desafio de captcha (token + SVG)."""
+    if not captcha.register_challenge(request):
+        return JsonResponse(
+            {'ok': False, 'erro': 'Muitas solicitações. Aguarde um instante.'},
+            status=429,
+        )
+    token, svg = captcha.build_challenge(request)
+    return JsonResponse({'ok': True, 'token': token, 'svg': svg})
+
+
+@never_cache
+@require_GET
+def captcha_imagem(request):
+    """Recria a imagem de um token existente (usado no botão de recarregar)."""
+    token = request.GET.get('token', '')
+    svg = captcha.render_svg_for_token(token)
+    if not svg:
+        return JsonResponse(
+            {'ok': False, 'erro': 'Verificação expirada. Recarregue o código.'},
+            status=400,
+        )
+    return JsonResponse({'ok': True, 'token': token, 'svg': svg})
 
 
 @login_required(login_url='login')

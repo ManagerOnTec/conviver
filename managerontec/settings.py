@@ -341,6 +341,16 @@ LOGIN_REDIRECT_URL = '/login/'
 LOGIN_URL = '/login/'
 LOGOUT_REDIRECT_URL = '/logout/'
 
+# ==========================================================
+# CAPTCHA DO LOGIN (contas/captcha.py)
+# ==========================================================
+CAPTCHA_TTL_SECONDS = config('CAPTCHA_TTL_SECONDS', default=300, cast=int)
+CAPTCHA_MAX_ATTEMPTS = config('CAPTCHA_MAX_ATTEMPTS', default=5, cast=int)
+CAPTCHA_CHALLENGES_PER_MIN = config('CAPTCHA_CHALLENGES_PER_MIN', default=20, cast=int)
+CAPTCHA_FAILS_LIMIT = config('CAPTCHA_FAILS_LIMIT', default=8, cast=int)
+CAPTCHA_FAILS_WINDOW_SECONDS = config('CAPTCHA_FAILS_WINDOW_SECONDS', default=600, cast=int)
+CAPTCHA_BLOCK_SECONDS = config('CAPTCHA_BLOCK_SECONDS', default=600, cast=int)
+
 DATE_INPUT_FORMATS = ['%d/%m/%Y']
 DATETIME_INPUT_FORMATS = ['%d/%m/%Y %H:%M:%S']
 TIME_INPUT_FORMATS = ['%H:%M:%S']
