@@ -515,71 +515,149 @@ class ParametrosProntuariosMixin:
         return super().dispatch(request, *args, **kwargs)
 
 
+def chain_form_init(form, form_init):
+    """
+    Encadeia um novo ``form.__init__`` ao que já estiver definido no form.
+
+    Os mixins de admin (ex.: ``AdminEstabelecimentoPadraoMixin``) substituem
+    ``form.__init__`` em ``get_form``. Se um ModelAdmin sobrescrever o
+    ``__init__`` diretamente, a lógica do mixin é descartada silenciosamente.
+    Use esta função para preservar as duas camadas.
+    """
+    previous_init = form.__init__
+
+    def chained_init(form_instance, *args, **kwargs):
+        previous_init(form_instance, *args, **kwargs)
+        form_init(form_instance, *args, **kwargs)
+
+    form.__init__ = chained_init
+    return form
+
+
 class AdminEstabelecimentoPadraoMixin:
     """
-    Mixin para inicializar o campo 'estabelecimento' com o valor do
-    'estabelecimento_padrao' do perfil do usuário e limitar a criação
-    de objetos apenas para os estabelecimentos liberados para o perfil.
-    Também cuida dos campos de auditoria como 'us_registro' e 'dt_registro'.
+    Vincula o campo 'estabelecimento' ao estabelecimento ATIVO NA SESSÃO do
+    usuário (chave 'estabelecimento_id', definida em select_estabelecimento).
+
+    Regras:
+    - Sessão ativa e liberada para o perfil: o valor é fixado (campo
+      desabilitado), com a sessão prevalecendo sobre qualquer POST.
+    - Sessão ativa mas NÃO liberada para o perfil: bloqueia com PermissionDenied
+      (em vez de silenciosamente cair em outro estabelecimento).
+    - Sem sessão (ex.: login direto no /admin ou superuser): usa o
+      'estabelecimento_padrao' do perfil, como fallback.
+    - Só quem não tem perfil (superuser puro) continua escolhendo livremente.
     """
+
+    @staticmethod
+    def _estabelecimento_da_sessao(request, perfil):
+        """
+        Resolve o estabelecimento ativo. Retorna (estabelecimento, liberado).
+        'liberado' indica se o estabelecimento pode ser usado pelo perfil.
+        """
+        estabelecimento = None
+        estabelecimento_id = request.session.get('estabelecimento_id')
+
+        if estabelecimento_id:
+            estabelecimento = Estabelecimento.objects.filter(
+                pk=estabelecimento_id).first()
+
+        if estabelecimento is None and perfil:
+            # Sem sessão: cai para o padrão do perfil.
+            estabelecimento = perfil.estabelecimento_padrao
+
+        if estabelecimento is None:
+            return None, False
+
+        if not perfil:
+            return estabelecimento, True
+
+        liberado = perfil.estabelecimento.filter(pk=estabelecimento.pk).exists()
+        return estabelecimento, liberado
 
     def get_form(self, request, obj=None, **kwargs):
         """
-        Passa o request para o formulário e inicializa o campo estabelecimento 
-        com o valor do estabelecimento_padrao do perfil do usuário, e filtra
-        os estabelecimentos para que apenas os liberados para o perfil do
-        usuário sejam exibidos.
+        Fixa o campo 'estabelecimento' no estabelecimento da sessão (ou no
+        padrão do perfil quando não há sessão) e impede a troca pelo usuário.
         """
         form = super().get_form(request, obj, **kwargs)
 
-        # Obtém o perfil do usuário
         perfil = getattr(request.user, 'perfil', None)
+        estabelecimento, liberado = self._estabelecimento_da_sessao(
+            request, perfil)
 
-        # Sobrescreve o método init do formulário
-        def form_init(form_instance, *args, **kwargs):
-            # Chama o init original
-            super(form_instance.__class__, form_instance).__init__(
-                *args, **kwargs)
+        # Sessão apontando para estabelecimento não liberado: bloqueia.
+        if perfil and estabelecimento and not liberado:
+            raise PermissionDenied(
+                'O estabelecimento selecionado na sessão não está liberado '
+                'para o seu perfil. Contate o administrador do sistema.')
 
-            if perfil:
-                # Obtém os estabelecimentos liberados para o perfil do usuário
-                estabelecimentos_liberados = perfil.estabelecimento.all()
+        campo = form.base_fields.get('estabelecimento')
+        if campo is None:
+            # Campo readonly/removido neste ModelAdmin: a vinculação é feita
+            # no save_model.
+            return form
 
-                # Se o usuário não tiver estabelecimentos liberados, desabilita o campo ou bloqueia a criação
-                if estabelecimentos_liberados.exists():
-                    # Filtra o campo 'estabelecimento' com os estabelecimentos liberados
-                    form_instance.fields['estabelecimento'].queryset = estabelecimentos_liberados
+        if perfil is not None:
+            liberados = perfil.estabelecimento.all()
+            campo.queryset = liberados.filter(pk=estabelecimento.pk) \
+                if estabelecimento else liberados
 
-                    # Se o objeto está sendo criado e o perfil tem estabelecimento_padrao, define o valor inicial
-                    if not obj and perfil.estabelecimento_padrao:
-                        form_instance.fields['estabelecimento'].initial = perfil.estabelecimento_padrao
-                else:
-                    # Se o perfil não tem estabelecimentos liberados, bloqueia a criação ou desabilita o campo
-                    form_instance.fields['estabelecimento'].queryset = Estabelecimento.objects.none(
-                    )
-                    form_instance.fields['estabelecimento'].disabled = True
+            if not estabelecimento:
+                campo.queryset = Estabelecimento.objects.none()
+                campo.disabled = True
+
+                def form_init(form_instance, *args, **kwargs):
                     form_instance.add_error(
-                        None, 'Você não tem permissão para criar objetos para nenhum estabelecimento.')
+                        None,
+                        'Nenhum estabelecimento ativo na sessão. Selecione um '
+                        'estabelecimento antes de continuar.',
+                    )
 
-        # Substitui o __init__ do formulário com a lógica de inicialização personalizada
-        form.__init__ = form_init
+                chain_form_init(form, form_init)
+                return form
+
+            # Fixa o valor: o usuário não escolhe estabelecimento.
+            campo.initial = estabelecimento
+            campo.disabled = True
+
+            def form_init(form_instance, *args, **kwargs):
+                # Garante o valor da sessão mesmo em edição (campo desabilitado
+                # não é enviado pelo navegador).
+                form_instance.fields['estabelecimento'].initial = estabelecimento
+                form_instance.instance.estabelecimento = estabelecimento
+                try:
+                    form_instance.initial['estabelecimento'] = estabelecimento
+                except Exception:
+                    pass
+
+            chain_form_init(form, form_init)
 
         return form
 
     def save_model(self, request, obj, form, change):
         """
-        Define os campos de auditoria e impede que o usuário salve um objeto
-        para um estabelecimento ao qual ele não tem permissão de acesso.
+        Garante o estabelecimento da sessão no objeto salvo e impede que o
+        usuário salve para um estabelecimento não liberado para o perfil.
         """
         perfil = getattr(request.user, 'perfil', None)
+        estabelecimento, liberado = self._estabelecimento_da_sessao(
+            request, perfil)
+
+        if perfil and estabelecimento and not liberado:
+            raise PermissionDenied(
+                'O estabelecimento selecionado na sessão não está liberado '
+                'para o seu perfil. Contate o administrador do sistema.')
+
+        if estabelecimento is not None:
+            # A sessão prevalece sobre qualquer valor vindo do POST.
+            obj.estabelecimento = estabelecimento
 
         if perfil:
-            estabelecimentos_liberados = perfil.estabelecimento.all()
-
-            # Verifica se o estabelecimento selecionado está entre os permitidos
-            if obj.estabelecimento and obj.estabelecimento not in estabelecimentos_liberados:
+            liberados = perfil.estabelecimento.all()
+            if obj.estabelecimento and obj.estabelecimento not in liberados:
                 raise PermissionDenied(
-                    "Você não tem permissão para salvar este objeto para este estabelecimento.")
+                    'Você não tem permissão para salvar este objeto para este estabelecimento.')
 
         super().save_model(request, obj, form, change)
 

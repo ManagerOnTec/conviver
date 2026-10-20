@@ -59,11 +59,18 @@ def home(request):
 
 def login(request):
 
+    # Destino solicitado (ex.: /admin/ vindo de /admin/login/?next=/admin/).
+    # Só aceitamos caminhos locais para evitar open redirect.
+    next_url = request.POST.get('next') or request.GET.get('next') or ''
+    if not next_url.startswith('/') or next_url.startswith('//'):
+        next_url = ''
+
     context = {
         'mostrar_rodape': False,
         'mostrar_nav': True,
         'titulo': 'ManagerONTEC',
         'title': 'login',
+        'next': next_url,
 
     }
 
@@ -107,9 +114,9 @@ def login(request):
 
         # Verificar se a senha foi alterada
 
-        if user.username == 'admin':
+        if user.username == 'admin' or (next_url.startswith('/admin') and user.is_staff):
             auth.login(request, user)
-            return redirect('/admin')
+            return redirect(next_url if next_url.startswith('/admin') else '/admin')
 
         try:
             perfil = user.perfil
@@ -122,6 +129,8 @@ def login(request):
         auth.login(request, user)
         if not senha_alterada:
             return redirect('alterar')
+        elif next_url and user.is_staff:
+            return redirect(next_url)
         else:
             return redirect('select_estabelecimento')
     else:
@@ -215,10 +224,12 @@ def alterar(request):
         return redirect('logout')
 
 
-@login_required(login_url='login')
 def logout(request):
-    auth.logout(request)
-    messages.warning(request, 'Usuário Deslogado!')
+    # Sem @login_required de propósito: se a sessão já expirou, apenas volta
+    # para a tela de login (evita redirect em loop com /admin/logout/).
+    if request.user.is_authenticated:
+        auth.logout(request)
+        messages.warning(request, 'Usuário Deslogado!')
     return redirect('login')
 
 

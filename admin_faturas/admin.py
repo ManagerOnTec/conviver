@@ -12,7 +12,7 @@ from .models import Convenio, PreFatura, Fatura, BaixaFatura
 from .forms import BaixaFaturaForm, ConvenioForm, FaturaForm, PreFaturaForm
 from django.contrib import messages
 from django.utils import timezone
-from dominios.utils import ExportToXLSMixin, AdminEstabelecimentoPadraoMixin, PreFaturadoFilterAdminMixin, StatusFilterAdminMixin, FaturadoFilterAdminMixin
+from dominios.utils import ExportToXLSMixin, AdminEstabelecimentoPadraoMixin, PreFaturadoFilterAdminMixin, StatusFilterAdminMixin, FaturadoFilterAdminMixin, chain_form_init
 from datetime import timedelta, date
 import calendar
 from decimal import Decimal
@@ -505,13 +505,15 @@ class BaixaFaturaAdmin(AdminEstabelecimentoPadraoMixin, ExportToXLSMixin, admin.
         return queryset, use_distinct
 
     def get_form(self, request, obj=None, **kwargs):
+        # O super() já inclui a filtragem/inicialização de 'estabelecimento'
+        # feita pelo AdminEstabelecimentoPadraoMixin.
         form = super().get_form(request, obj, **kwargs)
 
         def form_init(form_instance, *args, **kwargs):
-            super(form_instance.__class__, form_instance).__init__(
-                *args, **kwargs)
+            perfil_usuario = getattr(request.user, 'perfil', None)
+            if not perfil_usuario:
+                return
 
-            perfil_usuario = request.user.perfil
             estabelecimentos_permitidos = perfil_usuario.estabelecimento.all()
 
             form_instance.fields['fatura'].queryset = Fatura.objects.filter(
@@ -526,7 +528,8 @@ class BaixaFaturaAdmin(AdminEstabelecimentoPadraoMixin, ExportToXLSMixin, admin.
                 dt_fechamento_competencia__isnull = True, status='A'
             )
 
-        form.__init__ = form_init
+        # Encadeia em vez de substituir o __init__ aplicado pelo mixin.
+        chain_form_init(form, form_init)
 
         return form
 

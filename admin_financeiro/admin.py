@@ -3,7 +3,7 @@ from django.utils.translation import gettext_lazy as _
 from .models import ControleBancario, CompetenciaBancaria, MovimentoBancario
 from admin_pagamentos.models import Pagamento
 from admin_faturas.models import Fatura
-from dominios.utils import ExportToXLSMixin, AdminEstabelecimentoPadraoMixin, StatusFilterAdminMixin
+from dominios.utils import ExportToXLSMixin, AdminEstabelecimentoPadraoMixin, StatusFilterAdminMixin, chain_form_init
 from datetime import timedelta, date
 import calendar
 from decimal import Decimal
@@ -12,6 +12,7 @@ from .models import CompetenciaBancaria
 from admin_financeiro.forms import CompetenciaBancariaForm, MovimentoBancarioForm
 from django.utils import timezone
 from contas.models import Perfil
+from admin_cadastros.models import Estabelecimento
 from admin_cadastros_financeiros.models import Banco, Agencia, Conta, TransacaoFinanceira
 import xlwt
 from django.http import HttpResponse
@@ -112,15 +113,27 @@ class BancoPadraoFilter(admin.SimpleListFilter):
     title = _("Banco Padrão")
     parameter_name = "banco_padrao"
 
+    @staticmethod
+    def _estabelecimento_ativo(request, perfil):
+        """Estabelecimento ativo na sessão; sem sessão, usa o padrão do perfil."""
+        estabelecimento_id = request.session.get('estabelecimento_id')
+        if estabelecimento_id:
+            estabelecimento = Estabelecimento.objects.filter(
+                pk=estabelecimento_id).first()
+            if estabelecimento is not None:
+                return estabelecimento
+        return getattr(perfil, 'estabelecimento_padrao', None)
+
     def lookups(self, request, model_admin):
         perfil = Perfil.objects.filter(user=request.user).first()
-        if not perfil or not perfil.estabelecimento_padrao:
+        estabelecimento = self._estabelecimento_ativo(request, perfil)
+        if not estabelecimento:
             return []
-        
-        # Obter as contas padrão associadas ao estabelecimento padrão do perfil
+
+        # Obter as contas padrão associadas ao estabelecimento ativo
         contas_padroes = Conta.objects.filter(
             padrao=True,
-            agencia__estabelecimento=perfil.estabelecimento_padrao  # Associa conta ao estabelecimento
+            agencia__estabelecimento=estabelecimento  # Associa conta ao estabelecimento
         ).select_related('agencia__banco').distinct()
 
         # Retornar uma lista de tuplas (id da conta, descrição do banco) para o filtro
@@ -128,17 +141,21 @@ class BancoPadraoFilter(admin.SimpleListFilter):
 
     def queryset(self, request, queryset):
         perfil = Perfil.objects.filter(user=request.user).first()
-        if not perfil:
+        if not perfil and not request.user.is_superuser:
             return queryset.none()  # Retorna queryset vazio se o usuário não tiver um perfil
 
         if self.value():
             # Filtra pelo banco selecionado manualmente pelo usuário (por conta_id)
             return queryset.filter(competencia_bancaria__controle_bancario__conta_id=self.value())
-        
-        # Filtra automaticamente pelo banco padrão do estabelecimento padrão do perfil
+
+        estabelecimento = self._estabelecimento_ativo(request, perfil)
+        if not estabelecimento:
+            return queryset.none()
+
+        # Filtra automaticamente pelo banco padrão do estabelecimento ativo na sessão
         return queryset.filter(
             competencia_bancaria__controle_bancario__conta__padrao=True,
-            competencia_bancaria__controle_bancario__conta__agencia__estabelecimento=perfil.estabelecimento_padrao  # Filtra por estabelecimento padrão
+            competencia_bancaria__controle_bancario__conta__agencia__estabelecimento=estabelecimento  # Filtra por estabelecimento da sessão
         )
 
 
@@ -210,11 +227,7 @@ class CompetenciaAbertaMixin:
         """
         form = super().get_form(request, obj, **kwargs)
 
-        # Sobrescreve o método init do formulário
         def form_init(form_instance, *args, **kwargs):
-            # Chama o init original
-            super(form_instance.__class__, form_instance).__init__(*args, **kwargs)
-
             # Configuração padrão para competências abertas
             competencias_abertas = CompetenciaBancaria.objects.filter(
                 dt_fechamento_competencia__isnull=True
@@ -225,8 +238,8 @@ class CompetenciaAbertaMixin:
             if not obj and competencias_abertas.exists():
                 form_instance.fields['competencia_bancaria'].initial = competencias_abertas.first()
 
-        # Substitui o __init__ do formulário com a lógica de inicialização personalizada
-        form.__init__ = form_init
+        # Encadeia em vez de substituir o __init__ aplicado pelo mixin.
+        chain_form_init(form, form_init)
 
         return form
 
@@ -251,8 +264,8 @@ class MovimentoBancarioAdmin(CompetenciaAbertaMixin, ExportToXLSMixin, AdminEsta
     form = MovimentoBancarioForm
 
     actions = ['export_as_xls'] # Registrar a ação no admin
-  
-  
+
+
     readonly_fields = ['dt_registro', 'us_registro', 'dt_atualizacao', 'us_atualizacao','estabelecimento']
 
     list_display = [
@@ -277,16 +290,11 @@ class MovimentoBancarioAdmin(CompetenciaAbertaMixin, ExportToXLSMixin, AdminEsta
 
 
     def get_form(self, request, obj=None, **kwargs):
+        # O super() já inclui a filtragem/inicialização de 'estabelecimento'
+        # feita pelo AdminEstabelecimentoPadraoMixin.
         form = super().get_form(request, obj, **kwargs)
 
         def form_init(form_instance, *args, **kwargs):
-            super(form_instance.__class__, form_instance).__init__(
-                *args, **kwargs)
-
-            perfil_usuario = request.user.perfil
-            estabelecimentos_permitidos = perfil_usuario.estabelecimento.all()
-          
-
             form_instance.fields['transacao_financeira'].queryset = TransacaoFinanceira.objects.filter(
                 movimento='banco', status='A'
             )
@@ -295,7 +303,8 @@ class MovimentoBancarioAdmin(CompetenciaAbertaMixin, ExportToXLSMixin, AdminEsta
                 dt_fechamento_competencia__isnull = True, status='A'
             )
 
-        form.__init__ = form_init
+        # Encadeia em vez de substituir o __init__ aplicado pelo mixin.
+        chain_form_init(form, form_init)
 
         return form
 

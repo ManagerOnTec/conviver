@@ -87,6 +87,7 @@
 
         <form method="POST" action="{% url 'login' %}" class="auth-form">
           {% csrf_token %}
+          {% if next %}<input type="hidden" name="next" value="{{ next }}" />{% endif %}
 
           <div class="auth-field">
             <label for="id_usuario"><i class="fas fa-user me-2"></i>Usuário</label>
@@ -135,7 +136,7 @@
                 autocomplete="off"
                 inputmode="text"
                 maxlength="10"
-                placeholder="Digite o código"
+                placeholder="Código"
                 required
               />
               <input type="hidden" name="captcha_token" id="id_captcha_token"

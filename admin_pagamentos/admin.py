@@ -5,7 +5,7 @@ from django.contrib import admin
 from admin_financeiro.models import MovimentoBancario, CompetenciaBancaria
 from admin_cadastros.utils import EstabelecimentoFilterAdminMixin
 from contas.models import Perfil
-from dominios.utils import AdminEstabelecimentoPadraoMixin, AdminSaveModelAuditMixin, StatusFilterAdminMixin 
+from dominios.utils import AdminEstabelecimentoPadraoMixin, AdminSaveModelAuditMixin, StatusFilterAdminMixin , chain_form_init
 from .forms import BaixaPagamentoForm, ClassificacaoFornecedorForm, ClassificacaoPagamentoForm,FornecedorForm
 from admin_pagamentos.models import BaixaPagamento, ClassificacaoFornecedor, ClassificacaoPagamento, Fornecedor, ParametrosPagamentos, Pagamento
 from admin_cadastros_financeiros.models import TransacaoFinanceira
@@ -211,13 +211,15 @@ class BaixaPagamentoAdmin(ExportToXLSMixin, AdminSaveModelAuditMixin, AdminEstab
         return queryset, use_distinct
 
     def get_form(self, request, obj=None, **kwargs):
+        # O super() já inclui a filtragem/inicialização de 'estabelecimento'
+        # feita pelo AdminEstabelecimentoPadraoMixin.
         form = super().get_form(request, obj, **kwargs)
 
         def form_init(form_instance, *args, **kwargs):
-            super(form_instance.__class__, form_instance).__init__(
-                *args, **kwargs)
+            perfil_usuario = getattr(request.user, 'perfil', None)
+            if not perfil_usuario:
+                return
 
-            perfil_usuario = request.user.perfil
             estabelecimentos_permitidos = perfil_usuario.estabelecimento.all()
 
             form_instance.fields['pagamento'].queryset = Pagamento.objects.filter(
@@ -232,7 +234,8 @@ class BaixaPagamentoAdmin(ExportToXLSMixin, AdminSaveModelAuditMixin, AdminEstab
                 dt_fechamento_competencia__isnull = True, status='A'
             )
 
-        form.__init__ = form_init
+        # Encadeia em vez de substituir o __init__ aplicado pelo mixin.
+        chain_form_init(form, form_init)
 
         return form
 

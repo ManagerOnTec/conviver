@@ -2,10 +2,13 @@ from datetime import datetime
 from django.contrib import admin
 from dominios.admin_dashboard_mixins import AdminDashboardAndTopFilterMixin
 from .models import Atendimento
+from dominios.utils import AdminEstabelecimentoPadraoMixin 
+from admin_cadastros.utils import EstabelecimentoFilterAdminMixin
+
 
 
 @admin.register(Atendimento)
-class AtendimentoAdmin(AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
+class AtendimentoAdmin(AdminEstabelecimentoPadraoMixin, AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
     dashboard_date_field = 'dt_atendimento'
 
     def get_dashboard_kpis(self, request, queryset):
@@ -79,7 +82,7 @@ class AtendimentoAdmin(AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
         'estabelecimento', 'dt_atendimento', 'dt_alta',
     )
     list_display_links = ('id', 'pessoa')
-    list_filter = ('tipo_atendimento', 'carater_atendimento', 'estabelecimento')
+    list_filter = (EstabelecimentoFilterAdminMixin,'tipo_atendimento', 'carater_atendimento', 'estabelecimento')
     search_fields = ('id', 'pessoa__nome', 'pessoa__cpf', 'pessoa__rg')
     autocomplete_fields = ('pessoa',)
     date_hierarchy = 'dt_atendimento'
