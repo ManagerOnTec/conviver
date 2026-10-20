@@ -3407,6 +3407,8 @@ class PrescricaoCreateView(LoginRequiredMixin, CustomPermissionRequiredMixin, Fi
                 formset.save()
                 # messages.success(self.request, settings.MSG_ADD)
 
+                self._registrar_uso_prescricao_padrao(prescricao)
+
                 response = super().form_valid(form)
 
                 relatorio = salvar_pdf_prontuario(
@@ -3435,6 +3437,7 @@ class PrescricaoCreateView(LoginRequiredMixin, CustomPermissionRequiredMixin, Fi
         context = super().get_context_data(**kwargs)
         context['titulo'] = "Prontuários"
         context['title'] = "prescricao_cadastrar"
+        self._limpar_itens_de_prescricao_padrao(context)
         atendimento_id = self.kwargs.get('atendimento_id')
         context['atendimento_id'] = atendimento_id
         self.request.session['atendimento_id'] = atendimento_id
@@ -3463,6 +3466,32 @@ class PrescricaoCreateView(LoginRequiredMixin, CustomPermissionRequiredMixin, Fi
         context['cad_index'] = reverse_lazy('cadastros_index')
         context['list_index'] = reverse_lazy('prontuario_listar')
         return context
+
+    # ------------------------------------------------------------------
+    # PRESCRIÇÃO PADRÃO (modelo de prescrição)
+    # Os itens inseridos pelo modal (static/js/prescricao_padrao_modal.js) trafegam
+    # por campos hidden "item_padrao_id" no formset. Eles são removidos da cópia do
+    # POST usada pelo formset principal para NÃO alterar a lógica já existente de
+    # cadastro de prescrição. Apenas a auditoria (tabela PrescricaoPadraoUtilizacao)
+    # é registrada após o salvamento.
+    # Remoção: bash .rollback/2026-10-20_prescricao_padrao/rollback.sh
+    # ------------------------------------------------------------------
+    def _limpar_itens_de_prescricao_padrao(self, context):
+        formset = context.get('formset')
+        if not formset or not self.request.POST or not formset.is_bound:
+            return
+        if 'item_padrao_id' in formset.forms[0].fields if formset.forms else False:
+            for formset_form in formset.forms:
+                formset_form.fields.pop('item_padrao_id', None)
+
+    def _registrar_uso_prescricao_padrao(self, prescricao):
+        try:
+            from admin_prescricoes.models_prescricao_padrao import registrar_uso_prescricao_padrao
+            prefix = PrescricaoProdutoFormSet.get_default_prefix()
+            registrar_uso_prescricao_padrao(
+                prescricao, self.request.POST, prefix, self.request.user)
+        except Exception as exc:  # auditoria nunca deve impedir o cadastro
+            print(f'[prescricao-padrao] falha ao registrar uso: {exc}')
 
     def form_invalid(self, form):
         print("Formulário principal é inválido. Erros:")

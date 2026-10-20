@@ -15,16 +15,19 @@ from unittest.mock import patch
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.contrib.contenttypes.models import ContentType
 from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.exceptions import ValidationError
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory, TestCase, override_settings
+from django.urls import reverse
 from django.utils import timezone
 
 from admin_cadastros.models import Estabelecimento, Pessoa, Empresa, TipoAtendimento
-from admin_estoques.models import Grupo, Produto, TipoProduto, UnidadeMedida
+from admin_estoques.models import (
+    Grupo, Produto, TipoProduto, UnidadeMedida, ViaAdministracao,)
 from admin_evolucoes.models import TipoEvolucao
 from admin_prescricoes.models import InicioPlanoTerapeutico, IntervaloHoras
 from admin_relatorios.models import GerenciadorRelatorioGeral
@@ -1182,3 +1185,233 @@ class PrescricaoAdepPdfTests(TestCase):
             'SemMarcacaoNaoDeveAparecer', texto,
             'Item sem marcação de ADEP não deve constar no relatório.'
         )
+
+
+class PrescricaoPadraoTests(TestCase):
+    """Prescrição Padrão: liberação por parâmetro/perfil, API do modal e auditoria.
+
+    Cobrem o fluxo do "Assistente de Prescrição":
+      * a API só devolve modelos do estabelecimento liberados para o profissional;
+      * modelo de outra profissão / outro estabelecimento não aparece;
+      * a tela de cadastro renderiza a barra, o botão, o modal e a config JSON;
+      * o POST do cadastro grava a prescrição + item e a auditoria de uso.
+
+    Remoção: bash .rollback/2026-10-20_prescricao_padrao/rollback.sh
+    """
+
+    def setUp(self):
+        from admin_cadastros_assistenciais.models import (
+            CadastroProfissional, OrgaoRegulador, Profissao,
+        )
+        from admin_cadastros.models import Estado
+        from admin_prescricoes.models import ParametrosPrescricao
+        from admin_prescricoes.models_prescricao_padrao import (
+            PrescricaoPadrao, ProdutoPrescricaoPadrao,
+        )
+
+        self.user = get_user_model().objects.create_user(
+            username='medico_padrao', email='medico_padrao@example.com',
+            password='senha123')
+        self.user.user_permissions.add(
+            *Permission.objects.filter(
+                content_type__app_label='prontuarios',
+                codename='add_prescricao'))
+        self.pessoa_prof = Pessoa.objects.create(
+            nome='Médico Padrão', classificacao_pessoa='P', nacionalidade='b',
+            sexo='M', dt_nascimento=None, rg=None, cpf=None, status='A')
+        self.empresa = Empresa.objects.create(
+            nacionalidade='b', razao_social='Empresa Padrão', fantasia='Empresa Padrão',
+            empresa='EMP PADRAO', status='A')
+        self.estabelecimento = Estabelecimento.objects.create(
+            estabelecimento='Estab Padrão', tipo='H', empresa=self.empresa, status='A')
+        self.perfil = Perfil.objects.create(
+            user=self.user, pessoa=self.pessoa_prof,
+            estabelecimento_padrao=self.estabelecimento)
+        self.perfil.estabelecimento.add(self.estabelecimento)
+
+        self.profissao = Profissao.objects.create(profissao='Medico', status='A')
+        self.outra_profissao = Profissao.objects.create(profissao='Enfermeiro', status='A')
+        self.estado = Estado.objects.create(uf='SP', status='A')
+        self.orgao = OrgaoRegulador.objects.create(
+            sigla='CRM', descricao='Conselho Regional de Medicina',
+            uf=self.estado, status='A')
+        CadastroProfissional.objects.create(
+            profissional=self.user, profissao=self.profissao,
+            orgao_regulador=self.orgao, numero='12345', status='A')
+        ParametrosPrescricao.objects.create(
+            profissao=self.profissao, dias=3, estabelecimento=self.estabelecimento,
+            status='A')
+
+        self.grupo = Grupo.objects.create(
+            descricao='Analgésicos Padrão', tipo_produto=TipoProduto.objects.create(
+                descricao='Medicamento Padrão', status='A'),
+            pode_ser_prescrito=True, grupo_de_medicamento=True, status='A')
+        self.produto = Produto.objects.create(
+            descricao='Dipirona Padrão', unidade_medida=UnidadeMedida.objects.create(
+                unidade_medida='mg', descricao='Miligrama Padrão', status='A'),
+            via=ViaAdministracao.objects.get_or_create(
+                codigo='VO',
+                defaults={'descricao': 'Via Oral Padrão', 'status': 'A'},
+            )[0],
+            grupo=self.grupo, pode_ser_prescrito=True, status='A')
+        self.intervalo = IntervaloHoras.objects.create(
+            intervalo_horas=8, padrao=True, estabelecimento=self.estabelecimento, status='A')
+        self.inicio = InicioPlanoTerapeutico.objects.create(
+            hora_inicio=datetime.strptime('08:00', '%H:%M').time(), padrao=True,
+            estabelecimento=self.estabelecimento, status='A')
+
+        self.padrao = PrescricaoPadrao.objects.create(
+            descricao='Modelo Medico', profissao=self.profissao,
+            estabelecimento=self.estabelecimento, status='A')
+        self.item = ProdutoPrescricaoPadrao.objects.create(
+            prescricao_padrao=self.padrao, produto=self.produto,
+            intervalo_horas=self.intervalo, hora_inicio_produto=self.inicio, ordem=1)
+        self.padrao_outra_profissao = PrescricaoPadrao.objects.create(
+            descricao='Modelo Enfermagem', profissao=self.outra_profissao,
+            estabelecimento=self.estabelecimento, status='A')
+
+        self.paciente = Pessoa.objects.create(
+            nome='Paciente Padrão', classificacao_pessoa='P', nacionalidade='b',
+            sexo='M', dt_nascimento=None, rg=None, cpf=None, status='A')
+        self.atendimento = Atendimento.objects.create(
+            pessoa=self.paciente,
+            tipo_atendimento=TipoAtendimento.objects.create(
+                tipo_atendimento='Consulta Padrão', status='A'),
+            estabelecimento=self.estabelecimento, carater_atendimento='E',
+            entidade_encaminhamento='N', cert_nascimento=False, rg=False, cpf=False,
+            titulo_eleitor=False, carteira_vacina=False, cartao_sus=False,
+            cartao_banco=False, carteira_trabalho=False, foto=False, outros=False,
+            status='A')
+
+    def _client_logado(self):
+        from django.test import Client
+        client = Client(SERVER_NAME='localhost')
+        client.force_login(self.user)
+        session = client.session
+        session['estabelecimento_id'] = self.estabelecimento.id
+        session.save()
+        return client
+
+    def test_api_lista_apenas_modelos_liberados(self):
+        resp = self._client_logado().get(
+            reverse('prescricoes_padrao_disponiveis'))
+        self.assertEqual(resp.status_code, 200)
+        dados = resp.json()
+        self.assertEqual([d['descricao'] for d in dados], ['Modelo Medico'])
+        self.assertEqual(dados[0]['total_itens'], 1)
+        self.assertEqual(dados[0]['itens'][0]['produto_id'], self.produto.id)
+
+    def test_api_sem_parametros_retorna_vazio(self):
+        from admin_prescricoes.models import ParametrosPrescricao
+        ParametrosPrescricao.objects.all().update(status='I')
+        resp = self._client_logado().get(reverse('prescricoes_padrao_disponiveis'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), [])
+
+    def test_tela_cadastro_renderiza_assistente_de_prescricao(self):
+        with override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage'):
+            resp = self._client_logado().get(
+                reverse('prescricao_cadastrar', kwargs={'atendimento_id': self.atendimento.id}))
+            self.assertEqual(resp.status_code, 200)
+            html = resp.content.decode()
+        self.assertIn('Assistente de Prescrição', html)
+        self.assertIn('btn-tool-prescricao-padrao', html)
+        self.assertIn('modalPrescricaoPadrao', html)
+        self.assertIn('prescricao_padrao_modal.js', html)
+        self.assertIn('prescricao_padrao.css', html)
+        self.assertIn('prescricoes_padrao_disponiveis', html)
+
+    def test_post_grava_item_e_auditoria(self):
+        from prontuarios.models import Prescricao, ProdutoPrescricao
+        from admin_prescricoes.models_prescricao_padrao import PrescricaoPadraoUtilizacao
+
+        inicio = timezone.localtime().replace(hour=0, minute=0, second=0, microsecond=0)
+        payload = {
+            'atendimento': str(self.atendimento.id),
+            'estabelecimento': str(self.estabelecimento.id),
+            'status': 'A', 'fase': 'U',
+            'dt_inicio': (inicio + timedelta(days=1)).isoformat(timespec='minutes'),
+            'dt_final': (inicio + timedelta(days=2)).replace(
+                hour=23, minute=59).isoformat(timespec='minutes'),
+            'produtos-TOTAL_FORMS': '1', 'produtos-INITIAL_FORMS': '0',
+            'produtos-MIN_NUM_FORMS': '0', 'produtos-MAX_NUM_FORMS': '1000',
+            'produtos-0-produto': str(self.produto.id),
+            'produtos-0-intervalo_horas': str(self.intervalo.id),
+            'produtos-0-hora_inicio_produto': str(self.inicio.id),
+            'produtos-0-item_padrao_id': str(self.item.id),
+        }
+        resp = self._client_logado().post(
+            reverse('prescricao_cadastrar', kwargs={'atendimento_id': self.atendimento.id}),
+            payload)
+        self.assertEqual(resp.status_code, 302)
+
+        prescricao = Prescricao.objects.order_by('-pk').first()
+        self.assertIsNotNone(prescricao)
+        self.assertEqual(ProdutoPrescricao.objects.filter(prescricao=prescricao).count(), 1)
+        uso = PrescricaoPadraoUtilizacao.objects.get()
+        self.assertEqual(uso.prescricao_padrao_id, self.padrao.id)
+        self.assertEqual(uso.prescricao_id, prescricao.id)
+        self.assertEqual(uso.profissional_id, self.user.id)
+
+
+class ProdutoPrescricaoPadraoAutocompleteTests(TestCase):
+    """Autocomplete de Produto na Prescrição Padrão só lista prescritíveis.
+
+    Regra: produto com `pode_ser_prescrito=True` OU cujo grupo tenha
+    `pode_ser_prescrito=True`. Nas demais telas o autocomplete continua sem filtro.
+    """
+
+    def setUp(self):
+        from django.contrib import admin as dj_admin
+        from admin_estoques.models import (
+            Grupo, Produto, TipoProduto, UnidadeMedida, ViaAdministracao,
+        )
+        from admin_estoques.admin import ProdutoAdmin  # noqa: F401  (registra o admin)
+
+        self.tipo = TipoProduto.objects.create(descricao='Medicamento Aut', status='A')
+        self.grupo_ok = Grupo.objects.create(
+            descricao='Grupo Prescritível', tipo_produto=self.tipo,
+            pode_ser_prescrito=True, status='A')
+        self.grupo_nao = Grupo.objects.create(
+            descricao='Grupo Comum', tipo_produto=self.tipo,
+            pode_ser_prescrito=False, status='A')
+        via, _ = ViaAdministracao.objects.get_or_create(
+            codigo='VO', defaults={'descricao': 'Via Oral Aut', 'status': 'A'})
+        unidade, _ = UnidadeMedida.objects.get_or_create(
+            unidade_medida='mg', defaults={'descricao': 'Miligrama Aut', 'status': 'A'})
+
+        self.produto_grupo_ok = Produto.objects.create(
+            descricao='ProdutoGrupoPrescritivel', unidade_medida=unidade, via=via,
+            grupo=self.grupo_ok, pode_ser_prescrito=False, status='A')
+        self.produto_flag = Produto.objects.create(
+            descricao='ProdutoFlagPrescritivel', unidade_medida=unidade, via=via,
+            grupo=self.grupo_nao, pode_ser_prescrito=True, status='A')
+        self.produto_nao = Produto.objects.create(
+            descricao='ProdutoNaoPrescritivel', unidade_medida=unidade, via=via,
+            grupo=self.grupo_nao, pode_ser_prescrito=False, status='A')
+
+        self.admin_produto = dj_admin.site._registry[Produto]
+
+    def _search(self, referer, field_name='produtos-0-produto'):
+        from django.test import RequestFactory
+        req = RequestFactory().get(
+            '/admin/autocomplete/',
+            {'term': 'Produto', 'field_name': field_name})
+        req.META['HTTP_HOST'] = 'localhost'
+        req.META['HTTP_REFERER'] = referer
+        from admin_estoques.models import Produto
+        qs, _ = self.admin_produto.get_search_results(req, Produto.objects.all(), 'Produto')
+        return qs
+
+    def test_lista_apenas_prescritiveis_na_prescricao_padrao(self):
+        qs = self._search(
+            'http://localhost/admin/admin_prescricoes/prescricaopadrao/1/change/')
+        descricoes = set(qs.values_list('descricao', flat=True))
+        self.assertIn('ProdutoGrupoPrescritivel', descricoes)
+        self.assertIn('ProdutoFlagPrescritivel', descricoes)
+        self.assertNotIn('ProdutoNaoPrescritivel', descricoes)
+
+    def test_outras_telas_nao_sao_filtradas(self):
+        qs = self._search(
+            'http://localhost/admin/admin_estoques/produto/1/change/', field_name='outro')
+        self.assertIn('ProdutoNaoPrescritivel', set(qs.values_list('descricao', flat=True)))

@@ -1,0 +1,71 @@
+/* ==========================================================================
+   PRESCRIÇÃO PADRÃO — estilo da barra "Assistente de Prescrição" e do modal.
+   Carregado apenas em prontuarios/prescricao_cadastrar.html.
+   Remoção: bash .rollback/2026-10-20_prescricao_padrao/rollback.sh
+   ========================================================================== */
+
+.btn-tool-prescricao-padrao {
+    background: rgba(25, 135, 84, 0.15);
+    border-color: rgba(25, 135, 84, 0.45);
+    color: #34d399;
+}
+
+.btn-tool-prescricao-padrao:hover {
+    background: #198754;
+    border-color: #198754;
+    color: #ffffff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 14px rgba(25, 135, 84, 0.4);
+}
+
+.prescricao-padrao-card {
+    transition: all 0.2s ease;
+}
+
+.prescricao-padrao-card:hover {
+    box-shadow: 0 6px 18px rgba(25, 135, 84, 0.14) !important;
+}
+
+/* --------------------------------------------------------------------------
+   CORREÇÃO DO MODAL
+   O CSS de evolução que também é carregado nesta tela força apenas
+   #modalTextosPadrao/#modalDiagnosticos para position:fixed + z-index alto
+   (e estiliza .modal-backdrop globalmente). Sem estas regras o modal fica
+   atrás do backdrop (#right-content tem stacking context próprio) e o
+   diálogo aparece escuro e sem cliques.
+   -------------------------------------------------------------------------- */
+body.modal-open .modal#modalPrescricaoPadrao,
+.modal#modalPrescricaoPadrao {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: 2147483000 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    outline: 0 !important;
+}
+
+#modalPrescricaoPadrao .modal-dialog {
+    z-index: 2147483001 !important;
+    position: relative !important;
+    margin: 1.75rem auto !important;
+    pointer-events: auto !important;
+}
+
+#modalPrescricaoPadrao .modal-content {
+    background: #ffffff !important;
+    color: #1e293b !important;
+    border-radius: 14px !important;
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.45) !important;
+    position: relative !important;
+    z-index: 2147483002 !important;
+    pointer-events: auto !important;
+}
+
+/* Permite interação com todos os controles internos do modal */
+#modalPrescricaoPadrao .modal-dialog,
+#modalPrescricaoPadrao .modal-content,
+#modalPrescricaoPadrao .modal-content * {
+    pointer-events: auto !important;
+}

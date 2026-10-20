@@ -4,7 +4,7 @@ from django.utils.html import format_html
 from django.urls import reverse
 from dominios.admin_dashboard_mixins import AdminDashboardAndTopFilterMixin
 from .models import (
-    Evolucao, Prescricao, Adep, SinaisVitais,
+    Evolucao, Prescricao, ProdutoPrescricao, Adep, SinaisVitais,
     SAE, Diagnostico, PlanoCuidados, PerdasGanhos
 )
 
@@ -79,6 +79,7 @@ class PrescricaoAdmin(AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
     autocomplete_fields = ('atendimento',)
     date_hierarchy = 'dt_registro'
     ordering = ('-id',)
+    inlines = ()  # definido após ProdutoPrescricaoInline (ver abaixo)
 
     def paciente_nome(self, obj):
         p = obj.atendimento.pessoa if obj.atendimento else None
@@ -122,6 +123,75 @@ class PrescricaoAdmin(AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
                 'icon': '✅',
             },
         ]
+
+
+class ProdutoPrescricaoInline(admin.TabularInline):
+    """Itens da prescrição real — apenas leitura de contexto.
+
+    O lançamento de itens é feito na tela *Produto da Prescrição* (com select2)
+    ou pelo fluxo do prontuário, que calcula datas, gera ADEP e assina o PDF.
+    """
+
+    model = ProdutoPrescricao
+    fk_name = 'prescricao'
+    extra = 0
+    can_delete = False
+    fields = ('produto', 'intervalo_horas', 'hora_inicio_produto',
+              'se_necessario', 'dose_unica', 'observacao', 'dt_inicio', 'status')
+    readonly_fields = fields
+    ordering = ('dt_inicio',)
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+PrescricaoAdmin.inlines = (ProdutoPrescricaoInline,)
+
+
+@admin.register(ProdutoPrescricao)
+class ProdutoPrescricaoAdmin(admin.ModelAdmin):
+    """Produto da Prescrição (item de uma prescrição real).
+
+    Antes não havia tela no admin. Aqui os campos relacionados usam select2 de
+    digitação (autocomplete do Django) para localizar produto, intervalo, horário
+    de início e a prescrição sem rolar listas enormes.
+
+    `atendimento`/`estabelecimento` são derivados da prescrição
+    (`ProdutoPrescricao.save`), por isso ficam ocultos no formulário.
+    """
+
+    autocomplete_fields = ('prescricao', 'produto', 'intervalo_horas',
+                           'hora_inicio_produto')
+
+    class Media:
+        js = ('js/admin_select2_largura.js',)
+
+    exclude = ('atendimento', 'estabelecimento')
+    list_display = ('id', 'prescricao', 'produto', 'intervalo_horas',
+                    'hora_inicio_produto', 'se_necessario', 'dose_unica',
+                    'dt_inicio', 'dt_final', 'status')
+    list_display_links = ('id', 'produto')
+    list_filter = ('status', 'se_necessario', 'dose_unica', 'dt_inicio')
+    search_fields = ('id', 'produto__descricao', 'prescricao__id',
+                     'atendimento__pessoa__nome')
+    date_hierarchy = 'dt_inicio'
+    ordering = ('-id',)
+    list_per_page = 20
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.us_registro = request.user
+            obj.dt_registro = timezone.now()
+        else:
+            obj.us_atualizacao = request.user
+            obj.dt_atualizacao = timezone.now()
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(SinaisVitais)

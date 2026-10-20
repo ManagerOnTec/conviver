@@ -163,3 +163,8 @@ admin.site.register(InicioPlanoTerapeutico, InicioPlanoTerapeuticoAdmin)
 admin.site.register(IntervaloHoras, IntervaloHorasAdmin)
 admin.site.register(HorarioRestritoPrescricao, HorarioRestritoPrescricaoAdmin)
 admin.site.register(ParametrosPrescricao, ParametrosPrescricaoAdmin)
+
+# PRESCRIÇÃO PADRÃO (modelo de prescrição) - importado no final para registrar
+# PrescricaoPadrao/ProdutoPrescricaoPadrao sem alterar o admin já existente.
+# Remoção: bash .rollback/2026-10-20_prescricao_padrao/rollback.sh
+from admin_prescricoes import admin_prescricao_padrao  # noqa: E402,F401

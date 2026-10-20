@@ -1,5 +1,6 @@
 from smart_selects.form_fields import ChainedModelChoiceField
 from django.contrib import admin
+from django.db import models
 from .models import Categoria, Grupo, Classe, SubClasse, TipoProduto, Produto, UnidadeMedida, ViaAdministracao
 from dominios.utils import StatusFilterAdminMixin, ExportToXLSMixin
 from .forms import CategoriaForm, GrupoForm, ClasseForm, SubClasseForm, TipoProdutoForm, ProdutoForm, UnidadeMedidaForm, ViaAdministracaoForm
@@ -159,6 +160,76 @@ class ProdutoAdmin(ExportToXLSMixin, BaseModelAdmin):
             kwargs["queryset"] = SubClasse.objects.filter(
                 status='A')
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    def get_search_results(self, request, queryset, search_term):
+        """Autocomplete de Produto (usado pela Prescrição Padrão).
+
+        O widget `autocomplete_fields` consulta este ModelAdmin, ignorando o
+        queryset do form. Aqui aplicamos dois ajustes, **somente** quando a
+        consulta vem da Prescrição Padrão:
+
+        1. **Filtro de prescritibilidade**: só produtos com
+           `pode_ser_prescrito=True` ou cujo grupo seja prescritível (mesmo
+           critério de `produtos_prescritiveis_queryset`).
+        2. **Busca pelo nome do comercial vinculado**: o `__str__` do genérico
+           mostra ``Midazolam→ Dormonid / ...``, mas o `search_fields` apenas
+           cobre `descricao` ("Midazolam"). Pesquisar por "Dormonid" encontrava
+           o **comercial** (não prescritível) e não o genérico. Agora a busca
+           também considera `produto_referencia__descricao` e o comercial é
+           descartado, permanecendo o genérico prescritível que o referencia.
+        """
+        if not self._autocomplete_origem_prescricao_padrao(request):
+            return super().get_search_results(request, queryset, search_term)
+
+        prescritivel = models.Q(pode_ser_prescrito=True) | models.Q(
+            grupo__pode_ser_prescrito=True)
+
+        termo = (search_term or '').strip()
+        if not termo:
+            return queryset.filter(prescritivel).distinct(), False
+
+        # Recalcula a partir do queryset original (o `super()` filtra por
+        # `search_fields`, que não conhece o comercial vinculado).
+        # Mantém também os campos originais de busca (unidade de medida) e o id.
+        casam = Produto.objects.filter(
+            models.Q(descricao__icontains=termo)
+            | models.Q(produto_referencia__descricao__icontains=termo)
+            | models.Q(unidade_medida__unidade_medida__icontains=termo)
+            | models.Q(unidade_medida__descricao__icontains=termo)
+        )
+        if termo.isdigit():
+            casam = casam | Produto.objects.filter(pk=int(termo))
+
+        ids_prescritiveis = set(casam.filter(prescritivel).values_list('pk', flat=True))
+        # Comerciais (não prescritíveis) vinculados a um genérico prescritível
+        # encontrado são omitidos: o usuário escolhe o genérico.
+        ids_comerciais_vinculados = set(casam.filter(
+            pk__in=Produto.objects.filter(
+                produto_referencia__in=ids_prescritiveis,
+            ).values_list('pk', flat=True),
+        ).values_list('pk', flat=True))
+
+        ids = ids_prescritiveis - ids_comerciais_vinculados
+        resultado = Produto.objects.filter(pk__in=ids)
+
+        # Mantém eventuais filtros do queryset recebido (ex.: status).
+        resultado = resultado.filter(pk__in=queryset.values('pk'))
+        return resultado.distinct(), False
+
+    @staticmethod
+    def _autocomplete_origem_prescricao_padrao(request):
+        """True quando o autocomplete foi aberto a partir da Prescrição Padrão.
+
+        O Django envia o parâmetro ``field_name`` (ex.: ``produtos-0-produto``)
+        e o ``Referer`` da página de origem.
+        """
+        referer = request.META.get('HTTP_REFERER', '')
+        if 'prescricaopadrao' in referer:
+            return True
+        # Fallback: o formulário-pai informa o prefixo do formset
+        field_name = request.GET.get('field_name', '')
+        return field_name.startswith('produtos-')
+
 
 
 admin.site.register(TipoProduto, TipoProdutoAdmin)

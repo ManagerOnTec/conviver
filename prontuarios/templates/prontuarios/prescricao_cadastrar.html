@@ -88,6 +88,31 @@
   
   <!-- FIM DADOS DO OBJETO -->
   {% endblock %} {% block lista %}
+  <link rel="stylesheet" href="{% static 'css/evolucao_cadastrar_css.css' %}">
+  <link rel="stylesheet" href="{% static 'css/prescricao_padrao.css' %}">
+
+  <!-- ====================================================================
+       ASSISTENTE DE PRESCRIÇÃO — PRESCRIÇÃO PADRÃO (modelo de prescrição)
+       Remoção: bash .rollback/2026-10-20_prescricao_padrao/rollback.sh
+       ==================================================================== -->
+  <div class="evolucao-smart-tools-bar mb-3" id="secao-prescricao-padrao">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <span class="tools-bar-label">
+        <i class="fas fa-wand-magic-sparkles text-primary me-1"></i> Assistente de Prescrição:
+      </span>
+      <button
+        type="button"
+        id="btn-inserir-prescricao-padrao"
+        class="btn clinical-tool-btn btn-tool-prescricao-padrao"
+        title="Abrir catálogo de prescrições padrão liberadas para o seu perfil"
+      >
+        <i class="fas fa-file-prescription"></i>
+        <span>Prescrição Padrão</span>
+      </button>
+    </div>
+  </div>
+  <!-- FIM ASSISTENTE DE PRESCRIÇÃO -->
+
   <div class="container">
     <form
       id="form-prescricao-cadastrar"
@@ -104,9 +129,9 @@
                 <h5>Nova Prescrição</h5>
                 {{ form.as_p }}
               </div>
-  
+
               {{ formset.management_form }}
-  
+
               <!-- Template para itens clonados -->
               <div id="{{ formset.prefix }}-empty" style="display: none">
                 <div class="form-control mt-2 p-2 bg-light rounded shadow">
@@ -118,11 +143,11 @@
                     <div class="col-lg-4 col-md-6 col-sm-12 col-xs-4">
                       {{ formset.empty_form.intervalo_horas|as_crispy_field }}
                     </div>
-  
+
                     <div class="col-lg-4 col-md-6 col-sm-12 col-xs-4">
                       {{ formset.empty_form.hora_inicio_produto|as_crispy_field }}
                     </div>
-  
+
                     <div class="col-lg-4 col-md-6 col-sm-12 col-xs-4 mt-4">
                       {{ formset.empty_form.se_necessario|as_crispy_field }}
                     </div>
@@ -145,7 +170,7 @@
                   </div>
                 </div>
               </div>
-  
+
               <!-- Itens de prescrição -->
               <div id="itens-prescricao">
                 {% for form in formset %}
@@ -158,11 +183,11 @@
                     <div class="col-lg-4 col-md-6 col-sm-12 col-xs-4">
                       {{ form.intervalo_horas|as_crispy_field }}
                     </div>
-  
+
                     <div class="col-lg-4 col-md-6 col-sm-12 col-xs-4">
                       {{ form.hora_inicio_produto|as_crispy_field }}
                     </div>
-  
+
                     <div class="col-lg-4 col-md-6 col-sm-12 col-xs-4 mt-4">
                       {{ form.se_necessario|as_crispy_field }}
                     </div>
@@ -196,7 +221,7 @@
                 </div>
                 {% endfor %}
               </div>
-  
+
               <!-- Botão para adicionar itens -->
               <div class="mt-2">
                 <button
@@ -210,7 +235,7 @@
             </div>
           </div>
         </div>
-  
+
         <!-- Coluna dos botões -->
         <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
           {% include 'parciais/_workflow_submit_sidebar.html' with button_id='btn-prescricao-cadastrar' submit_label='Salvar' status_title='Cadastrando...' status_spinner_class='text-success' status_text_class='text-success' %}
@@ -219,6 +244,15 @@
     </form>
   </div>
   {% endblock %} {% block scriptcustom %}
+  <script id="prescricao-padrao-config" type="application/json">
+    {
+      "url": "{% url 'prescricoes_padrao_disponiveis' %}",
+      "formsetPrefix": "{{ formset.prefix }}",
+      "atendimentoId": "{{ atendimento_id }}"
+    }
+  </script>
+  {% include 'parciais/_prescricao_padrao_modal.html' %}
+  <script src="{% static 'js/prescricao_padrao_modal.js' %}"></script>
   <script>
     $(document).ready(function () {
       var formsetPrefix = "{{ formset.prefix }}"; // Prefixo do formset

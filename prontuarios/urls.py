@@ -4,6 +4,7 @@ from . views import (AdepListarAdministrarView, AdepListarAssinarView, Diagnosti
                      PlanoCuidadosListView, PlanoCuidadosUpdateView, ProntuarioDetailView, EvolucaoListView, EvolucaoCreateView, EvolucaoDetailView, EvolucaoUpdateView, ProntuarioListView, SAECreateView, SAEDetailView, SAEListView, SAEUpdateView, SinaisVitaisCreateView, SinaisVitaisDetailView, SinaisVitaisListView, SinaisVitaisUpdateView, TextoPadraoFiltradoView, AdepListView,
                      SuspendPrescriptionView, PrescricaoGeralListView, RenovarPrescricoesLoteView, SuspenderPrescricoesLoteView, check_adeps)
 from . utils import buscar_diagnosticos
+from admin_prescricoes.views_prescricao_padrao import PrescricoesPadraoDisponiveisView
 
 
 urlpatterns = [
@@ -103,6 +104,10 @@ urlpatterns = [
          ItensPrescricaoListView.as_view(), name='itens_prescricao_listar'),
     path('prescricao_cadastrar/<int:atendimento_id>/',
          PrescricaoCreateView.as_view(), name='prescricao_cadastrar'),
+
+    # PRESCRIÇÃO PADRÃO (modal do cadastro de prescrição)
+    path('prescricoes_padrao_disponiveis/',
+         PrescricoesPadraoDisponiveisView.as_view(), name='prescricoes_padrao_disponiveis'),
     path('prescricao_editar/<int:pk>/',
          PrescricaoUpdateView.as_view(), name='prescricao_editar'),
 
