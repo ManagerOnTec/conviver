@@ -207,14 +207,52 @@
     }
   }
 
+  /**
+   * Localiza a primeira linha do formset que ainda não tem produto selecionado
+   * (normalmente a linha inicial `extra=1` que o Django já renderiza vazia).
+   * Retorna `{row, index}` ou `null`.
+   */
+  function linhaVaziaExistente(prefix) {
+    var container = document.getElementById('itens-prescricao');
+    if (!container) return null;
+    var rows = container.querySelectorAll('.row');
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i];
+      var sel = row.querySelector('select[name$="-produto"]');
+      if (!sel) continue;
+      if (sel.value) continue;                 // já preenchida
+      var m = sel.name.match(new RegExp('^' + prefix + '-(\\d+)-produto$'));
+      if (!m) continue;
+      var idx = parseInt(m[1], 10);
+      if (isNaN(idx)) continue;
+      // Linha que já tem auditoria de outra inserção não deve ser reaproveitada
+      if (row.querySelector('input.item_padrao_id')) continue;
+      return { row: row, index: idx };
+    }
+    return null;
+  }
+
   function inserirModelo(modeloId) {
     var modelo = state.modelos.find(function (m) { return String(m.id) === String(modeloId); });
     if (!modelo || !modelo.itens || !modelo.itens.length) {
       alert('Esta prescrição padrão não possui itens ativos.');
       return;
     }
+    var cfg = getConfig() || {};
+    var prefix = cfg.formsetPrefix;
     var inseridos = 0;
+
     modelo.itens.forEach(function (item) {
+      // 1) Reaproveita a linha que já veio na tela (vazia) — evita criar uma
+      //    linha extra e deixar a primeira sem produto.
+      var vazia = linhaVaziaExistente(prefix);
+      if (vazia) {
+        preencherItem(vazia.row, prefix, vazia.index, item);
+        garantirSelect2(vazia.row);
+        inseridos++;
+        return;
+      }
+      // 2) Sem linha vazia disponível: cria uma nova.
       if (adicionarItemNoFormset(item)) inseridos++;
     });
 
@@ -223,9 +261,59 @@
       return;
     }
 
+    // O script da página chama $('select').select2() no ready; se ele rodar
+    // depois desta inserção, pode duplicar o widget. Garante um único aqui.
+    dedupTodos();
+
     var modalEl = document.getElementById('modalPrescricaoPadrao');
     if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).hide();
     mostrarToast(inseridos + ' item(ns) de “' + modelo.descricao + '” inserido(s).');
+  }
+
+  /** Garante UM único widget select2 por <select> na linha.
+   *
+   *  A página já chama `$('select').select2()` (initializeSelect2) e o select2
+   *  duplica o widget quando é inicializado de novo no mesmo elemento — era o
+   *  efeito de "produto/intervalo/hora aparecem duas vezes". Aqui apenas
+   *  removemos containers órfãos e inicializamos só quando necessário.
+   */
+  function garantirSelect2(row) {
+    if (!window.jQuery || !jQuery.fn.select2) return;
+    jQuery(row).find('select').each(function () {
+      var el = this;
+      var $sel = jQuery(el);
+
+      // Já tem o widget? Só sincroniza o texto exibido.
+      if (window.Select2 && $sel.data('select2')) {
+        $sel.trigger('change.select2');
+        return;
+      }
+
+      // Remove containers órfãos que não pertençam a este select.
+      var pai = el.parentNode;
+      if (pai) {
+        jQuery(pai).children('span.select2-container').each(function () {
+          if (this.previousElementSibling !== el) jQuery(this).remove();
+        });
+      }
+      $sel.select2({ width: '100%' });
+    });
+  }
+
+  /** Remove widgets select2 duplicados (defesa extra após inserções). */
+  function dedupSelect2(row) {    if (!window.jQuery) return;
+    jQuery(row).find('select').each(function () {
+      var el = this;
+      var pai = el.parentNode;
+      if (!pai) return;
+      var containers = jQuery(pai).children('span.select2-container');
+      if (containers.length > 1) {
+        // Mantém apenas o que está imediatamente após o próprio select.
+        containers.each(function () {
+          if (this.previousElementSibling !== el) jQuery(this).remove();
+        });
+      }
+    });
   }
 
   /**
@@ -267,11 +355,14 @@
 
     var row = novoItem.querySelector('.row') || novoItem;
     preencherItem(row, prefix, index, item);
-
-    if (window.jQuery && jQuery.fn.select2) {
-      jQuery(row).find('select').select2({ width: '100%' });
-    }
+    garantirSelect2(row);
     return true;
+  }
+
+  /** Aplica a deduplicação em todas as linhas do formset. */
+  function dedupTodos() {
+    var container = document.getElementById('itens-prescricao');
+    if (container) dedupSelect2(container);
   }
 
   function setValor(row, seletor, valor) {
