@@ -1,17 +1,27 @@
 /**
  * ============================================================================
- * CONVIVER / MANAGERONTEC - ASSISTENTE DE TEXTOS PADRONIZADOS PARA DOCUMENTOS
- * (Atas, Ofícios e Orçamentos)
+ * CONVIVER / MANAGERONTEC - TEXTOS PADRONIZADOS PARA DOCUMENTOS
+ * Atas | Oficios | Orcamentos  ->  admin_relatorios.TextoDocumentoPadrao
  * ============================================================================
- * - Abre o modal acima de qualquer elemento (backdrop sem cobrir o conteudo);
- * - Carrega os textos de admin_relatorios.TextoDocumentoPadrao via AJAX,
- *   filtrados estritamente pelo tipo (atas / oficios / orcamentos);
- * - Insere o texto no editor TinyMCE (ou textarea) na posicao do cursor.
+ * Fonte de dados : /texto-padrao/<tipo>/   (atas | oficios | orcamentos)
+ * Controle total do modal (sem Bootstrap), carregamento por tipo e inserção
+ * no editor TinyMCE (com fallback para textarea).
  */
 (function () {
     'use strict';
 
-    function getDocumentEditor() {
+    var MODAL_SEL = '#modalDocumentoTextoPadrao';
+    var BACKDROP_ID = 'backdropDocumentoTextoPadrao';
+    var LABELS = { atas: 'Ata', oficios: 'Ofício', orcamentos: 'Orçamento' };
+    var TIPOS = { ata: 'atas', atas: 'atas', oficio: 'oficios', oficios: 'oficios', orcamento: 'orcamentos', orcamentos: 'orcamentos' };
+
+    function normalizarTipo(valor) {
+        var v = String(valor || '').toLowerCase().trim();
+        return TIPOS[v] || 'atas';
+    }
+
+    /* ---------------- EDITOR ---------------- */
+    function getEditor() {
         if (typeof tinymce === 'undefined') return null;
         var ids = ['id_ata', 'ata', 'id_oficio', 'oficio', 'id_orcamento', 'orcamento'];
         for (var i = 0; i < ids.length; i++) {
@@ -22,318 +32,341 @@
         return null;
     }
 
-    function getDocumentTextarea() {
+    function getTextarea() {
         return document.getElementById('id_ata') ||
                document.getElementById('id_oficio') ||
                document.getElementById('id_orcamento') ||
                document.querySelector('form textarea');
     }
 
-    function parseDocumentHtml(html) {
-        var parser = new DOMParser();
-        return parser.parseFromString(html || '', 'text/html').body.innerHTML;
-    }
+    function inserirTexto(html) {
+        var parsed = String(html || '').trim();
+        if (!parsed) return false;
 
-    function insertHtmlIntoDocument(html) {
-        var parsed = parseDocumentHtml(html).trim();
-        if (!parsed) return;
-
-        var editor = getDocumentEditor();
+        var editor = getEditor();
         if (editor) {
             editor.focus();
-            var current = (editor.getContent({ format: 'html' }) || '').trim();
-            var empty = ['', '<p></p>', '<p><br data-mce-bogus="1"></p>', '<p>&nbsp;</p>'];
-            if (empty.indexOf(current) !== -1) {
-                editor.setContent(parsed);
-            } else {
-                editor.execCommand('mceInsertContent', false, parsed);
-            }
+            editor.execCommand('mceInsertContent', false, parsed);
             editor.save();
-            return;
+            return true;
         }
 
-        var ta = getDocumentTextarea();
+        var ta = getTextarea();
         if (ta) {
-            var clean = parsed.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim();
-            var pos = typeof ta.selectionStart === 'number' ? ta.selectionStart : ta.value.length;
-            var before = ta.value.slice(0, pos);
-            var after = ta.value.slice(pos);
-            ta.value = before + (before && !/\n$/.test(before) ? '\n' : '') + clean + after;
+            var tmp = document.createElement('div');
+            tmp.innerHTML = parsed;
+            var texto = (tmp.textContent || '').trim();
+            var pos = (typeof ta.selectionStart === 'number') ? ta.selectionStart : ta.value.length;
+            var antes = ta.value.slice(0, pos);
+            var depois = ta.value.slice(pos);
+            ta.value = antes + (antes && !/\n$/.test(antes) ? '\n' : '') + texto + depois;
             ta.focus();
+            return true;
         }
+        return false;
     }
 
-    function showToast(message) {
-        var existing = document.querySelector('.clinical-toast-notification');
-        if (existing) existing.remove();
+    /* ---------------- TOAST ---------------- */
+    function toast(msg) {
+        var old = document.querySelector('.clinical-toast-notification');
+        if (old) old.parentNode.removeChild(old);
 
-        var toast = document.createElement('div');
-        toast.className = 'clinical-toast-notification';
+        var el = document.createElement('div');
+        el.className = 'clinical-toast-notification';
         var icon = document.createElement('i');
         icon.className = 'fas fa-check-circle text-success';
         var span = document.createElement('span');
-        span.textContent = message;
-        toast.appendChild(icon);
-        toast.appendChild(span);
-        document.body.appendChild(toast);
+        span.textContent = msg;
+        el.appendChild(icon);
+        el.appendChild(span);
+        document.body.appendChild(el);
 
         setTimeout(function () {
-            toast.style.transition = 'opacity .3s ease, transform .3s ease';
-            toast.style.opacity = '0';
-            toast.style.transform = 'translateY(-10px)';
-            setTimeout(function () { toast.remove(); }, 300);
+            el.style.transition = 'opacity .3s ease, transform .3s ease';
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(-10px)';
+            setTimeout(function () {
+                if (el.parentNode) el.parentNode.removeChild(el);
+            }, 300);
         }, 3000);
     }
 
-    function abrirModal(modalEl) {
-        if (!modalEl) return;
+    /* ---------------- MODAL ---------------- */
+    function abrirModal(modal) {
+        if (!modal) return;
+        if (modal.parentNode !== document.body) document.body.appendChild(modal);
 
-        if (modalEl.parentElement !== document.body) {
-            document.body.appendChild(modalEl);
+        if (!document.getElementById(BACKDROP_ID)) {
+            var bd = document.createElement('div');
+            bd.id = BACKDROP_ID;
+            bd.className = 'modal-backdrop fade show';
+            bd.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:#000;opacity:.45;z-index:2147482000;';
+            document.body.appendChild(bd);
         }
 
-        var backdrop = document.getElementById('backdropDocumentoTextoPadrao');
-        if (!backdrop) {
-            backdrop = document.createElement('div');
-            backdrop.id = 'backdropDocumentoTextoPadrao';
-            backdrop.className = 'modal-backdrop fade show';
-            backdrop.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:#000;opacity:.45;z-index:999990;';
-            document.body.appendChild(backdrop);
-        }
-
-        modalEl.classList.add('show');
-        modalEl.style.cssText = 'display:block;position:fixed;inset:0;width:100vw;height:100vh;z-index:999999;overflow-y:auto;';
-        modalEl.removeAttribute('aria-hidden');
-        modalEl.setAttribute('aria-modal', 'true');
+        modal.style.display = 'block';
+        modal.style.position = 'fixed';
+        modal.style.top = '0';
+        modal.style.left = '0';
+        modal.style.width = '100vw';
+        modal.style.height = '100vh';
+        modal.style.zIndex = '2147483000';
+        modal.style.overflowX = 'hidden';
+        modal.style.overflowY = 'auto';
+        modal.classList.add('show');
+        modal.setAttribute('aria-modal', 'true');
+        modal.removeAttribute('aria-hidden');
 
         document.body.classList.add('modal-open');
         document.body.style.overflow = 'hidden';
-
-        var dialog = modalEl.querySelector('.modal-dialog');
-        if (dialog) {
-            dialog.style.zIndex = '1000000';
-            dialog.style.position = 'relative';
-            dialog.style.pointerEvents = 'auto';
-        }
     }
 
-    function fecharModal(modalEl) {
-        if (!modalEl) return;
+    function fecharModal(modal) {
+        if (!modal) return;
+        modal.style.display = 'none';
+        modal.classList.remove('show');
+        modal.setAttribute('aria-hidden', 'true');
+        modal.removeAttribute('aria-modal');
 
-        modalEl.classList.remove('show');
-        modalEl.style.display = 'none';
-        modalEl.setAttribute('aria-hidden', 'true');
-        modalEl.removeAttribute('aria-modal');
-
-        var backdrop = document.getElementById('backdropDocumentoTextoPadrao');
-        if (backdrop) backdrop.remove();
+        var bd = document.getElementById(BACKDROP_ID);
+        if (bd && bd.parentNode) bd.parentNode.removeChild(bd);
 
         document.body.classList.remove('modal-open');
         document.body.style.overflow = '';
     }
 
-    function init() {
-        var button = document.getElementById('insertDefaultDocs');
-        var modalEl = document.getElementById('modalDocumentoTextoPadrao');
-        if (!button || !modalEl) return;
-        if (button.dataset.assistentePronto === '1') return;
-        button.dataset.assistentePronto = '1';
+    /* ---------------- RENDER ---------------- */
+    function construirCard(item, tipo, onInsert) {
+        var card = document.createElement('div');
+        card.className = 'clinical-text-card';
 
-        var filtroInput = document.getElementById('filtroDocTextoInput');
-        var btnLimparFiltro = document.getElementById('btnLimparFiltroDocTexto');
-        var loadingEl = document.getElementById('loadingDocTexto');
-        var containerEl = document.getElementById('listaDocTextosContainer');
-        var vazioEl = document.getElementById('vazioDocTexto');
+        var header = document.createElement('div');
+        header.className = 'clinical-card-header';
 
-        var textosCarregados = [];
-        var tipoAtual = '';
+        var title = document.createElement('h6');
+        title.className = 'clinical-card-title';
+        var ico = document.createElement('i');
+        ico.className = 'fas fa-file-lines text-primary';
+        title.appendChild(ico);
+        title.appendChild(document.createTextNode(' ' + (item.descricao || 'Sem descrição')));
 
-        if (modalEl.parentElement !== document.body) {
-            document.body.appendChild(modalEl);
-        }
+        var badges = document.createElement('div');
+        badges.className = 'clinical-card-badges';
+        var badge = document.createElement('span');
+        badge.className = 'badge bg-primary-subtle text-primary border border-primary-subtle small px-2 py-1';
+        badge.textContent = LABELS[tipo] || 'Documento';
+        badges.appendChild(badge);
 
-        modalEl.querySelectorAll('[data-bs-dismiss], [data-dismiss]').forEach(function (btn) {
-            btn.addEventListener('click', function (e) {
-                e.preventDefault();
-                fecharModal(modalEl);
-            });
-        });
+        header.appendChild(title);
+        header.appendChild(badges);
 
-        document.addEventListener('click', function (e) {
-            if (e.target && e.target.id === 'backdropDocumentoTextoPadrao') {
-                fecharModal(modalEl);
-            }
-        });
+        var tmp = document.createElement('div');
+        tmp.innerHTML = item.texto || '';
+        var preview = document.createElement('div');
+        preview.className = 'clinical-card-preview';
+        var txt = (tmp.textContent || '').replace(/\s+/g, ' ').trim();
+        if (txt.length > 300) txt = txt.substring(0, 300) + '...';
+        preview.textContent = txt || 'Sem conteúdo disponível';
 
-        document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape' && modalEl.classList.contains('show')) {
-                fecharModal(modalEl);
-            }
-        });
+        var actions = document.createElement('div');
+        actions.className = 'clinical-card-actions';
 
-        function normalizarTipo(valor) {
-            var mapa = {
-                'ata': 'atas', 'atas': 'atas',
-                'oficio': 'oficios', 'oficios': 'oficios',
-                'orcamento': 'orcamentos', 'orcamentos': 'orcamentos'
-            };
-            var chave = (valor || '').toLowerCase().trim();
-            return mapa[chave] || 'atas';
-        }
-
-        function abrir() {
-            tipoAtual = normalizarTipo(button.getAttribute('data-tipo-documento'));
-            abrirModal(modalEl);
-            carregarTextos(tipoAtual);
-        }
-
-        button.addEventListener('click', function (e) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn-insert-clinical-text';
+        var plus = document.createElement('i');
+        plus.className = 'fas fa-plus';
+        btn.appendChild(plus);
+        btn.appendChild(document.createTextNode(' Inserir no Documento'));
+        btn.addEventListener('click', function (e) {
             e.preventDefault();
-            e.stopImmediatePropagation();
-            abrir();
-        }, true);
-
-        /* Fallback: se Bootstrap abrir o modal por data-bs-toggle */
-        modalEl.addEventListener('show.bs.modal', function () {
-            tipoAtual = normalizarTipo(button.getAttribute('data-tipo-documento'));
-            carregarTextos(tipoAtual);
+            onInsert(item);
         });
 
-        function carregarTextos(tipo) {
-            if (loadingEl) loadingEl.style.display = 'block';
-            if (containerEl) {
-                containerEl.style.display = 'none';
-                containerEl.innerHTML = '';
-            }
-            if (vazioEl) vazioEl.style.display = 'none';
+        actions.appendChild(btn);
+        card.appendChild(header);
+        card.appendChild(preview);
+        card.appendChild(actions);
+        return card;
+    }
 
-            var url = '/texto-padrao/' + encodeURIComponent(tipo) + '/?t=' + Date.now();
+    /* ---------------- ASSISTENTE ---------------- */
+    function criarAssistente() {
+        var button = document.getElementById('insertDefaultDocs');
+        var modal = document.querySelector(MODAL_SEL);
+        if (!button || !modal) return null;
+
+        var loading = document.getElementById('loadingDocTexto');
+        var container = document.getElementById('listaDocTextosContainer');
+        var vazio = document.getElementById('vazioDocTexto');
+        var filtro = document.getElementById('filtroDocTextoInput');
+        var limpar = document.getElementById('btnLimparFiltroDocTexto');
+
+        var estado = { tipo: 'atas', dados: [], carregando: false, carregadoPara: null };
+
+        if (modal.parentNode !== document.body) document.body.appendChild(modal);
+
+        function onInsert(item) {
+            if (inserirTexto(item.texto)) {
+                fecharModal(modal);
+                toast('Texto "' + (item.descricao || '') + '" inserido com sucesso!');
+            } else {
+                toast('Não foi possível localizar o editor do documento.');
+            }
+        }
+
+        function renderizar(lista) {
+            if (!container || !vazio) return;
+            container.innerHTML = '';
+
+            if (!lista || !lista.length) {
+                container.style.display = 'none';
+                vazio.style.display = 'block';
+                return;
+            }
+
+            vazio.style.display = 'none';
+            container.style.display = 'flex';
+
+            for (var i = 0; i < lista.length; i++) {
+                container.appendChild(construirCard(lista[i], estado.tipo, onInsert));
+            }
+        }
+
+        function carregar(tipo) {
+            if (estado.carregando) return;
+            estado.carregando = true;
+
+            if (loading) loading.style.display = 'block';
+            if (container) {
+                container.style.display = 'none';
+                container.innerHTML = '';
+            }
+            if (vazio) vazio.style.display = 'none';
+
+            var url = '/texto-padrao/' + encodeURIComponent(tipo) + '/?_=' + new Date().getTime();
 
             fetch(url, {
+                method: 'GET',
                 credentials: 'same-origin',
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                cache: 'no-store',
+                headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
             })
                 .then(function (res) {
                     if (!res.ok) throw new Error('HTTP ' + res.status);
                     return res.json();
                 })
-                .then(function (data) {
-                    textosCarregados = Array.isArray(data) ? data : [];
-                    renderizar(textosCarregados, tipo);
+                .then(function (dados) {
+                    estado.dados = Array.isArray(dados) ? dados : [];
+                    estado.carregadoPara = tipo;
+                    if (loading) loading.style.display = 'none';
+                    renderizar(estado.dados);
                 })
                 .catch(function (err) {
-                    console.error('[Texto Padrao] ' + err.message);
-                    if (loadingEl) loadingEl.style.display = 'none';
-                    if (vazioEl) {
-                        vazioEl.style.display = 'block';
-                        var p = vazioEl.querySelector('p');
-                        if (p) p.textContent = 'Nao foi possivel consultar o catalogo de textos padronizados.';
+                    console.error('[Texto Padrão] ' + err.message);
+                    if (loading) loading.style.display = 'none';
+                    if (container) container.style.display = 'none';
+                    if (vazio) {
+                        vazio.style.display = 'block';
+                        var p = vazio.querySelector('p');
+                        if (p) p.textContent = 'Não foi possível carregar os textos padronizados (' + err.message + ').';
                     }
-                });
+                })
+                .then(function () { estado.carregando = false; });
         }
 
-        function renderizar(lista, tipo) {
-            if (loadingEl) loadingEl.style.display = 'none';
+        function abrir(tipo) {
+            estado.tipo = normalizarTipo(tipo || button.getAttribute('data-tipo-documento'));
+            if (filtro) filtro.value = '';
+            if (limpar) limpar.style.display = 'none';
+            abrirModal(modal);
+            carregar(estado.tipo);
+        }
 
-            if (!lista || lista.length === 0) {
-                if (containerEl) containerEl.style.display = 'none';
-                if (vazioEl) vazioEl.style.display = 'block';
-                return;
-            }
+        button.addEventListener('click', function (e) {
+            e.preventDefault();
+            button.setAttribute('data-aberto-pelo-direto', '1');
+            abrir(button.getAttribute('data-tipo-documento'));
+        }, true);
 
-            if (vazioEl) vazioEl.style.display = 'none';
-            if (!containerEl) return;
+        modal.querySelectorAll('[data-bs-dismiss], [data-dismiss]').forEach(function (el) {
+            el.addEventListener('click', function (e) {
+                e.preventDefault();
+                fecharModal(modal);
+            });
+        });
 
-            var labels = { 'atas': 'Ata', 'oficios': 'Oficio', 'orcamentos': 'Orcamento' };
+        document.addEventListener('click', function (e) {
+            if (e.target && e.target.id === BACKDROP_ID) fecharModal(modal);
+        });
 
-            containerEl.innerHTML = '';
-            containerEl.style.display = 'flex';
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && modal.classList.contains('show')) fecharModal(modal);
+        });
 
-            lista.forEach(function (item) {
-                var card = document.createElement('div');
-                card.className = 'clinical-text-card';
-
-                var header = document.createElement('div');
-                header.className = 'clinical-card-header';
-
-                var title = document.createElement('h6');
-                title.className = 'clinical-card-title';
-                var iconEl = document.createElement('i');
-                iconEl.className = 'fas fa-file-lines text-primary';
-                title.appendChild(iconEl);
-                title.appendChild(document.createTextNode(' ' + (item.descricao || 'Sem descricao')));
-
-                var badges = document.createElement('div');
-                badges.className = 'clinical-card-badges';
-                var badge = document.createElement('span');
-                badge.className = 'badge bg-primary-subtle text-primary border border-primary-subtle small px-2 py-1';
-                badge.textContent = labels[tipo] || 'Documento';
-                badges.appendChild(badge);
-
-                header.appendChild(title);
-                header.appendChild(badges);
-
-                var prev = document.createElement('div');
-                prev.innerHTML = item.texto || '';
-
-                var preview = document.createElement('div');
-                preview.className = 'clinical-card-preview';
-                preview.textContent = (prev.textContent || '').trim().substring(0, 320) || 'Sem conteudo disponivel';
-
-                var actions = document.createElement('div');
-                actions.className = 'clinical-card-actions';
-
-                var insertBtn = document.createElement('button');
-                insertBtn.type = 'button';
-                insertBtn.className = 'btn-insert-clinical-text';
-                var plus = document.createElement('i');
-                plus.className = 'fas fa-plus';
-                insertBtn.appendChild(plus);
-                insertBtn.appendChild(document.createTextNode(' Inserir no Documento'));
-
-                insertBtn.addEventListener('click', function () {
-                    insertHtmlIntoDocument(item.texto);
-                    fecharModal(modalEl);
-                    showToast('Texto "' + (item.descricao || '') + '" inserido com sucesso!');
-                });
-
-                actions.appendChild(insertBtn);
-                card.appendChild(header);
-                card.appendChild(preview);
-                card.appendChild(actions);
-                containerEl.appendChild(card);
+        if (filtro) {
+            filtro.addEventListener('input', function () {
+                var q = this.value.trim().toLowerCase();
+                if (limpar) limpar.style.display = q ? 'inline-block' : 'none';
+                renderizar(estado.dados.filter(function (it) {
+                    return (it.descricao || '').toLowerCase().indexOf(q) !== -1 ||
+                           (it.texto || '').toLowerCase().indexOf(q) !== -1;
+                }));
             });
         }
 
-        if (filtroInput) {
-            filtroInput.addEventListener('input', function () {
-                var query = (this.value || '').trim().toLowerCase();
-                if (btnLimparFiltro) btnLimparFiltro.style.display = query ? 'inline-block' : 'none';
-
-                var filtrados = textosCarregados.filter(function (item) {
-                    var desc = (item.descricao || '').toLowerCase();
-                    var texto = (item.texto || '').toLowerCase();
-                    return desc.indexOf(query) !== -1 || texto.indexOf(query) !== -1;
-                });
-
-                renderizar(filtrados, tipoAtual);
+        if (limpar) {
+            limpar.addEventListener('click', function () {
+                if (filtro) { filtro.value = ''; filtro.focus(); }
+                limpar.style.display = 'none';
+                renderizar(estado.dados);
             });
         }
 
-        if (btnLimparFiltro) {
-            btnLimparFiltro.addEventListener('click', function () {
-                if (!filtroInput) return;
-                filtroInput.value = '';
-                filtroInput.focus();
-                btnLimparFiltro.style.display = 'none';
-                renderizar(textosCarregados, tipoAtual);
-            });
+        return { abrir: abrir, carregar: carregar, estado: estado };
+    }
+
+    /* ---------------- BOOT ROBUSTO ---------------- */
+    var assistente = null;
+
+    function boot() {
+        if (assistente) return;
+        assistente = criarAssistente();
+        if (!assistente) {
+            console.warn('[Texto Padrao] Botao #insertDefaultDocs ou modal ausente. Nova tentativa em 300ms...');
+            setTimeout(boot, 300);
+        } else {
+            console.info('[Texto Padrao] Assistente inicializado.');
         }
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
+    /* Tentativas de inicializacao em pontos diferentes do ciclo de vida */
+    boot();
+    document.addEventListener('DOMContentLoaded', boot);
+    window.addEventListener('load', boot);
+    setTimeout(boot, 500);
+    setTimeout(boot, 1500);
+
+    /* Fallback: delegacao de evento no document (caso o listener direto nao exista) */
+    document.addEventListener('click', function (e) {
+        var alvo = (e.target && e.target.closest) ? e.target.closest('#insertDefaultDocs') : null;
+        if (!alvo) return;
+        if (!assistente) boot();
+        if (!assistente) return;
+        if (alvo.getAttribute('data-aberto-pelo-direto') === '1') {
+            alvo.removeAttribute('data-aberto-pelo-direto');
+            return;
+        }
+        e.preventDefault();
+        assistente.abrir(alvo.getAttribute('data-tipo-documento'));
+    });
+
+    /* API global para abertura manual (debug / integracoes) */
+    window.AssistenteDocumentos = {
+        abrir: function (tipo) {
+            if (!assistente) boot();
+            if (assistente) assistente.abrir(tipo);
+        },
+        estado: function () { return assistente ? assistente.estado : null; }
+    };
 })();

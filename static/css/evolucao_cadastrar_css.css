@@ -14,20 +14,20 @@ body.modal-open .modal#modalDocumentoTextoPadrao,
     inset: 0 !important;
     width: 100vw !important;
     height: 100vh !important;
-    z-index: 999999 !important;
+    z-index: 2147483000 !important;
     overflow-x: hidden !important;
     overflow-y: auto !important;
     outline: 0 !important;
 }
 
 .modal-backdrop {
-    z-index: 999990 !important;
+    z-index: 2147482000 !important;
 }
 
 #modalTextosPadrao .modal-dialog,
 #modalDiagnosticos .modal-dialog,
 #modalDocumentoTextoPadrao .modal-dialog {
-    z-index: 1000000 !important;
+    z-index: 2147483001 !important;
     position: relative !important;
     pointer-events: auto !important;
     margin: 1.75rem auto !important;
@@ -42,7 +42,7 @@ body.modal-open .modal#modalDocumentoTextoPadrao,
     box-shadow: 0 20px 45px rgba(0, 0, 0, 0.45) !important;
     position: relative !important;
     pointer-events: auto !important;
-    z-index: 1000001 !important;
+    z-index: 2147483002 !important;
 }
 
 /* Garante interatividade em todos os elementos internos do modal */
@@ -58,13 +58,14 @@ body.modal-open .modal#modalDocumentoTextoPadrao,
    ========================================================================== */
 
 /* BARRA DE FERRAMENTAS CLÍNICAS SUPERIOR */
-.evolucao-smart-tools-bar {
-    background: linear-gradient(135deg, #182330 0%, #111821 100%);
-    border: 1px solid rgba(122, 166, 209, 0.25);
-    border-radius: 10px;
-    padding: 10px 16px;
-    margin-bottom: 14px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+.evolucao-smart-tools-bar,
+.document-smart-tools-bar {
+    background: radial-gradient(circle at top, #17304a 0%, #0c1420 42%, #09111b 100%) !important;
+    border: 1px solid rgba(122, 166, 209, 0.28) !important;
+    border-radius: 10px !important;
+    padding: 12px 18px !important;
+    margin-bottom: 14px !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35) !important;
 }
 
 .tools-bar-label {
@@ -328,14 +329,7 @@ body.modal-open .modal#modalDocumentoTextoPadrao,
 
 
 /* BARRA DE FERRAMENTAS INTELIGENTE PARA DOCUMENTOS (ATAS, OFÍCIOS, ORÇAMENTOS) */
-.document-smart-tools-bar {
-    background: radial-gradient(circle at top, #17304a 0%, #0c1420 42%, #09111b 100%);
-    border: 1px solid rgba(122, 166, 209, 0.28);
-    border-radius: 10px;
-    padding: 12px 18px;
-    margin-bottom: 14px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
-}
+/* .document-smart-tools-bar: estilos unificados acima, com .evolucao-smart-tools-bar */
 
 /* MODAL DE TEXTOS PADRONIZADOS PARA DOCUMENTOS - sempre acima de tudo */
 #modalDocumentoTextoPadrao {

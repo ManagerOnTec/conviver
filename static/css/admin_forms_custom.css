@@ -530,6 +530,33 @@
     border-color: #ef4444 !important;
 }
 
+/* 15.1 EDITORES RICOS (TinyMCE) OCUPANDO TODA A LARGURA DO CAMPO */
+.admin-custom-change-form .form-row .flex-container:has(.tox-tinymce) {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+.admin-custom-change-form .form-row .tox.tox-tinymce {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
+    box-sizing: border-box !important;
+}
+
+.admin-custom-change-form .form-row .tox .tox-editor-container,
+.admin-custom-change-form .form-row .tox .tox-edit-area {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+.admin-custom-change-form .form-row .tox .tox-toolbar,
+.admin-custom-change-form .form-row .tox .tox-toolbar__overflow,
+.admin-custom-change-form .form-row .tox .tox-toolbar__primary {
+    flex-wrap: wrap !important;
+}
+
 /* 16. RESPONSIVIDADE (MOBILE) */
 @media (max-width: 768px) {
     .admin-form-shell {

@@ -103,6 +103,17 @@ class TextoDocumentoPadraoAdmin(admin.ModelAdmin):
     search_fields = ('descricao', 'texto')
     readonly_fields = ('dt_registro', 'us_registro',
                        'dt_atualizacao', 'us_atualizacao')
+    fieldsets = (
+        ('Texto Padrão', {
+            'classes': ('wide',),
+            'fields': ('tipo', 'descricao', 'texto', 'status'),
+        }),
+        ('Auditoria', {
+            'classes': ('collapse',),
+            'fields': ('dt_registro', 'us_registro',
+                       'dt_atualizacao', 'us_atualizacao'),
+        }),
+    )
 
     def save_model(self, request, obj, form, change):
         if not obj.us_registro_id:

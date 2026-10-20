@@ -68,6 +68,19 @@ class TextoPadraoAdmin(admin.ModelAdmin):
 
     list_per_page = 11
 
+    fieldsets = (
+        ('Texto Padrão', {
+            'classes': ('wide',),
+            'fields': ('tipo_evolucao', 'profissao', 'profissional',
+                       'descricao', 'texto', 'status'),
+        }),
+        ('Auditoria', {
+            'classes': ('collapse',),
+            'fields': ('us_registro', 'dt_registro',
+                       'us_atualizacao', 'dt_atualizacao'),
+        }),
+    )
+
     def save_model(self, request, obj, form, change):
         if not change:  # se estiver criando um novo objeto
             obj.us_registro = request.user
