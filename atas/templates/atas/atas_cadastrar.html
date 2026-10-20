@@ -40,20 +40,21 @@
 <!-- prettier-ignore -->
 {% block lista %}
 
-<div class="d-flex justify-content-start">
-  <button
-    id="insertDefaultDocs"
-    data-tipo-documento="atas"
-    class="btn btn-sm btn-success btn-outline-light"
-  >
-    <i class="fas fa-plus" style="transition: color 0.3s"></i>Texto Padrão
-  </button>
+<link rel="stylesheet" href="{% static 'css/evolucao_cadastrar_css.css' %}">
 
-  <!-- Certifique-se de que você tem um elemento com o ID 'context-menu' no seu HTML para que o menu de contexto possa ser exibido. -->
-  <div id="context-menu" style="display: none">
-    <!-- Os itens do menu serão inseridos aqui dinamicamente pelo JavaScript -->
-  </div>
+<!-- BARRA DE FERRAMENTAS INTELIGENTE DE DOCUMENTOS -->
+<div class="document-smart-tools-bar mb-3">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <span class="tools-bar-label"><i class="fas fa-wand-magic-sparkles text-primary me-1"></i> Assistente de Documentos:</span>
+        <button type="button" id="insertDefaultDocs" data-tipo-documento="atas" class="btn clinical-tool-btn btn-tool-textos" title="Abrir catálogo de frases e textos padronizados">
+            <i class="fas fa-file-signature me-1"></i>
+            <span>Texto Padrão</span>
+        </button>
+    </div>
 </div>
+
+<!-- MODAL DE TEXTOS PADRONIZADOS PARA DOCUMENTOS -->
+{% include 'parciais/_document_text_tools_modal.html' %}
 
 <!--TABELA CONT DIREITA-->
 <div class="container">

@@ -90,24 +90,23 @@
 
 <link rel="stylesheet" href="{% static 'css/evolucao_cadastrar_css.css' %}">
 
-
-
-<div class="d-flex justify-content-start">
-
-    <button id="insertDefaultText" class="btn btn-sm btn-success btn-outline-light">
-        <i class="fas fa-plus" style="transition: color 0.3s;"></i>Texto Padrão
-    </button>
-
-    <!-- Certifique-se de que você tem um elemento com o ID 'context-menu' no seu HTML para que o menu de contexto possa ser exibido. -->
-    <div id="context-menu" style="display: none;">
-        <!-- Os itens do menu serão inseridos aqui dinamicamente pelo JavaScript -->
+<!-- BARRA DE FERRAMENTAS CLÍNICAS INTELIGENTE -->
+<div class="evolucao-smart-tools-bar mb-3">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <span class="tools-bar-label"><i class="fas fa-wand-magic-sparkles text-primary me-1"></i> Assistente Clínico:</span>
+        <button type="button" id="insertDefaultText" class="btn clinical-tool-btn btn-tool-textos" title="Abrir catálogo de textos padronizados">
+            <i class="fas fa-file-signature"></i>
+            <span>Texto Padrão</span>
+        </button>
+        <button type="button" id="btn-buscar-diagnosticos" data-atendimento-id="{{ atendimento_id }}" class="btn clinical-tool-btn btn-tool-diagnosticos" title="Consultar e inserir diagnósticos (CID)">
+            <i class="fas fa-stethoscope"></i>
+            <span>Diagnósticos (CID)</span>
+        </button>
     </div>
-
-    <!-- Botão para buscar diagnósticos -->
-    <button id="btn-buscar-diagnosticos" data-atendimento-id="{{ atendimento_id }}"
-        class="btn btn-sm btn-success btn-outline-light">
-        <i class="fas fa-plus" style="transition: color 0.3s;"></i>Diagnósticos</button>
 </div>
+
+<!-- INCLUSÃO DOS MODAIS VISUAIS DE TEXTO PADRÃO E DIAGNÓSTICOS -->
+{% include 'parciais/_clinical_text_tools_modal.html' %}
 
 
 

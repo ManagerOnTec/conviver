@@ -1,0 +1,56 @@
+<!-- MODAL DE TEXTOS E FRASES PADRONIZADAS PARA DOCUMENTOS (ATAS, OFÍCIOS, ORÇAMENTOS) -->
+<!-- Renderizado fora do fluxo: sem .fade, z-index altíssimo e backdrop próprio controlado por JS -->
+<div id="modalDocumentoTextoPadrao" tabindex="-1" aria-labelledby="modalDocumentoTextoPadraoLabel"
+  aria-hidden="true"
+  style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2147483000;overflow-x:hidden;overflow-y:auto;outline:0;">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable"
+    style="position:relative;z-index:2147483001;pointer-events:auto;margin:1.75rem auto;max-width:820px;">
+    <div class="modal-content border-0 shadow-lg"
+      style="border-radius:12px;overflow:hidden;background:#ffffff;color:#1e293b;pointer-events:auto;">
+      <div class="modal-header bg-primary text-white py-3 px-4">
+        <h5 class="modal-title fw-bold" id="modalDocumentoTextoPadraoLabel">
+          <i class="fas fa-file-signature me-2"></i>Frases & Textos Padronizados para Documentos
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body p-4 bg-light">
+        <!-- Campo de Pesquisa em Tempo Real -->
+        <div class="input-group mb-3 shadow-sm">
+          <span class="input-group-text bg-white border-end-0 text-primary">
+            <i class="fas fa-search"></i>
+          </span>
+          <input type="text" id="filtroDocTextoInput" class="form-control border-start-0 ps-0"
+            placeholder="Pesquisar por título, descrição ou conteúdo..." autocomplete="off">
+          <button type="button" id="btnLimparFiltroDocTexto" class="btn btn-outline-secondary border-start-0"
+            style="display: none;">✕</button>
+        </div>
+
+        <!-- Feedback de Carregamento -->
+        <div id="loadingDocTexto" class="text-center py-5">
+          <div class="spinner-border text-primary mb-2" role="status">
+            <span class="visually-hidden">Carregando...</span>
+          </div>
+          <p class="text-muted small mb-0">Consultando catálogo de frases padronizadas...</p>
+        </div>
+
+        <!-- Lista de Cartões de Textos Padronizados -->
+        <div id="listaDocTextosContainer" class="d-flex flex-column gap-3" style="display: none;">
+          <!-- Injetado dinamicamente via JS -->
+        </div>
+
+        <!-- Sem Resultados -->
+        <div id="vazioDocTexto" class="text-center py-5" style="display: none;">
+          <i class="fas fa-file-circle-xmark fa-3x text-muted mb-3 opacity-50"></i>
+          <h6 class="fw-bold text-secondary">Nenhum texto padronizado encontrado</h6>
+          <p class="text-muted small">Não há textos padrão cadastrados para este tipo de documento ou a pesquisa não
+            encontrou resultados.</p>
+        </div>
+      </div>
+      <div class="modal-footer bg-white border-top py-2 px-4 d-flex justify-content-between">
+        <small class="text-muted"><i class="fas fa-info-circle me-1"></i>Clique em "Inserir no Documento" para incluir o
+          texto no editor.</small>
+        <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>

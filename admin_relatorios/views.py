@@ -2,30 +2,48 @@ from django.views import View
 from django.http import JsonResponse
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ObjectDoesNotExist
-# Substitua pelo caminho correto do seu modelo
+from django.db.models import Q
 from .models import TextoDocumentoPadrao
 
 
 class TextoPadraoFiltradoPorTipoView(LoginRequiredMixin, View):
+    """
+    Retorna os textos padronizados de admin_relatorios.TextoDocumentoPadrao
+    filtrados pelo tipo de documento (atas, oficios, orcamentos).
+    Aceita singular/plural e retorna JSON consumivel pelo modal do front.
+    """
+
+    MAPA_TIPOS = {
+        'ata': 'atas', 'atas': 'atas',
+        'oficio': 'oficios', 'oficios': 'oficios',
+        'orcamento': 'orcamentos', 'orcamentos': 'orcamentos',
+        'documento': 'atas', 'documentos': 'atas',
+    }
+
     def get(self, request, *args, **kwargs):
         try:
-            # Obtém o tipo do documento a partir dos parâmetros da URL
-            # Ex: 'atas', 'oficios', 'orcamentos'
-            tipo_documento = kwargs.get('tipo_documento')
+            tipo_raw = (kwargs.get('tipo_documento') or '').strip().lower()
+            tipo_normalizado = self.MAPA_TIPOS.get(tipo_raw, tipo_raw)
 
-            # Filtra os TextoDocumentoPadrao pelo tipo e status ativo
-            textos_padrao = TextoDocumentoPadrao.objects.filter(
-                tipo=tipo_documento, status='A'
-            ).values(
+            # Monta o conjunto de tipos aceitos (singular + plural + variacoes de caixa)
+            variacoes = {tipo_raw, tipo_normalizado, tipo_raw.capitalize(), tipo_normalizado.capitalize()}
+            variacoes.discard('')
+
+            queryset = TextoDocumentoPadrao.objects.filter(status='A')
+
+            if variacoes:
+                filtro = Q()
+                for v in variacoes:
+                    filtro |= Q(tipo__iexact=v)
+                queryset = queryset.filter(filtro)
+
+            textos_padrao = queryset.values(
                 'id', 'descricao', 'texto', 'tipo'
-            )
+            ).order_by('descricao')
 
-            # Converte o QuerySet em uma lista de dicionários
             response_data = list(textos_padrao)
-
-            # Retorna os dados em formato JSON
             return JsonResponse(response_data, safe=False)
 
-        except ObjectDoesNotExist as e:
-            print(f"Erro ao obter query: {e}")
+        except Exception as e:
+            print(f"Erro ao obter textos padrao por tipo: {e}")
             return JsonResponse([], safe=False)

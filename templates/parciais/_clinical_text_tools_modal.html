@@ -1,0 +1,117 @@
+<!-- MODAL DE TEXTOS PADRONIZADOS -->
+<div class="modal fade" id="modalTextosPadrao" tabindex="-1" aria-labelledby="modalTextosPadraoLabel"
+  aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content border-0 shadow-lg" style="border-radius: 12px; overflow: hidden;">
+      <div class="modal-header bg-primary text-white py-3 px-4">
+        <h5 class="modal-title fw-bold" id="modalTextosPadraoLabel">
+          <i class="fas fa-file-signature me-2"></i>Textos Padronizados para Evolução
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body p-4 bg-light">
+        <!-- Campo de Pesquisa em Tempo Real -->
+        <div class="input-group mb-3 shadow-sm">
+          <span class="input-group-text bg-white border-end-0 text-primary">
+            <i class="fas fa-search"></i>
+          </span>
+          <input type="text" id="filtroTextoPadraoInput" class="form-control border-start-0 ps-0"
+            placeholder="Pesquisar por título, especialidade ou palavra-chave..." autocomplete="off">
+          <button type="button" id="btnLimparFiltroTextos" class="btn btn-outline-secondary border-start-0"
+            style="display: none;">✕</button>
+        </div>
+
+        <!-- Feedback de Carregamento -->
+        <div id="loadingTextosPadrao" class="text-center py-5">
+          <div class="spinner-border text-primary mb-2" role="status">
+            <span class="visually-hidden">Carregando...</span>
+          </div>
+          <p class="text-muted small mb-0">Buscando textos padronizados da sua especialidade...</p>
+        </div>
+
+        <!-- Lista de Cartões de Textos -->
+        <div id="listaTextosPadraoContainer" class="d-flex flex-column gap-3" style="display: none;">
+          <!-- Injetado dinamicamente via JS -->
+        </div>
+
+        <!-- Sem Resultados -->
+        <div id="vazioTextosPadrao" class="text-center py-5" style="display: none;">
+          <i class="fas fa-file-circle-xmark fa-3x text-muted mb-3 opacity-50"></i>
+          <h6 class="fw-bold text-secondary">Nenhum texto padronizado encontrado</h6>
+          <p class="text-muted small">Nenhum texto corresponde à pesquisa ou não há modelos cadastrados para o seu
+            perfil.</p>
+        </div>
+      </div>
+      <div class="modal-footer bg-white border-top py-2 px-4 d-flex justify-content-between">
+        <small class="text-muted"><i class="fas fa-info-circle me-1"></i>Clique no botão do card para inserir o texto no
+          editor.</small>
+        <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DE DIAGNÓSTICOS DO ATENDIMENTO -->
+<div class="modal fade" id="modalDiagnosticos" tabindex="-1" aria-labelledby="modalDiagnosticosLabel"
+  aria-hidden="true">
+  <div class="modal-dialog modal-md modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg" style="border-radius: 12px; overflow: hidden;">
+      <div class="modal-header bg-info text-dark py-3 px-4">
+        <h5 class="modal-title fw-bold" id="modalDiagnosticosLabel">
+          <i class="fas fa-stethoscope me-2"></i>Diagnósticos do Atendimento (CID)
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body p-4 bg-light">
+        <!-- Feedback de Carregamento -->
+        <div id="loadingDiagnosticos" class="text-center py-4">
+          <div class="spinner-border text-info mb-2" role="status">
+            <span class="visually-hidden">Carregando...</span>
+          </div>
+          <p class="text-muted small mb-0">Consultando diagnósticos ativos deste atendimento...</p>
+        </div>
+
+        <!-- Conteúdo dos Diagnósticos -->
+        <div id="conteudoDiagnosticos" style="display: none;">
+          <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
+            <span class="fw-semibold small text-secondary">Selecione os CIDs a incluir:</span>
+            <button type="button" id="btnToggleTodosDiagnosticos"
+              class="btn btn-link btn-sm text-decoration-none p-0 text-primary fw-bold">Marcar Todos</button>
+          </div>
+
+          <div id="listaDiagnosticosCheckbox" class="d-flex flex-column gap-2 mb-3 max-vh-40 overflow-auto pe-1">
+            <!-- Injetado dinamicamente via JS -->
+          </div>
+
+          <!-- Opções de Posição -->
+          <div class="p-3 bg-white rounded border mb-2">
+            <label class="form-label fw-bold small text-secondary mb-2">Posição de inserção no texto:</label>
+            <div class="form-check form-check-inline me-3">
+              <input class="form-check-input" type="radio" name="posicaoDiagnosticos" id="posInicio" value="inicio"
+                checked>
+              <label class="form-check-label small" for="posInicio">No início (topo)</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="posicaoDiagnosticos" id="posCursor" value="cursor">
+              <label class="form-check-label small" for="posCursor">Na posição atual do cursor</label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vazio -->
+        <div id="vazioDiagnosticos" class="text-center py-4" style="display: none;">
+          <i class="fas fa-clipboard-question fa-3x text-muted mb-3 opacity-50"></i>
+          <h6 class="fw-bold text-secondary">Nenhum diagnóstico ativo</h6>
+          <p class="text-muted small mb-0">Não há registros de diagnósticos (CID) associados a este atendimento.</p>
+        </div>
+      </div>
+      <div class="modal-footer bg-white border-top py-2 px-4">
+        <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" id="btnConfirmarInserirDiagnosticos" class="btn btn-primary btn-sm px-3 fw-bold"
+          style="display: none;">
+          <i class="fas fa-check me-1"></i> Inserir Selecionados
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

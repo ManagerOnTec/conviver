@@ -1,76 +1,370 @@
-/* Estilos básicos para o menu de contexto */
-#context-menu {
-    display: none;
-    position: absolute;
-    background-color: rgb(0, 0, 0);
-    /* Fundo preto */
-    color: #ffffff;
-    /* Texto branco */
-    border: 1px solid #ffffff;
-    /* Borda branca */
-    z-index: 1000;
-    border-radius: 5px;
-    box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
-    /* Corrigido para incluir opacidade */
-    white-space: nowrap;
+/* ==========================================================================
+   CORREÇÃO DEFINITIVA DE MODAL: Z-INDEX E VISIBILIDADE ACIMA DO BACKDROP
+   Garante que o modal nunca fique escuro ou atrás do backdrop nem de
+   containers com position:relative / fixed (#table-container, #right-content).
+   ========================================================================== */
+/* O modal deve ficar SEMPRE fora do fluxo e no topo da pilha */
+body.modal-open .modal#modalTextosPadrao,
+body.modal-open .modal#modalDiagnosticos,
+body.modal-open .modal#modalDocumentoTextoPadrao,
+.modal#modalTextosPadrao,
+.modal#modalDiagnosticos,
+.modal#modalDocumentoTextoPadrao {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: 999999 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    outline: 0 !important;
 }
 
-/* Utilizando classes do Bootstrap para responsividade */
-#context-menu ul {
-    list-style-type: none;
-    padding: 0;
-    margin: 0;
-    background-color: rgb(0, 0, 0);
-    /* Fundo preto */
-    color: #ffffff;
-    /* Texto branco */
-    border: 1px solid #ffffff;
-    /* Borda branca */
-    white-space: nowrap;
+.modal-backdrop {
+    z-index: 999990 !important;
 }
 
-#context-menu li,
-.has-submenu,
-.has-sub {
-    padding: 8px 12px;
+#modalTextosPadrao .modal-dialog,
+#modalDiagnosticos .modal-dialog,
+#modalDocumentoTextoPadrao .modal-dialog {
+    z-index: 1000000 !important;
+    position: relative !important;
+    pointer-events: auto !important;
+    margin: 1.75rem auto !important;
+}
+
+#modalTextosPadrao .modal-content,
+#modalDiagnosticos .modal-content,
+#modalDocumentoTextoPadrao .modal-content {
+    background: #ffffff !important;
+    color: #1e293b !important;
+    border-radius: 14px !important;
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.45) !important;
+    position: relative !important;
+    pointer-events: auto !important;
+    z-index: 1000001 !important;
+}
+
+/* Garante interatividade em todos os elementos internos do modal */
+#modalTextosPadrao .modal-content *,
+#modalDiagnosticos .modal-content *,
+#modalDocumentoTextoPadrao .modal-content * {
+    pointer-events: auto;
+}
+
+/* ==========================================================================
+   CONVIVER / MANAGERONTEC - ASSISTENTE CLÍNICO DE TEXTOS E DIAGNÓSTICOS
+   Design moderno, intuitivo e com alta usabilidade para inserção de conteúdo.
+   ========================================================================== */
+
+/* BARRA DE FERRAMENTAS CLÍNICAS SUPERIOR */
+.evolucao-smart-tools-bar {
+    background: linear-gradient(135deg, #182330 0%, #111821 100%);
+    border: 1px solid rgba(122, 166, 209, 0.25);
+    border-radius: 10px;
+    padding: 10px 16px;
+    margin-bottom: 14px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.tools-bar-label {
+    font-size: 0.84rem;
+    font-weight: 700;
+    color: #cbd5e1;
+    display: inline-flex;
+    align-items: center;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.clinical-tool-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 14px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    border-radius: 7px;
+    transition: all 0.2s cubic-bezier(0.165, 0.84, 0.44, 1);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
     cursor: pointer;
-    white-space: nowrap;
+    border-width: 1.5px;
+}
+
+.btn-tool-textos {
+    background: rgba(13, 110, 253, 0.15);
+    border-color: rgba(13, 110, 253, 0.45);
+    color: #60a5fa;
+}
+
+.btn-tool-textos:hover {
+    background: #0d6efd;
+    border-color: #0d6efd;
     color: #ffffff;
-    /* Texto branco */
+    transform: translateY(-2px);
+    box-shadow: 0 4px 14px rgba(13, 110, 253, 0.4);
 }
 
-/* Hover effect */
-#context-menu li:hover,
-.has-submenu:hover,
-.has-sub:hover {
-    background-color: #0000ff;
-    /* Fundo muda para azul ao passar o mouse */
+.btn-tool-diagnosticos {
+    background: rgba(14, 165, 233, 0.15);
+    border-color: rgba(14, 165, 233, 0.45);
+    color: #38bdf8;
 }
 
-/* Submenu */
-.submenu {
-    display: none;
-    position: absolute;
-    left: 100%;
-    top: 0;
-    white-space: nowrap;
-    background-color: rgb(0, 0, 0);
-    /* Fundo preto */
+.btn-tool-diagnosticos:hover {
+    background: #0284c7;
+    border-color: #0284c7;
     color: #ffffff;
-    /* Texto branco */
-    border-radius: 5px;
-    border: 1px solid #ffffff;
-    /* Borda branca */
+    transform: translateY(-2px);
+    box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4);
 }
 
-.has-submenu:hover .submenu,
-.has-sub:hover .submenu {
-    display: block;
+/* CARDS DE TEXTOS PADRONIZADOS DENTRO DO MODAL */
+.clinical-text-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 9px;
+    padding: 14px 18px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
-.has-submenu::after,
-.has-sub::after {
-    position: absolute;
+.clinical-text-card:hover {
+    border-color: #3b82f6;
+    box-shadow: 0 6px 18px rgba(59, 130, 246, 0.12);
+    transform: translateY(-2px);
+}
+
+.clinical-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.clinical-card-title {
+    font-size: 0.98rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.clinical-card-badges {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.clinical-card-preview {
+    font-size: 0.86rem;
+    color: #475569;
+    background: #f8fafc;
+    border: 1px solid #f1f5f9;
+    border-radius: 6px;
+    padding: 8px 12px;
+    line-height: 1.5;
+    max-height: 85px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.clinical-card-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.btn-insert-clinical-text {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border-radius: 6px;
+    background: #0d6efd;
     color: #ffffff;
-    /* Texto branco */
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-insert-clinical-text:hover {
+    background: #0b5ed7;
+    transform: scale(1.02);
+}
+
+/* ITENS DE DIAGNÓSTICO (CHECKBOX CARDS) */
+.diagnostic-check-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.diagnostic-check-item:hover {
+    background: #f0fdf4;
+    border-color: #86efac;
+}
+
+.diagnostic-check-item input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: #0284c7;
+    cursor: pointer;
+    margin: 0;
+}
+
+.diagnostic-check-label {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin: 0;
+    cursor: pointer;
+    flex: 1;
+}
+
+/* TOAST / NOTIFICAÇÃO FLUTUANTE DE FEEDBACK */
+.clinical-toast-notification {
+    position: fixed;
+    top: 24px;
+    right: 24px;
+    z-index: 10999;
+    background: #1e293b;
+    color: #ffffff;
+    border-left: 4px solid #10b981;
+    border-radius: 8px;
+    padding: 12px 18px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    animation: toast-fade-in 0.25s ease-out;
+}
+
+@keyframes toast-fade-in {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+
+/* LEQUE / ACORDEÃO POR TIPO DE EVOLUÇÃO E TEXTOS CADASTRADOS */
+.tipo-evolucao-accordion-item {
+    border-radius: 10px;
+    background: #ffffff;
+    border: 1.5px solid #cbd5e1;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    margin-bottom: 14px;
+}
+
+.tipo-evolucao-header {
+    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%) !important;
+    border-bottom: 1px solid #bae6fd !important;
+    padding: 13px 18px !important;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s ease;
+}
+
+.tipo-evolucao-header:hover {
+    background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%) !important;
+}
+
+.tipo-evolucao-header h6 {
+    margin: 0;
+    font-size: 0.96rem;
+    font-weight: 700;
+    color: #0369a1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tipo-evolucao-header .chevron-icon {
+    transition: transform 0.25s ease;
+    color: #0284c7;
+    font-size: 0.9rem;
+}
+
+.tipo-evolucao-accordion-item.collapsed .tipo-evolucao-header {
+    border-bottom: none !important;
+}
+
+.tipo-evolucao-accordion-item.collapsed .tipo-evolucao-header .chevron-icon {
+    transform: rotate(-90deg);
+}
+
+.tipo-evolucao-accordion-item.collapsed .tipo-evolucao-body {
+    display: none !important;
+}
+
+.tipo-evolucao-body {
+    padding: 14px 16px;
+    background: #f8fafc;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+
+/* BARRA DE FERRAMENTAS INTELIGENTE PARA DOCUMENTOS (ATAS, OFÍCIOS, ORÇAMENTOS) */
+.document-smart-tools-bar {
+    background: radial-gradient(circle at top, #17304a 0%, #0c1420 42%, #09111b 100%);
+    border: 1px solid rgba(122, 166, 209, 0.28);
+    border-radius: 10px;
+    padding: 12px 18px;
+    margin-bottom: 14px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+/* MODAL DE TEXTOS PADRONIZADOS PARA DOCUMENTOS - sempre acima de tudo */
+#modalDocumentoTextoPadrao {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: 2147483000 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+}
+
+#modalDocumentoTextoPadrao .modal-dialog {
+    z-index: 2147483001 !important;
+    position: relative !important;
+    pointer-events: auto !important;
+}
+
+#modalDocumentoTextoPadrao .modal-content {
+    background: #ffffff !important;
+    color: #1e293b !important;
+    border-radius: 14px !important;
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.45) !important;
+    position: relative !important;
+    pointer-events: auto !important;
+    z-index: 2147483002 !important;
+}
+
+#modalDocumentoTextoPadrao .modal-content * {
+    pointer-events: auto;
 }

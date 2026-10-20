@@ -1165,65 +1165,50 @@ class TextoPadraoFiltradoView(LoginRequiredMixin, View):
         try:
             user = self.request.user
             estabelecimento_id = request.session.get('estabelecimento_id')
-            print(f"User: {user}, Estabelecimento ID: {estabelecimento_id}")
 
-            # Obtém o único CadastroProfissional para o usuário logado
-            prof = CadastroProfissional.objects.get(
-                profissional=user, status='A')
-            print(f"CadastroProfissional: {prof}")
+            # Obtém CadastroProfissional se houver (sem quebrar caso não exista)
+            prof = CadastroProfissional.objects.filter(
+                profissional=user, status='A').first()
 
-            # IDs de TipoEvolucao
             te_ids = set()
+            prof_id = prof.id if prof else None
+            profissional_id = prof.profissional_id if prof else None
+            profissao_id = prof.profissao_id if prof else None
 
-            # Obtém o ID de CadastroProfissional e Profissao
             if prof:
-                prof_id = prof.id
-                profissional_id = prof.profissional.id
-                profissao_id = prof.profissao.id
-            else:
-                profissao_id = None
-                prof_id = None
-            print(
-                f"Prof ID: {prof_id}, Profisisonal ID: {profissional_id}, Profissao ID: {profissao_id}")
+                pars = ParametrosEvolucao.objects.filter(
+                    Q(profissional=profissional_id, status='A') |
+                    Q(profissao=profissao_id, status='A')
+                )
+                if estabelecimento_id:
+                    pars = pars.filter(Q(estabelecimento_id=estabelecimento_id) | Q(estabelecimento__isnull=True))
 
-            # Filtra os ParametrosEvolucao com base no profissional e na profissão
-            pars = ParametrosEvolucao.objects.filter(
-                Q(profissional=profissional_id, estabelecimento=estabelecimento_id, status='A') |
-                Q(profissao=profissao_id,
-                  estabelecimento=estabelecimento_id, status='A')
-            )
-            print(f"ParametrosEvolucao: {pars}")
-
-            # Coleta os IDs de TipoEvolucao
-            if pars:
                 for par in pars:
-                    te_ids.update(
-                        par.tipo_evolucao.values_list('id', flat=True))
-                print(f"TipoEvolucao IDs: {te_ids}")
+                    te_ids.update(par.tipo_evolucao.values_list('id', flat=True))
 
-            # Inicializa o filtro Q
-            query_filter = Q()
-            # Adiciona os filtros ao query_filter
+            query_filter = Q(status='A')
             if te_ids:
-                query_filter |= Q(tipo_evolucao__id__in=te_ids, status='A')
-            if prof_id:
-                query_filter |= Q(profissional__id=prof_id, status='A')
-            if profissao_id:
-                query_filter |= Q(profissao__id=profissao_id, status='A')
+                q_especifico = Q(tipo_evolucao__id__in=te_ids, status='A')
+                if prof_id:
+                    q_especifico |= Q(profissional__id=prof_id, status='A')
+                if profissao_id:
+                    q_especifico |= Q(profissao__id=profissao_id, status='A')
+                query_filter = q_especifico
+            elif not user.is_superuser and prof:
+                query_filter = (Q(profissao__id=profissao_id, status='A') | Q(status='A'))
+            else:
+                query_filter = Q(status='A')
 
-            # Filtra os TextoPadrao
             textos_padrao = TextoPadrao.objects.filter(query_filter).values(
-                'id', 'descricao', 'texto', 'profissional__profissional', 'profissao__profissao', 'tipo_evolucao__tipo_evolucao'
-            )
-            print(
-                f"te ids: {te_ids}, prof_id: {prof_id}, profissao_id: {profissao_id}, query_filter: {query_filter}")
-            print(f"TextoPadrao: {textos_padrao}")
+                'id', 'descricao', 'texto', 'profissional__profissional',
+                'profissao__profissao', 'tipo_evolucao_id', 'tipo_evolucao__tipo_evolucao'
+            ).order_by('tipo_evolucao__tipo_evolucao', 'descricao')
 
             response_data = list(textos_padrao)
             return JsonResponse(response_data, safe=False)
 
-        except ObjectDoesNotExist as e:
-            print(f"Erro ao obter query: {e}")
+        except Exception as e:
+            print(f"Erro ao obter textos padrao: {e}")
             return JsonResponse([], safe=False)
 
 
