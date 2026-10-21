@@ -111,11 +111,17 @@ def _sign_value(value):
 
 
 def _unsign_value(token, max_age=None):
+    """Lê o payload do token. Devolve None se inválido ou EXPIRADO.
+
+    Nunca deixa SignatureExpired/BadSignature vazar para a view: em DEBUG isso
+    vira tela de erro em /login/ em vez da mensagem amigável.
+    """
+    if not token:
+        return None
     try:
         return signing.loads(token, salt=SALT, max_age=max_age or TTL())
-    except signing.SignatureExpired:
-        raise
-    except signing.BadSignature:
+    except (signing.SignatureExpired, signing.BadSignature):
+        # Token expirado, adulterado ou inválido => tratado como "sem token".
         return None
 
 
@@ -148,13 +154,21 @@ def build_challenge(request):
     code = _new_code()
     issued_at = int(time.time())
     token = _sign_value({'code': code, 'iat': issued_at})
-    svg = render_svg_for_token(token)
+    # Renderiza direto do código recém-gerado. Não depende de _unsign_value,
+    # então nunca pode estourar SignatureExpired dentro da view de login.
+    svg = render_svg(code, token)
     return token, svg
 
 
 def render_svg_for_token(token):
-    """Recria o SVG de um token existente (usado no recarregar)."""
-    payload = _unsign_value(token)
+    """Recria o SVG de um token existente (usado no recarregar).
+
+    Devolve None quando o token expirou/é inválido, em vez de levantar exceção.
+    """
+    try:
+        payload = _unsign_value(token)
+    except Exception:
+        payload = None
     if not payload or not payload.get('code'):
         return None
     return render_svg(payload['code'], token)

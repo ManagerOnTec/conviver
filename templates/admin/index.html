@@ -67,25 +67,46 @@
         <!-- Barra de Atalhos Rápidos Clínicos & Operacionais -->
         <div class="admin-quick-launch-strip">
           <span class="quick-launch-label"><i class="fas fa-bolt"></i> Acesso Rápido:</span>
-          <a href="{% url 'admin:atendimentos_atendimento_add' %}" class="quick-launch-btn" title="Iniciar novo atendimento">
-            <i class="fas fa-hospital-user"></i> Novo Atendimento
-          </a>
-          <a href="{% url 'admin:prontuarios_evolucao_add' %}" class="quick-launch-btn" title="Registrar nova evolução clínica">
-            <i class="fas fa-file-medical-alt"></i> Nova Evolução
-          </a>
-          <a href="{% url 'admin:prontuarios_prescricao_add' %}" class="quick-launch-btn" title="Criar nova prescrição médica">
-            <i class="fas fa-prescription-bottle-alt"></i> Nova Prescrição
-          </a>
-          <a href="{% url 'admin:prontuarios_sinaisvitais_add' %}" class="quick-launch-btn" title="Registrar aferição de sinais vitais">
-            <i class="fas fa-heartbeat"></i> Sinais Vitais
-          </a>
           <a href="{% url 'admin:admin_relatorios_relatorio_changelist' %}" class="quick-launch-btn" title="Consultar e baixar PDFs e relatórios">
-            <i class="fas fa-file-pdf"></i> Central de PDFs / Dossiês
+            <i class="fas fa-file-pdf"></i> Central de PDFs
           </a>
-          <a href="{% url 'admin:admin_cadastros_pessoa_add' %}" class="quick-launch-btn" title="Cadastrar nova pessoa/paciente">
-            <i class="fas fa-user-plus"></i> Novo Paciente
+          <a href="{% url 'admin:admin_cadastros_pessoa_add' %}" class="quick-launch-btn" title="Cadastrar novo paciente">
+            <i class="fas fa-user-plus"></i> Nova Pessoa
           </a>
+          <a href="{% url 'admin:auth_user_add' %}" class="quick-launch-btn" title="Cadastrar novo usuário do sistema">
+            <i class="fas fa-user-shield"></i> Novo Usuário
+          </a> 
+
+          <a href="{% url 'admin:documentos_legais_modelodocumentolegal_add' %}" class="quick-launch-btn" title="Cadastrar novo modelo de documento legal">
+            <i class="fas fa-file-contract"></i> Novo Modelo - Termos Legais
+          </a>
+
+          <a href="{% url 'admin:admin_cadastros_assistenciais_cadastroprofissional_add' %}" class="quick-launch-btn" title="Cadastrar novo profissional de saúde">
+            <i class="fas fa-user-md"></i> Novo Prof. Saúde
+          </a>
+
+           <a href="{% url 'admin:admin_prescricoes_prescricaopadrao_add' %}" class="quick-launch-btn" title="Cadastrar nova prescrição padrão">
+            <i class="fas fa-pills"></i> Nova Prescrição Padrão
+          </a>
+
+          <a href="{% url 'admin:admin_evolucoes_textopadrao_add' %}" class="quick-launch-btn" title="Cadastrar novo texto padrão">
+            <i class="fas fa-file-alt"></i> Novo Texto Padrão - Evoluções
+          </a>
+
+          <a href="{% url 'admin:admin_relatorios_textodocumentopadrao_add' %}" class="quick-launch-btn" title="Cadastrar novo texto de documento padrão">
+            <i class="fas fa-file-alt"></i> Novo Texto Padrão - Atas, Ofícios, Orçamentos
+          </a>
+
+         
+
+
+          
+
+
         </div>
+
+
+        
 
         <!-- Barra Localizadora JS (Estilo Select Estabelecimento) -->
         <div class="index-search-container">

@@ -241,7 +241,7 @@ class DocumentoLegalInternacao(models.Model):
 
     class Meta:
         verbose_name = 'Documento Legal de Internação'
-        verbose_name_plural = '3. Documentos Legais de Internação'
+        verbose_name_plural = 'Documentos Legais de Internação'
         ordering = ['-dt_registro', '-id']
 
     def save(self, *args, **kwargs):

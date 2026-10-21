@@ -496,6 +496,8 @@ class RelatorioAdmin(AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
 
     def get_actions(self, request):
         actions = super().get_actions(request)
+        # Relatórios são somente consulta: remove exclusão em massa
+        actions.pop('delete_selected', None)
         # Opções de ativar e inativar relatórios somente para usuários administradores (superuser)
         if not request.user.is_superuser:
             actions.pop('action_ativar', None)
@@ -628,6 +630,27 @@ class RelatorioAdmin(AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
         if not obj.dt_registro:
             obj.dt_registro = timezone.now()
         super().save_model(request, obj, form, change)
+
+    # Relatórios gerados são somente consulta: sem adicionar, editar ou excluir
+    # (registros são criados pelo sistema, nunca pelo admin).
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def response_add(self, request, obj, post_url_continue=None):
+        messages.info(
+            request, 'Relatórios são somente para consulta; não é possível adicionar registros.')
+        return super().response_add(request, obj, post_url_continue)
+
+    def response_change(self, request, obj):
+        messages.info(
+            request, 'Relatórios são somente para consulta; não é possível alterar registros.')
+        return super().response_change(request, obj)
 
 
 admin.site.register(TextoDocumentoPadrao, TextoDocumentoPadraoAdmin)

@@ -136,7 +136,7 @@ class Relatorio(models.Model):
 
     class Meta:
         verbose_name = 'Relatório Gerado'
-        verbose_name_plural = '4. Relatórios Gerados'
+        verbose_name_plural = 'Relatórios Gerados'
 
     def __str__(self):
         return f"{self.tipo} - {self.content_object}"
