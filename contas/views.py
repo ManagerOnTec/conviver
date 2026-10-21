@@ -28,7 +28,7 @@ from django.contrib.auth.forms import UserCreationForm, AuthenticationForm, Pass
 from logging import INFO, DEBUG
 from logging import basicConfig
 from logging import info, debug
-from admin_automacoes. models import EmailConfiguration
+from administracao_sistema.models import EmailConfiguration
 from django.http import HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import reverse
@@ -109,6 +109,18 @@ def login(request):
                     request, 'Muitas tentativas. Aguarde alguns minutos e tente novamente.')
             else:
                 messages.error(request, 'Usuário ou senha inválidos!')
+            context['captcha_token'], context['captcha_svg'] = captcha.build_challenge(request)
+            return render(request, 'contas/login.html', context)
+
+        # Limite de usuários simultâneos: bloqueia NOVO login antes de abrir
+        # a sessão. admin nunca é bloqueado.
+        from administracao_sistema.services import pode_iniciar_sessao
+        pode_entrar, limite, ativos = pode_iniciar_sessao(user)
+        if not pode_entrar:
+            messages.error(
+                request,
+                f'Número máximo de usuários simultâneos atingido '
+                f'({ativos}/{limite}). Tente novamente mais tarde.')
             context['captcha_token'], context['captcha_svg'] = captcha.build_challenge(request)
             return render(request, 'contas/login.html', context)
 

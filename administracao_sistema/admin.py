@@ -1,4 +1,7 @@
-from .models import EmailConfiguration, QtdUsuariosSimultaneos
+from .models import EmailConfiguration, QtdUsuariosSimultaneos, ActiveSession
+from .admin_logs import ProntuarioAcessosAdmin  # registra Log Acessos
+from .admin_parametros import ConfiguracaoSessaoAdmin  # registra Config. de Sessões
+from .permissions import AdminSomenteUsuarioAdminMixin
 from .forms import EmailConfigurationAdminForm, forms
 from django.contrib import admin
 from cryptography.fernet import Fernet
@@ -10,7 +13,7 @@ from django.utils import timezone
 from django.contrib import messages
 from .models import ActiveSession
 
-class EmailConfigurationAdmin(admin.ModelAdmin):
+class EmailConfigurationAdmin(AdminSomenteUsuarioAdminMixin, admin.ModelAdmin):
     form = EmailConfigurationAdminForm
 
     list_display = ('id', 'regra',
@@ -19,41 +22,34 @@ class EmailConfigurationAdmin(admin.ModelAdmin):
                           'email_port', 'email_host_user',)
     list_filter = ('regra',)
 
-    def has_add_permission(self, request):
-        return request.user.username == 'admin'
-
-    def has_change_permission(self, request, obj=None):
-        return request.user.username == 'admin'
-
-    def has_delete_permission(self, request, obj=None):
-        return request.user.username == 'admin'
-
-    def has_view_permission(self, request, obj=None):
-        return request.user.username == 'admin'
+    # As regras de acesso (somente 'admin') vêm do mixin base.
 
 
-class QtdUsuariosSimultaneosAdmin(admin.ModelAdmin):
+class QtdUsuariosSimultaneosAdmin(AdminSomenteUsuarioAdminMixin, admin.ModelAdmin):
+    """
+    Configuração única do sistema.
+
+    Mesma regra de Configuração de Sessões: só pode existir UMA linha. Permite
+    adicionar apenas enquanto não houver registro; depois, apenas editar o
+    existente. Exclusão bloqueada.
+    """
 
     list_display = ('id', 'max_usuarios_simultaneos',)
     list_display_links = ('id', 'max_usuarios_simultaneos')
 
     def has_add_permission(self, request):
-        return request.user.username == 'admin'
-
-    def has_change_permission(self, request, obj=None):
-        return request.user.username == 'admin'
+        # Só permite adicionar se ainda não existir configuração.
+        return QtdUsuariosSimultaneos.objects.count() == 0
 
     def has_delete_permission(self, request, obj=None):
-        return request.user.username == 'admin'
-
-    def has_view_permission(self, request, obj=None):
-        return request.user.username == 'admin'
+        # Não permitir exclusão da configuração única.
+        return False
 
 
 
 
 @admin.register(ActiveSession)
-class ActiveSessionAdmin(admin.ModelAdmin):
+class ActiveSessionAdmin(AdminSomenteUsuarioAdminMixin, admin.ModelAdmin):
 
     list_display = (
         'session_key',

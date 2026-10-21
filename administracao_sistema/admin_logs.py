@@ -1,8 +1,9 @@
 from django.contrib import admin
-from . models import ProntuarioAcessos
+from .models_logs import ProntuarioAcessos
+from .permissions import AdminSomenteUsuarioAdminMixin
 from dominios.utils import ExportToXLSMixin
 
-class ProntuarioAcessosAdmin(ExportToXLSMixin, admin.ModelAdmin):
+class ProntuarioAcessosAdmin(AdminSomenteUsuarioAdminMixin, ExportToXLSMixin, admin.ModelAdmin):
     model = ProntuarioAcessos
 
     actions = ['export_as_xls']

@@ -20,7 +20,7 @@ from admin_estoques.models import Produto
 from admin_prescricoes.forms import BaseModelPrescricaoForm
 from admin_prescricoes.models import InicioPlanoTerapeutico, IntervaloHoras, ParametrosPrescricao
 from .models import SAE, PerdasGanhos, PlanoCuidados, Prescricao, ProdutoPrescricao, SinaisVitais, PassagemPlantao
-from admin_logs.models import ProntuarioAcessos
+from administracao_sistema.models_logs import ProntuarioAcessos
 from django.contrib.auth.models import User
 from dominios.widgets import DateTimePickerInput
 from crispy_forms.layout import Submit

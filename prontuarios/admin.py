@@ -3,14 +3,16 @@ from django.utils import timezone
 from django.utils.html import format_html
 from django.urls import reverse
 from dominios.admin_dashboard_mixins import AdminDashboardAndTopFilterMixin
+from dominios.utils import SomenteLeituraEstatisticoAdminMixin
 from .models import (
     Evolucao, Prescricao, ProdutoPrescricao, Adep, SinaisVitais,
-    SAE, Diagnostico, PlanoCuidados, PerdasGanhos
+    SAE, Diagnostico, PlanoCuidados, PerdasGanhos, Psicoterapia
 )
 
 
 @admin.register(Evolucao)
-class EvolucaoAdmin(AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
+class EvolucaoAdmin(SomenteLeituraEstatisticoAdminMixin, AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
+    # Módulo estatístico: evolução é criada/assinada pelo fluxo do prontuário.
     dashboard_date_field = 'dt_registro'
     list_display = ('id', 'paciente_nome', 'tipo_evolucao', 'estabelecimento', 'dt_registro', 'us_registro', 'status_badge')
     list_filter = ('tipo_evolucao', 'status', 'estabelecimento', 'dt_registro', 'us_registro')
@@ -71,7 +73,8 @@ class EvolucaoAdmin(AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
 
 
 @admin.register(Prescricao)
-class PrescricaoAdmin(AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
+class PrescricaoAdmin(SomenteLeituraEstatisticoAdminMixin, AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
+    # Módulo estatístico: prescrição é criada/assinada pelo fluxo do prontuário.
     dashboard_date_field = 'dt_registro'
     list_display = ('id', 'paciente_nome', 'fase', 'dt_inicio', 'dt_final', 'estabelecimento', 'status')
     list_filter = ('fase', 'status', 'estabelecimento', 'dt_inicio')
@@ -155,7 +158,7 @@ PrescricaoAdmin.inlines = (ProdutoPrescricaoInline,)
 
 
 @admin.register(ProdutoPrescricao)
-class ProdutoPrescricaoAdmin(admin.ModelAdmin):
+class ProdutoPrescricaoAdmin(SomenteLeituraEstatisticoAdminMixin, admin.ModelAdmin):
     """Produto da Prescrição (item de uma prescrição real).
 
     Antes não havia tela no admin. Aqui os campos relacionados usam select2 de
@@ -195,7 +198,8 @@ class ProdutoPrescricaoAdmin(admin.ModelAdmin):
 
 
 @admin.register(SinaisVitais)
-class SinaisVitaisAdmin(AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
+class SinaisVitaisAdmin(SomenteLeituraEstatisticoAdminMixin, AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
+    # Módulo estatístico: sinais vitais são registrados pelo fluxo do prontuário.
     dashboard_date_field = 'dt_registro'
     list_display = (
         'id', 'paciente_nome', 'temperatura', 'pressao_arterial',
@@ -253,3 +257,215 @@ class SinaisVitaisAdmin(AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
             },
         ]
 
+
+
+# ==========================================================================
+# MÓDULOS ESTATÍSTICOS DO PRONTUÁRIO
+# Somente consulta: registros são criados/editados/assinados no fluxo do
+# prontuário (com auditoria, parametrização e geração de PDF).
+# ==========================================================================
+
+
+class _ProntuarioEstatisticoAdminMixin(SomenteLeituraEstatisticoAdminMixin):
+    """Base comum dos módulos estatísticos de prontuário."""
+
+    dashboard_date_field = 'dt_registro'
+    date_hierarchy = 'dt_registro'
+    ordering = ('-dt_registro', '-id')
+
+    def paciente_nome(self, obj):
+        atendimento = getattr(obj, 'atendimento', None)
+        pessoa = getattr(atendimento, 'pessoa', None) if atendimento else None
+        return pessoa.nome if pessoa else '-'
+    paciente_nome.short_description = 'Paciente'
+    paciente_nome.admin_order_field = 'atendimento__pessoa__nome'
+
+    def status_badge(self, obj):
+        if getattr(obj, 'status', None) == 'A':
+            return format_html(
+                '<span style="background-color: #28a745; color: #fff; padding: 2px 6px; '
+                'border-radius: 3px; font-size: 0.7rem; font-weight: bold;">Ativo</span>')
+        return format_html(
+            '<span style="background-color: #dc3545; color: #fff; padding: 2px 6px; '
+            'border-radius: 3px; font-size: 0.7rem; font-weight: bold;">Inativo</span>')
+    status_badge.short_description = 'Status'
+    status_badge.admin_order_field = 'status'
+
+    def assinado_badge(self, obj):
+        if getattr(obj, 'assinar', False):
+            return format_html(
+                '<span style="background-color: #0d6efd; color: #fff; padding: 2px 6px; '
+                'border-radius: 3px; font-size: 0.7rem; font-weight: bold;">Assinado</span>')
+        return format_html('<span style="color: #999;">-</span>')
+    assinado_badge.short_description = 'Assinatura'
+
+    def total_hoje_e_assinados(self, queryset):
+        """(total, registrados hoje, assinados) — tolerante a modelos sem 'assinar'."""
+        hoje = timezone.now().date()
+        tem_assinar = any(
+            f.name == 'assinar' for f in queryset.model._meta.fields)
+        assinados = queryset.filter(assinar=True).count() if tem_assinar else 0
+        return (
+            queryset.count(),
+            queryset.filter(dt_registro__date=hoje).count(),
+            assinados,
+        )
+
+
+@admin.register(Diagnostico)
+class DiagnosticoAdmin(_ProntuarioEstatisticoAdminMixin, AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
+    list_display = ('id', 'paciente_nome', 'cids', 'estabelecimento',
+                    'dt_registro', 'us_registro', 'assinado_badge', 'status_badge')
+    list_filter = ('status', 'estabelecimento', 'dt_registro', 'us_registro')
+    search_fields = ('id', 'atendimento__pessoa__nome', 'atendimento__pessoa__cpf',
+                     'diagnostico__codigo', 'diagnostico__descricao')
+    autocomplete_fields = ('atendimento',)
+    list_select_related = ('atendimento__pessoa', 'estabelecimento')
+    list_prefetch_related = ('diagnostico',)
+
+    def cids(self, obj):
+        # 'diagnostico' é ManyToMany: list_display exige um método.
+        return ', '.join(str(d) for d in obj.diagnostico.all()) or '-'
+    cids.short_description = 'Diagnóstico (CID)'
+
+    def get_dashboard_kpis(self, request, queryset):
+        total, hoje, assinados = self.total_hoje_e_assinados(queryset)
+        pacientes = queryset.exclude(atendimento__pessoa__isnull=True) \
+            .values('atendimento__pessoa_id').distinct().count()
+        return [
+            {'title': 'Total de Diagnósticos', 'value': f'{total:,}'.replace(',', '.'),
+             'subtitle': 'Registros no filtro', 'color_class': 'kpi-blue', 'icon': '🧾'},
+            {'title': 'Registrados Hoje', 'value': f'{hoje:,}'.replace(',', '.'),
+             'subtitle': f"Em {timezone.now():%d/%m/%Y}", 'color_class': 'kpi-green', 'icon': '📅'},
+            {'title': 'Assinados', 'value': f'{assinados:,}'.replace(',', '.'),
+             'subtitle': 'Com PDF assinado', 'color_class': 'kpi-purple', 'icon': '✍️'},
+            {'title': 'Pacientes', 'value': f'{pacientes:,}'.replace(',', '.'),
+             'subtitle': 'Atendimentos distintos', 'color_class': 'kpi-orange', 'icon': '👥'},
+        ]
+
+
+@admin.register(Psicoterapia)
+class PsicoterapiaAdmin(_ProntuarioEstatisticoAdminMixin, AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
+    list_display = ('id', 'paciente_nome', 'estabelecimento',
+                    'dt_registro', 'us_registro', 'status_badge')
+    list_filter = ('status', 'estabelecimento', 'dt_registro', 'us_registro')
+    search_fields = ('id', 'atendimento__pessoa__nome', 'atendimento__pessoa__cpf')
+    autocomplete_fields = ('atendimento',)
+    list_select_related = ('atendimento__pessoa', 'estabelecimento')
+
+    def get_dashboard_kpis(self, request, queryset):
+        total, hoje, _ = self.total_hoje_e_assinados(queryset)
+        pacientes = queryset.exclude(atendimento__pessoa__isnull=True) \
+            .values('atendimento__pessoa_id').distinct().count()
+        return [
+            {'title': 'Total de Sessões', 'value': f'{total:,}'.replace(',', '.'),
+             'subtitle': 'Registros no filtro', 'color_class': 'kpi-blue', 'icon': '🛋'},
+            {'title': 'Registradas Hoje', 'value': f'{hoje:,}'.replace(',', '.'),
+             'subtitle': f"Em {timezone.now():%d/%m/%Y}", 'color_class': 'kpi-green', 'icon': '📅'},
+            {'title': 'Pacientes', 'value': f'{pacientes:,}'.replace(',', '.'),
+             'subtitle': 'Em acompanhamento', 'color_class': 'kpi-purple', 'icon': '👥'},
+        ]
+
+
+@admin.register(Adep)
+class AdepAdmin(_ProntuarioEstatisticoAdminMixin, AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
+    dashboard_date_field = 'data_hora'
+    date_hierarchy = 'data_hora'
+    list_display = ('id', 'paciente_nome', 'prescricao', 'fase_adep',
+                    'data_hora', 'dt_adep', 'us_adep', 'status_badge')
+    list_filter = ('fase_adep', 'status', 'estabelecimento', 'data_hora')
+    search_fields = ('id', 'atendimento__pessoa__nome', 'atendimento__pessoa__cpf',
+                     'prescricao__id')
+    autocomplete_fields = ('atendimento',)
+    list_select_related = ('atendimento__pessoa', 'prescricao')
+
+    def get_dashboard_kpis(self, request, queryset):
+        total = queryset.count()
+        pendentes = queryset.filter(fase_adep='P').count()
+        administrados = queryset.filter(fase_adep='A').count()
+        nao_adm = queryset.filter(fase_adep='N').count()
+        return [
+            {'title': 'Total de ADEPs', 'value': f'{total:,}'.replace(',', '.'),
+             'subtitle': 'Registros no filtro', 'color_class': 'kpi-blue', 'icon': '💊'},
+            {'title': 'Pendentes', 'value': f'{pendentes:,}'.replace(',', '.'),
+             'subtitle': 'Aguardando administração', 'color_class': 'kpi-orange', 'icon': '⏳'},
+            {'title': 'Administrados', 'value': f'{administrados:,}'.replace(',', '.'),
+             'subtitle': 'Doses aplicadas', 'color_class': 'kpi-green', 'icon': '✅'},
+            {'title': 'Não Administrados', 'value': f'{nao_adm:,}'.replace(',', '.'),
+             'subtitle': 'Registrados como não adm.', 'color_class': 'kpi-red', 'icon': '🚫'},
+        ]
+
+
+@admin.register(SAE)
+class SAEAdmin(_ProntuarioEstatisticoAdminMixin, AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
+    list_display = ('id', 'paciente_nome', 'estabelecimento',
+                    'dt_registro', 'us_registro', 'assinado_badge', 'status_badge')
+    list_filter = ('status', 'estabelecimento', 'dt_registro', 'us_registro')
+    search_fields = ('id', 'atendimento__pessoa__nome', 'atendimento__pessoa__cpf')
+    autocomplete_fields = ('atendimento',)
+    list_select_related = ('atendimento__pessoa', 'estabelecimento')
+
+    def get_dashboard_kpis(self, request, queryset):
+        total, hoje, assinados = self.total_hoje_e_assinados(queryset)
+        pacientes = queryset.exclude(atendimento__pessoa__isnull=True) \
+            .values('atendimento__pessoa_id').distinct().count()
+        return [
+            {'title': 'Total SAE', 'value': f'{total:,}'.replace(',', '.'),
+             'subtitle': 'Registros no filtro', 'color_class': 'kpi-blue', 'icon': '🩹'},
+            {'title': 'Registrados Hoje', 'value': f'{hoje:,}'.replace(',', '.'),
+             'subtitle': f"Em {timezone.now():%d/%m/%Y}", 'color_class': 'kpi-green', 'icon': '📅'},
+            {'title': 'Assinados', 'value': f'{assinados:,}'.replace(',', '.'),
+             'subtitle': 'Com PDF assinado', 'color_class': 'kpi-purple', 'icon': '✍️'},
+            {'title': 'Pacientes', 'value': f'{pacientes:,}'.replace(',', '.'),
+             'subtitle': 'Atendimentos distintos', 'color_class': 'kpi-orange', 'icon': '👥'},
+        ]
+
+
+@admin.register(PlanoCuidados)
+class PlanoCuidadosAdmin(_ProntuarioEstatisticoAdminMixin, AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
+    list_display = ('id', 'paciente_nome', 'estabelecimento',
+                    'dt_registro', 'us_registro', 'assinado_badge', 'status_badge')
+    list_filter = ('status', 'estabelecimento', 'dt_registro', 'us_registro')
+    search_fields = ('id', 'atendimento__pessoa__nome', 'atendimento__pessoa__cpf')
+    autocomplete_fields = ('atendimento',)
+    list_select_related = ('atendimento__pessoa', 'estabelecimento')
+
+    def get_dashboard_kpis(self, request, queryset):
+        total, hoje, assinados = self.total_hoje_e_assinados(queryset)
+        pacientes = queryset.exclude(atendimento__pessoa__isnull=True) \
+            .values('atendimento__pessoa_id').distinct().count()
+        return [
+            {'title': 'Total de Planos', 'value': f'{total:,}'.replace(',', '.'),
+             'subtitle': 'Registros no filtro', 'color_class': 'kpi-blue', 'icon': '📋'},
+            {'title': 'Registrados Hoje', 'value': f'{hoje:,}'.replace(',', '.'),
+             'subtitle': f"Em {timezone.now():%d/%m/%Y}", 'color_class': 'kpi-green', 'icon': '📅'},
+            {'title': 'Assinados', 'value': f'{assinados:,}'.replace(',', '.'),
+             'subtitle': 'Com PDF assinado', 'color_class': 'kpi-purple', 'icon': '✍️'},
+            {'title': 'Pacientes', 'value': f'{pacientes:,}'.replace(',', '.'),
+             'subtitle': 'Atendimentos distintos', 'color_class': 'kpi-orange', 'icon': '👥'},
+        ]
+
+
+@admin.register(PerdasGanhos)
+class PerdasGanhosAdmin(_ProntuarioEstatisticoAdminMixin, AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
+    list_display = ('id', 'paciente_nome', 'peso', 'altura', 'estabelecimento',
+                    'dt_registro', 'us_registro', 'assinado_badge', 'status_badge')
+    list_filter = ('status', 'estabelecimento', 'dt_registro', 'us_registro')
+    search_fields = ('id', 'atendimento__pessoa__nome', 'atendimento__pessoa__cpf')
+    autocomplete_fields = ('atendimento',)
+    list_select_related = ('atendimento__pessoa', 'estabelecimento')
+
+    def get_dashboard_kpis(self, request, queryset):
+        total, hoje, assinados = self.total_hoje_e_assinados(queryset)
+        pacientes = queryset.exclude(atendimento__pessoa__isnull=True) \
+            .values('atendimento__pessoa_id').distinct().count()
+        return [
+            {'title': 'Total de Aferições', 'value': f'{total:,}'.replace(',', '.'),
+             'subtitle': 'Registros no filtro', 'color_class': 'kpi-blue', 'icon': '⚖️'},
+            {'title': 'Aferições Hoje', 'value': f'{hoje:,}'.replace(',', '.'),
+             'subtitle': f"Em {timezone.now():%d/%m/%Y}", 'color_class': 'kpi-green', 'icon': '📅'},
+            {'title': 'Assinadas', 'value': f'{assinados:,}'.replace(',', '.'),
+             'subtitle': 'Com PDF assinado', 'color_class': 'kpi-purple', 'icon': '✍️'},
+            {'title': 'Pacientes', 'value': f'{pacientes:,}'.replace(',', '.'),
+             'subtitle': 'Atendimentos distintos', 'color_class': 'kpi-orange', 'icon': '👥'},
+        ]

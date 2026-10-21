@@ -2,13 +2,17 @@ from datetime import datetime
 from django.contrib import admin
 from dominios.admin_dashboard_mixins import AdminDashboardAndTopFilterMixin
 from .models import Atendimento
-from dominios.utils import AdminEstabelecimentoPadraoMixin 
+from dominios.utils import AdminEstabelecimentoPadraoMixin , SomenteLeituraEstatisticoAdminMixin
 from admin_cadastros.utils import EstabelecimentoFilterAdminMixin
 
 
 
 @admin.register(Atendimento)
-class AtendimentoAdmin(AdminEstabelecimentoPadraoMixin, AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
+class AtendimentoAdmin(SomenteLeituraEstatisticoAdminMixin, AdminEstabelecimentoPadraoMixin, AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
+    """
+    Módulo estatístico: atendimentos são abertos/encerrados pelo fluxo do
+    sistema. No admin só há consulta (sem add/change/delete).
+    """
     dashboard_date_field = 'dt_atendimento'
 
     def get_dashboard_kpis(self, request, queryset):
@@ -87,4 +91,10 @@ class AtendimentoAdmin(AdminEstabelecimentoPadraoMixin, AdminDashboardAndTopFilt
     autocomplete_fields = ('pessoa',)
     date_hierarchy = 'dt_atendimento'
     ordering = ('-id',)
+
+    # Registro clínico: nenhum campo é editável no admin.
+    fields = None
+    readonly_fields = tuple(
+        f.name for f in Atendimento._meta.fields
+    )
 

@@ -2,7 +2,7 @@
 from django import forms
 from django.utils import timezone
 from django.forms import TextInput, inlineformset_factory
-from .models import ProntuarioAcessos
+from .models_logs import ProntuarioAcessos
 from django.core.validators import MinLengthValidator
 
 

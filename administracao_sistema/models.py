@@ -29,8 +29,12 @@ class EmailConfiguration(models.Model):
     regra = models.CharField(max_length=255, choices=regras_emails_choices)
 
     class Meta:
+        # Consolidado no app 'administracao_sistema'; db_table preserva a
+        # tabela original (nenhum dado é movido).
+        app_label = 'administracao_sistema'
+        db_table = 'admin_automacoes_emailconfiguration'
         verbose_name = 'E-mail e configuração'
-        verbose_name_plural = '1. E-mails e configurações'
+        verbose_name_plural = '2. E-mails e configurações'
 
     def __str__(self):
         return f'Configurações de E-mail Remetente {self.regra}'
@@ -40,8 +44,10 @@ class QtdUsuariosSimultaneos(models.Model):
     max_usuarios_simultaneos = models.PositiveIntegerField()
 
     class Meta:
+        app_label = 'administracao_sistema'
+        db_table = 'admin_automacoes_qtdusuariossimultaneos'
         verbose_name = 'Quantidade de Usuários Simultâneos'
-        verbose_name_plural = '2. Quantidade de Usuários Simultâneos'
+        verbose_name_plural = '3. Quantidade de Usuários Simultâneos'
 
     def __str__(self):
         return f'Quantidade de Usuários Simultâneos: {self.max_usuarios_simultaneos}'
@@ -51,9 +57,10 @@ class QtdUsuariosSimultaneos(models.Model):
 
 class ActiveSession(Session):
     class Meta:
+        app_label = 'administracao_sistema'
         proxy = True
         verbose_name = "Usuário Logado"
-        verbose_name_plural = "Usuários Logados"
+        verbose_name_plural = "Log - Sessões - Usuários Logados"
 
     def get_user(self):
         data = self.get_decoded()

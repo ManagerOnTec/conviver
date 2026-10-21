@@ -14,7 +14,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import Image, KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from admin_relatorios.models import GerenciadorRelatorioGeral, GerenciadorRelatorioPersonalizado
+from admin_relatorios.models import GerenciadorRelatorioGeral, GerenciadorRelatorioPersonalizado, Relatorio
 from admin_relatorios.rel_footer import genFooterRel
 from admin_relatorios.rel_header import genHeaderRel
 from admin_relatorios.utils import assinar_pdf, verificar_assinatura_pdf
@@ -469,4 +469,52 @@ def atualizar_pdf_documento(documento, user=None, assinar_funcionario=False):
     documento.hash_pdf = hashlib.sha256(pdf_final_bytes).hexdigest()
     documento.pdf_gerado.save(f'{documento.codigo_documento}.pdf', ContentFile(pdf_final_bytes), save=False)
     documento.save(update_fields=['pdf_gerado', 'hash_pdf'])
+
+    # Registra o PDF na tabela genérica de relatórios para que ele apareça em
+    # Admin > Relatórios gerados (grupo "Termos e Documentos Legais") e nas
+    # ações de dossiê/ZIP do paciente.
+    registrar_relatorio_documento_legal(documento, user=user)
+
     return assinatura_funcionario_aplicada
+
+
+def registrar_relatorio_documento_legal(documento, user=None):
+    """
+    Cria/atualiza o registro em ``Relatorio`` para um ``DocumentoLegalInternacao``.
+
+    O documento legal tem um único PDF vigente (``pdf_gerado``): ao gerar de
+    novo, o registro anterior é inativado e um novo é criado, preservando o
+    histórico no admin.
+
+    Retorna o ``Relatorio`` criado, ou None se o documento não tiver PDF.
+    """
+    if not documento or not documento.pk or not documento.pdf_gerado:
+        return None
+
+    from django.contrib.contenttypes.models import ContentType
+    from django.db import transaction
+
+    content_type = ContentType.objects.get_for_model(documento.__class__)
+
+    with transaction.atomic():
+        Relatorio.objects.filter(
+            content_type=content_type,
+            object_id=documento.pk,
+            status='A',
+        ).update(status='I')
+
+        relatorio = Relatorio(
+            tipo='documentos_legais',
+            content_type=content_type,
+            object_id=documento.pk,
+            atendimento=documento.atendimento,
+            pessoa=documento.pessoa,
+            us_registro=user or documento.us_registro,
+            status='A',
+        )
+
+        # Aponta para o MESMO arquivo já gravado (sem duplicar storage/GCS).
+        relatorio.relatorio.name = documento.pdf_gerado.name
+        relatorio.save()
+
+    return relatorio

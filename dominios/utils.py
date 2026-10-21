@@ -163,6 +163,38 @@ class FilterAdminByStatusMixin:
         return field
 
 
+class SomenteLeituraEstatisticoAdminMixin:
+    """
+    Transforma o ModelAdmin em um módulo ESTATÍSTICO (somente consulta).
+
+    Os registros são gerados exclusivamente pelo fluxo do sistema
+    (atendimento, prontuário, PDF/assinatura). Permitir add/change/delete
+    pelo admin abriria brecha para editar registros clínicos por fora do
+    fluxo — burlando auditoria, assinatura digital e parametrizações.
+
+    Use como PRIMEIRO mixin da classe:
+        class AtendimentoAdmin(SomenteLeituraEstatisticoAdminMixin, admin.ModelAdmin)
+    """
+    # Deixa explícito no template do admin (botão "Adicionar" some).
+    save_on_top = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_actions(self, request):
+        # Mesmo que algum mixin/acesso adicione ações, removeremos as de
+        # escrita (ex.: "Excluir selecionados").
+        actions = super().get_actions(request)
+        actions.pop('delete_selected', None)
+        return actions
+
+
 # LISTAR NO ADMIN OBJETOS A E SE NECESSARIO ALTERAR PARA STATUS I
 class StatusFilterAdminMixin(SimpleListFilter):
     title = 'Status (Ativo)'
@@ -494,7 +526,7 @@ class ParametrosProntuariosMixin:
         if self.modelo_parametros is None:
             js = '''
             <script>
-                alert("Permissoes em Admin Parametros, para Passagem de Plantoes nao definido. Por favor, contate o administrador do sistema.");
+                alert("Exige permissoes em Admin Parametros ou Cadastro Profissional. Por favor, contate o administrador do sistema.");
                 window.history.back();
             </script>
             '''

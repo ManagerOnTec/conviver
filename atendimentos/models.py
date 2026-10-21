@@ -96,7 +96,7 @@ class Atendimento(models.Model):
     class Meta:
 
         verbose_name = 'Atendimento'
-        verbose_name_plural = '3.1 Atendimentos'
+        verbose_name_plural = 'Atendimentos'
         ordering = ['-id']
 
     def __str__(self):

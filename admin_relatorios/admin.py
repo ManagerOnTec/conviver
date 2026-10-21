@@ -219,12 +219,10 @@ class TipoDocumentoLegalRelatorioFilter(admin.SimpleListFilter):
             return queryset
         # Filtra relatórios cujo tipo seja documentos_legais/termo e correspondam aos documentos gerados deste tipo
         doc_ct = ContentType.objects.get_for_model(DocumentoLegalInternacao)
-        doc_ids = DocumentoLegalInternacao.objects.filter(tipo_documento_id=val).values_list('id', flat=True)
-        # Permite filtrar tanto se content_type for DocumentoLegalInternacao quanto pelo nome do tipo
-        return queryset.filter(
-            models.Q(content_type=doc_ct, object_id__in=doc_ids) |
-            models.Q(tipo__in=['documentos_legais', 'termo', 'termos'], relatorio__icontains=f"termo")
-        )
+        doc_ids = DocumentoLegalInternacao.objects.filter(
+            tipo_documento_id=val).values_list('id', flat=True)
+        # O tipo gravado pelo gerador de documentos legais é 'documentos_legais'.
+        return queryset.filter(content_type=doc_ct, object_id__in=doc_ids)
 
 
 class ModuloProntuarioFilter(admin.SimpleListFilter):
@@ -235,6 +233,7 @@ class ModuloProntuarioFilter(admin.SimpleListFilter):
         return (
             ('prontuario', 'Todos de Prontuário Clínico'),
             ('evolucao', 'Evoluções Clínicas'),
+            ('documentos_legais', 'Termos e Documentos Legais'),
             ('prescricao', 'Prescrições Médicas'),
             ('adep', 'ADEP (Administrações)'),
             ('sinais_vitais', 'Sinais Vitais & Perdas/Ganhos'),
@@ -250,8 +249,13 @@ class ModuloProntuarioFilter(admin.SimpleListFilter):
         if not val:
             return queryset
         if val == 'prontuario':
+            # Os tipos são gravados no modelo sem separador (ver os registros
+            # existentes: 'sinaisvitais', 'perdasganhos', 'planocuidados').
             return queryset.filter(
-                tipo__in=['evolucao', 'prescricao', 'adep', 'sinais_vitais', 'perdas_ganhos', 'sae', 'diagnostico', 'plano_cuidados']
+                tipo__in=['evolucao', 'psicoterapia', 'prescricao', 'adep',
+                          'sinaisvitais', 'sinais_vitais', 'perdasganhos',
+                          'perdas_ganhos', 'sae', 'diagnostico', 'planocuidados',
+                          'plano_cuidados']
             )
         elif val == 'evolucao':
             return queryset.filter(tipo__in=['evolucao', 'psicoterapia'])
@@ -260,17 +264,22 @@ class ModuloProntuarioFilter(admin.SimpleListFilter):
         elif val == 'adep':
             return queryset.filter(tipo='adep')
         elif val == 'sinais_vitais':
-            return queryset.filter(tipo__in=['sinais_vitais', 'perdas_ganhos', 'sv'])
+            return queryset.filter(
+                tipo__in=['sinaisvitais', 'sinais_vitais', 'perdasganhos',
+                          'perdas_ganhos', 'sv'])
         elif val == 'sae':
             return queryset.filter(tipo='sae')
         elif val == 'diagnostico':
             return queryset.filter(tipo='diagnostico')
         elif val == 'plano_cuidados':
-            return queryset.filter(tipo='plano_cuidados')
+            return queryset.filter(tipo__in=['planocuidados', 'plano_cuidados'])
         elif val == 'documentos_legais':
-            return queryset.filter(tipo__in=['documentos_legais', 'termo', 'termos'])
+            return queryset.filter(
+                tipo__in=['documentos_legais', 'documentolegal', 'termo', 'termos'])
         elif val == 'administrativo':
-            return queryset.filter(tipo__in=['ata', 'atas', 'oficio', 'oficios', 'orcamento', 'orcamentos'])
+            # Atas/Ofícios/Orçamentos são gravados no plural pelos respectivos apps.
+            return queryset.filter(
+                tipo__in=['ata', 'atas', 'oficio', 'oficios', 'orcamento', 'orcamentos'])
         return queryset
 
 

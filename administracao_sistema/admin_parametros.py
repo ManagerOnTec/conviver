@@ -1,10 +1,11 @@
 from django.contrib import admin
-from .models import ConfiguracaoSessao
-from .forms import ConfiguracaoSessaoForm
+from .models_parametros import ConfiguracaoSessao
+from .permissions import AdminSomenteUsuarioAdminMixin
 
 
-class ConfiguracaoSessaoAdmin(admin.ModelAdmin):
-    form = ConfiguracaoSessaoForm
+class ConfiguracaoSessaoAdmin(AdminSomenteUsuarioAdminMixin, admin.ModelAdmin):
+    # O antigo `ConfiguracaoSessaoForm` nunca existiu no projeto (o import
+    # quebrava o carregamento do app). Usamos o ModelForm gerado pelo Django.
 
     def has_add_permission(self, request):
         # Verificar se já existe algum registro antes de permitir adição

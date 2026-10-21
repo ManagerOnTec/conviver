@@ -44,7 +44,7 @@ from django.contrib.messages.views import SuccessMessageMixin
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView, DetailView
 from django.forms import HiddenInput
 from django.urls import reverse, reverse_lazy
-from admin_logs.forms import ProntuarioAcessosCreateForm
+from administracao_sistema.forms_logs import ProntuarioAcessosCreateForm
 from admin_prescricoes.models import HorarioRestritoPrescricao, InicioPlanoTerapeutico, IntervaloHoras, ParametrosPrescricao
 from prontuarios.models import Prescricao, ProdutoPrescricao
 from admin_evolucoes.models import ParametrosEvolucao, TextoPadrao
@@ -3226,7 +3226,9 @@ class PrescricaoListView(LoginRequiredMixin, CustomPermissionRequiredMixin, Filt
         return context
 
 
-class PrescricaoGeralListView(LoginRequiredMixin, CustomPermissionRequiredMixin, FilterObjectsByEstabelecimentoMixin, RelatorioMixin, ListView):
+class PrescricaoGeralListView(LoginRequiredMixin, CustomPermissionRequiredMixin, FilterObjectsByEstabelecimentoMixin, ParametrosProntuariosMixin, RelatorioMixin, ListView):
+
+                              
     permission_required = 'prontuarios.change_prescricao'
     template_name = "prontuarios/prescricao_geral_listar.html"
     model = Prescricao

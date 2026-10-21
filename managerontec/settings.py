@@ -151,9 +151,9 @@ INSTALLED_APPS = [
     'admin_sae',
     'admin_estoques',
     'admin_prescricoes',
-    'admin_automacoes',
-    'admin_logs',
-    'admin_parametros',
+    # Módulo único 'Administração do Sistema' (consolida admin_automacoes,
+    # admin_logs e admin_parametros; tabelas preservadas).
+    'administracao_sistema',
     'admin_adep',
     'admin_perdas_ganhos',
     'admin_plano_cuidados',
@@ -205,6 +205,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'managerontec.middlewares.RegistroAcessoMiddleware',
+    'administracao_sistema.middleware.ConfiguracaoSessaoMiddleware',
     'managerontec.middlewares.LimitUserLoginsMiddleware',
 ]
 

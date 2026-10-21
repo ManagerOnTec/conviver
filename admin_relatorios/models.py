@@ -112,7 +112,8 @@ class GerenciadorRelatorioPersonalizado(models.Model):
 class Relatorio(models.Model):
     relatorio = models.FileField(upload_to='relatorios/')
     # Por exemplo, 'prescricao', 'adep', 'evolucao', 'ata', 'oficio', 'orcamento', etc.
-    tipo = models.CharField(max_length=10)
+    # 20 chars para acomodar 'documentos_legais', 'sinaisvitais', etc.
+    tipo = models.CharField(max_length=20)
 
     # Campos para implementação da chave genérica
     content_type = models.ForeignKey(ContentType, on_delete=models.PROTECT)
