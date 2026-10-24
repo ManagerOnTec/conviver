@@ -199,65 +199,10 @@
         </div>
         {% endif %}
 
-        <!-- ========== TESOURARIA ========== -->
-        {% if user|has_perm:'apptesouraria.view_caixa' %}
-        <div class="col-lg-4 col-md-6 col-sm-12">
-          <a href="{% url 'apptesouraria:tesouraria_index' %}" class="text-decoration-none h-100">
-            <div class="card h-100 bg-dark border-success text-white transition-card">
-              <div class="card-body d-flex flex-column align-items-center text-center p-4">
-                <i class="fas fa-cash-register fa-3x mb-3 text-success"></i>
-                <h5 class="card-title fw-bold">Tesouraria</h5>
-                <p class="card-text text-muted small">Gestão de caixas e movimentações.</p>
-              </div>
-            </div>
-          </a>
-        </div>
-        {% endif %}
 
-        <!-- ========== CONCILIAÇÃO BANCÁRIA ========== -->
-        {% if user|has_perm:'appconciliacao.view_extratobancario' %}
-        <div class="col-lg-4 col-md-6 col-sm-12">
-          <a href="{% url 'appconciliacao:conciliacao_index' %}" class="text-decoration-none h-100">
-            <div class="card h-100 bg-dark border-success text-white transition-card">
-              <div class="card-body d-flex flex-column align-items-center text-center p-4">
-                <i class="fas fa-sync-alt fa-3x mb-3 text-success"></i>
-                <h5 class="card-title fw-bold">Conciliação Bancária</h5>
-                <p class="card-text text-muted small">Importação e conciliação de extratos.</p>
-              </div>
-            </div>
-          </a>
-        </div>
-        {% endif %}
 
-        <!-- ========== CARTÃO DE PAGAMENTO ========== -->
-        {% if user|has_perm:'appcartao.view_cartaopagamento' %}
-        <div class="col-lg-4 col-md-6 col-sm-12">
-          <a href="{% url 'appcartao:cartao_index' %}" class="text-decoration-none h-100">
-            <div class="card h-100 bg-dark border-success text-white transition-card">
-              <div class="card-body d-flex flex-column align-items-center text-center p-4">
-                <i class="fas fa-credit-card fa-3x mb-3 text-success"></i>
-                <h5 class="card-title fw-bold">Cartão de Pagamento</h5>
-                <p class="card-text text-muted small">Controle de transações e faturas.</p>
-              </div>
-            </div>
-          </a>
-        </div>
-        {% endif %}
 
-        <!-- ========== BAIXA DE FATURA ========== -->
-        {% if user|has_perm:'appbaixa_fatura.view_baixafatura' %}
-        <div class="col-lg-4 col-md-6 col-sm-12">
-          <a href="{% url 'appbaixa_fatura:baixa_fatura_index' %}" class="text-decoration-none h-100">
-            <div class="card h-100 bg-dark border-success text-white transition-card">
-              <div class="card-body d-flex flex-column align-items-center text-center p-4">
-                <i class="fas fa-file-invoice-dollar fa-3x mb-3 text-success"></i>
-                <h5 class="card-title fw-bold">Baixa de Fatura</h5>
-                <p class="card-text text-muted small">Gestão de baixas e pagamentos.</p>
-              </div>
-            </div>
-          </a>
-        </div>
-        {% endif %}
+
 
       </div>
     </div>

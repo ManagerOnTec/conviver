@@ -585,8 +585,8 @@ html.hide-top-filter div.xfull {
    -------------------------------------------------------------------------- */
 .admin-dashboard-kpis {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 12px;
     margin-bottom: 16px;
     margin-top: 4px;
 }
@@ -595,7 +595,8 @@ html.hide-top-filter div.xfull {
     background: var(--body-bg, #fff);
     border: 1px solid var(--border-color, #e0e6ed);
     border-radius: 8px;
-    padding: 14px 16px;
+    padding: 12px 14px;
+    min-width: 0;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
     display: flex;
     align-items: center;
@@ -628,16 +629,24 @@ html.hide-top-filter div.xfull {
 .kpi-card.kpi-teal { --kpi-accent: #20c997; }
 
 .kpi-icon {
-    width: 42px;
-    height: 42px;
+    width: 36px;
+    height: 36px;
     border-radius: 8px;
     background: rgba(13, 110, 253, 0.1);
     color: var(--kpi-accent, #0d6efd);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.3rem;
+    font-size: 1.05rem;
     flex-shrink: 0;
+}
+
+/* Ícone SVG inline (não depende do CDN do Font Awesome). */
+.kpi-icon svg {
+    width: 20px;
+    height: 20px;
+    display: block;
+    color: inherit;
 }
 
 .kpi-card.kpi-blue .kpi-icon { background: rgba(13, 110, 253, 0.12); color: #0d6efd; }
@@ -651,6 +660,12 @@ html.hide-top-filter div.xfull {
     display: flex;
     flex-direction: column;
     min-width: 0;
+    flex: 1 1 auto;
+}
+
+.kpi-subtitle {
+    white-space: normal;
+    line-height: 1.3;
 }
 
 .kpi-title {
@@ -660,16 +675,33 @@ html.hide-top-filter div.xfull {
     letter-spacing: 0.5px;
     color: var(--body-quiet-color, #6c757d);
     margin-bottom: 2px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    line-height: 1.25;
 }
 
 .kpi-value {
-    font-size: 1.45rem;
+    /* O valor precisa caber INTEIRO no card (ex.: R$ 79.667,60). Fonte
+       fluida + quebra controlada para números longos. */
+    font-size: clamp(0.8rem, 1vw, 1.15rem);
     font-weight: 700;
     line-height: 1.2;
     color: var(--body-fg, #212529);
+    white-space: nowrap;
+    overflow-wrap: anywhere;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Cards monetários ganham mais espaço: o ícone só aparece se houver largura. */
+@media (max-width: 1400px) {
+    .admin-dashboard-kpis {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    }
+
+    .kpi-value {
+        font-size: 1rem;
+    }
 }
 
 .kpi-subtitle {
@@ -857,6 +889,215 @@ html.hide-top-filter div.xfull {
 
 .actions .button:hover {
     opacity: 0.9;
+}
+
+/* Barra de ações que acompanha a tabela (topo e rodapé):
+   sem margem sobrando e encostada nas bordas da lista. */
+#changelist .actions {
+    margin-top: 0;
+    margin-bottom: 10px;
+}
+
+#changelist #result_list + .actions {
+    margin-top: -1px;
+    margin-bottom: 4px;
+    border-top: 1px solid var(--border-color, #e0e6ed);
+    border-bottom: 1px solid var(--border-color, #e0e6ed);
+}
+
+#changelist .results + .actions {
+    margin-top: 10px;
+}
+
+/* LISTAGEM (changelist) — tabela legível com todas as colunas.
+   Com 19 colunas (Faturas) a tabela mede ~2900px; em vez de espremer tudo na
+   largura da tela (o que quebrava PERÍODO/CLIENTE em 5 linhas), a tabela
+   mantém a largura natural e rola horizontalmente DENTRO do bloco .results.
+   Toda a `list_display` continua visível — nenhuma coluna é removida. */
+#changelist .results {
+    overflow-x: auto !important;
+    max-width: 100% !important;
+}
+
+#changelist #result_list {
+    table-layout: auto !important;
+    width: auto !important;
+    min-width: 100% !important;
+}
+
+#changelist #result_list thead th {
+    padding: 10px 10px !important;
+    font-size: 0.7rem;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+#changelist #result_list thead th .text a,
+#changelist #result_list thead th a {
+    white-space: nowrap;
+}
+
+/* Cabeçalho fixo: ao rolar a tabela a coluna continua identificada. */
+#changelist #result_list thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--darkened-bg, #f8f9fa);
+}
+
+#changelist #result_list tbody td,
+#changelist #result_list tbody th {
+    padding: 9px 10px !important;
+    vertical-align: top;
+    font-size: 0.82rem;
+    line-height: 1.4;
+}
+
+/* Números e datas em uma linha. */
+#changelist #result_list tbody td.field-id,
+#changelist #result_list tbody td.field-competencia,
+#changelist #result_list tbody td.field-dt_vencimento,
+#changelist #result_list tbody td.field-dt_liquidacao,
+#changelist #result_list tbody td.field-dt_recebimento,
+#changelist #result_list tbody td.field-dia_envio,
+#changelist #result_list tbody td.field-dias_pagamento,
+#changelist #result_list tbody td.field-valor,
+#changelist #result_list tbody td.field-valor_fatura,
+#changelist #result_list tbody td.field-valor_saldo,
+#changelist #result_list tbody td.field-valor_baixa,
+#changelist #result_list tbody td.field-valor_mensal,
+#changelist #result_list tbody td.field-valor_diaria,
+#changelist #result_list tbody td.field-inicio_vigencia,
+#changelist #result_list tbody td.field-final_vigencia,
+#changelist #result_list tbody td.field-tx_retencao_nf,
+#changelist #result_list tbody td.field-vl_retencao_nf {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Textos longos têm largura confortável (quebram dentro da própria célula). */
+#changelist #result_list tbody td.field-cliente,
+#changelist #result_list tbody td.field-display_clientes {
+    min-width: 220px;
+    max-width: 320px;
+    white-space: normal;
+}
+
+#changelist #result_list tbody td.field-periodo_tratamento,
+#changelist #result_list tbody td.field-descricao {
+    min-width: 160px;
+    max-width: 260px;
+    white-space: normal;
+}
+
+/* LISTAGEM EDITÁVEL (`list_editable`) — tabela montada pelo
+   admin_changelist_actions.js a partir das linhas soltas do formset. */
+#changelist-form table.js-changelist-editavel {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    table-layout: auto;
+    margin-bottom: 4px;
+    background: var(--body-bg, #fff);
+}
+
+#changelist-form table.js-changelist-editavel thead th {
+    padding: 10px 8px !important;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.35px;
+    text-transform: uppercase;
+    color: var(--body-quiet-color, #555);
+    background: var(--darkened-bg, #f8f9fa);
+    border-bottom: 2px solid var(--border-color, #e0e6ed);
+    white-space: nowrap;
+    text-align: left;
+}
+
+#changelist-form table.js-changelist-editavel tbody tr:nth-child(even) {
+    background: rgba(0, 0, 0, 0.015);
+}
+
+#changelist-form table.js-changelist-editavel tbody tr:hover {
+    background: rgba(13, 110, 253, 0.05);
+}
+
+#changelist-form table.js-changelist-editavel td {
+    padding: 6px 8px !important;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--hairline-color, #edf2f7);
+}
+
+#changelist-form table.js-changelist-editavel td.action-checkbox {
+    width: 36px;
+    text-align: center;
+}
+
+/* Campos editáveis: compactos para caberem várias colunas. */
+#changelist-form table.js-changelist-editavel td input[type="text"],
+#changelist-form table.js-changelist-editavel td input[type="number"],
+#changelist-form table.js-changelist-editavel td select {
+    width: 100%;
+    min-width: 90px;
+    max-width: 220px;
+    height: 34px;
+    padding: 4px 8px;
+    font-size: 0.85rem;
+    border-radius: 6px;
+    box-sizing: border-box;
+}
+
+#changelist-form table.js-changelist-editavel td.field-valor input,
+#changelist-form table.js-changelist-editavel td.field-valor_mensal input,
+#changelist-form table.js-changelist-editavel td.field-valor_diaria input,
+#changelist-form table.js-changelist-editavel td.field-valor_fatura input {
+    max-width: 130px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+#changelist-form table.js-changelist-editavel td.field-status select,
+#changelist-form table.js-changelist-editavel td.field-pre_faturado,
+#changelist-form table.js-changelist-editavel td.field-faturado {
+    max-width: 90px;
+    text-align: center;
+}
+
+/* Help text do formset não polui a linha. */
+#changelist-form table.js-changelist-editavel td .help,
+#changelist-form table.js-changelist-editavel td br,
+#changelist-form table.js-changelist-editavel td span.helptext {
+    display: none !important;
+}
+
+/* A 1ª barra de ações reaposicionada fica colada na tabela. */
+#changelist-form > .actions-top {
+    margin-top: 0;
+    margin-bottom: 0;
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+}
+
+/* Selects agrupados da barra superior (Convênio, Estabelecimento, ...) */
+.top-filter-selects {
+    gap: 18px;
+}
+
+.top-subfilter-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+}
+
+.top-subfilter-group .filter-group-label {
+    white-space: nowrap;
+}
+
+.top-subfilter-select {
+    max-width: 240px;
 }
 
 

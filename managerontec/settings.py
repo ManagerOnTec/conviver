@@ -168,10 +168,6 @@ INSTALLED_APPS = [
     'orcamentos',
     'atas',
     'tinymce',
-    'apptesouraria',
-    'appconciliacao',
-    'appcartao',
-    'appbaixa_fatura',
     'documentos_legais',
 ]
 

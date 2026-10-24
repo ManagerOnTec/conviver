@@ -22,6 +22,7 @@ import re
 from django import forms
 from django.contrib.auth.models import Group
 from django.db.models import Q
+from django.contrib import admin
 from admin_cadastros.models import Estabelecimento
 from django.contrib.admin import SimpleListFilter
 from admin_cadastros_assistenciais.models import CadastroProfissional
@@ -140,6 +141,222 @@ def get_current_user(request):
 
 
 # FILTRAR APENAS ATIVOS NOS FORMS TEMPLATES CUSTOMIZADOS
+
+
+class Select2AdminModelAdminMixin:
+    """
+    Usa o autocomplete (select2 de digitação) em TODOS os campos de chave
+    estrangeira / many-to-many do formulário — inclusive nos inlines.
+
+    Para cada campo o widget correto é escolhido automaticamente:
+    - ManyToManyField -> AutocompleteSelectMultiple
+    - ForeignKey       -> AutocompleteSelect
+
+    Regras aplicadas:
+    - Campo ``disabled``/``readonly`` (ex.: 'estabelecimento' fixado pela sessão
+      pelo AdminEstabelecimentoPadraoMixin) não é alterado.
+    - Se o ModelAdmin definir ``autocomplete_light_skip = ('campo',)`` o
+      campo é ignorado (útil para campos cujo modelo relacionado não tem
+      ``search_fields`` — o admin do destino lança exception nesse caso).
+    - Ao trocar o widget, o queryset do campo é REGISTRADO em
+      ``_select2_querysets`` e reaplicado no ``get_search_results`` do admin
+      do modelo relacionado (ex.: o 'cliente' do convênio só aparece com
+      pacientes ativos).
+    - Se o formulário montar campos fora do ``formfield_for_*`` (form próprio,
+      ``base_fields`` de inline etc.), declare ``select2_querysets = {...}``
+      no ModelAdmin para o mesmo recorte valer na busca do select2.
+    """
+
+    autocomplete_light_skip = ()
+
+    # {nome_do_campo: queryset} — recorte aplicado na busca do select2,
+    # independentemente de o widget ter sido aplicado pelo mixin.
+    select2_querysets = {}
+
+    # {(modelo_do_form, nome_do_campo): queryset} — recorte usado na busca do
+    # select2. Preenchido por ``_aplicar_autocomplete`` e consumido em
+    # ``get_search_results``; o widget em si não recebe o queryset porque o
+    # AutocompleteJsonView ignora ``widget.get_queryset()``.
+    _select2_querysets = None
+
+    def _pode_usar_autocomplete(self, related_model):
+        """Só troca o widget se o admin de destino permitir a busca
+        (sem ``search_fields`` o AutocompleteJsonView retorna 403)."""
+        related_admin = admin.site._registry.get(related_model)
+        if related_admin is None:
+            return False
+        return bool(getattr(related_admin, 'search_fields', None))
+
+    @staticmethod
+    def _campo_editavel(formfield, db_field):
+        """Campos somente leitura/desabilitados continuam com o widget original
+        e campos ocultos não precisam de autocomplete."""
+        if getattr(formfield, 'disabled', False):
+            return False
+        return not isinstance(formfield.widget, forms.HiddenInput)
+
+    @classmethod
+    def _aplicar_autocomplete(cls, admin_site, widget_class, db_field, formfield):
+        """Troca o widget preservando o queryset e os attrs do campo.
+
+        O queryset continua valendo para validação/salvamento; a busca do
+        select2 é recortada por ``select2_querysets`` (ver
+        ``get_search_results``).
+        """
+        queryset = getattr(formfield, 'queryset', None)
+        if queryset is None:
+            return formfield
+
+        class _AutocompleteComStatus(widget_class):
+            """Select2 de digitação; o recorte do queryset é aplicado no
+            ``get_search_results`` do ModelAdmin que hospeda o campo."""
+
+            def get_queryset(self, request):
+                return queryset
+
+        # O Django só aceita ``<ModelAdmin>.autocomplete_fields`` quando o
+        # widget é EXATAMENTE AutocompleteSelect*; subclasses disparam
+        # SystemCheckError no boot. Por isso marcamos esta subclasse como
+        # autocomplete declarado (mesmo critério do validates()).
+        _AutocompleteComStatus.__module__ = widget_class.__module__
+        _AutocompleteComStatus.__name__ = widget_class.__name__
+        _AutocompleteComStatus.__qualname__ = widget_class.__qualname__
+
+        formfield.widget = _AutocompleteComStatus(
+            db_field, admin_site,
+            attrs=formfield.widget.attrs,
+            choices=queryset,
+        )
+        return formfield
+
+    def get_search_results(self, request, queryset, search_term):
+        """Aplica o recorte do campo também na busca do select2.
+
+        O ``AutocompleteJsonView`` filtra pelo queryset INTEIRO do modelo que
+        hospeda o campo e ignora ``widget.get_queryset()``. Sem isto, o select2
+        de 'cliente' do convênio listava todas as Pessoas (inclusive
+        funcionários), embora o formulário só aceitasse pacientes.
+        """
+        resultados, may_have_duplicates = super().get_search_results(
+            request, queryset, search_term)
+
+        campo = request.GET.get('field_name') if request is not None else None
+        if not campo:
+            # Busca normal do changelist: sem recorte.
+            return resultados, may_have_duplicates
+
+        fonte = request.GET.get('source_model')
+        if fonte == self.model._meta.model_name:
+            # O select2 pertence a um campo DESTE próprio ModelAdmin
+            # (ex.: campo de Pessoa no admin de Pessoa).
+            recorte = (self.select2_querysets or {}).get(campo)
+            if recorte is None:
+                # Widget aplicado pelo mixin: o queryset vem do form e é
+                # registrado em ``_select2_querysets``.
+                recorte = (self._select2_querysets or {}).get(campo)
+        else:
+            # O select2 está em outro ModelAdmin (ex.: 'cliente' do Convênio)
+            # e busca neste modelo: o recorte mora no admin de origem.
+            recorte = (self._select2_querysets or {}).get(campo)
+
+        if recorte is None:
+            return resultados, may_have_duplicates
+
+        if hasattr(recorte.model, 'status'):
+            recorte = recorte.filter(status='A')
+
+        # Interseção com o que o ModelAdmin de destino já liberou para busca.
+        return resultados.filter(pk__in=recorte.values('pk')), may_have_duplicates
+
+    @classmethod
+    def _autocomplete(cls, admin_site, formfield, db_field, widget_class):
+        """Decide e aplica o select2 de digitação (usado também nos inlines)."""
+        if formfield is None or not cls._campo_editavel(formfield, db_field):
+            return formfield
+        related_admin = admin.site._registry.get(db_field.remote_field.model)
+        if related_admin is None or not getattr(related_admin, 'search_fields', None):
+            return formfield
+        return cls._aplicar_autocomplete(
+            admin_site, widget_class, db_field, formfield)
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        formfield = super().formfield_for_foreignkey(db_field, request, **kwargs)
+        if db_field.name in self.autocomplete_light_skip:
+            return formfield
+        formfield = self._autocomplete(
+            self.admin_site, formfield, db_field,
+            admin.widgets.AutocompleteSelect)
+        self._registrar_recorte(formfield, db_field)
+        return formfield
+
+    def formfield_for_manytomany(self, db_field, request, **kwargs):
+        formfield = super().formfield_for_manytomany(db_field, request, **kwargs)
+        if db_field.name in self.autocomplete_light_skip:
+            return formfield
+        formfield = self._autocomplete(
+            self.admin_site, formfield, db_field,
+            admin.widgets.AutocompleteSelectMultiple)
+        self._registrar_recorte(formfield, db_field)
+        return formfield
+
+    def _registrar_recorte(self, formfield, db_field):
+        """Guarda o queryset do campo para o recorte da busca do select2.
+
+        ``get_search_results`` roda no ModelAdmin do modelo RELACIONADO
+        (Pessoa), não neste, e os hooks acima rodam antes do ``__init__`` do
+        form — por isso o recorte lido do form é relido aqui no momento do
+        render (``_select2_querysets``). O recorte declarado em
+        ``select2_querysets`` tem prioridade.
+        """
+        declarado = (self.select2_querysets or {}).get(db_field.name)
+        if declarado is None:
+            declarado = getattr(formfield, 'queryset', None)
+        if declarado is None:
+            return
+
+        relacionado = self.admin_site._registry.get(db_field.remote_field.model)
+        if relacionado is None or not isinstance(
+                relacionado, Select2AdminModelAdminMixin):
+            return
+        if relacionado._select2_querysets is None:
+            relacionado._select2_querysets = {}
+        relacionado._select2_querysets[db_field.name] = declarado
+
+    # --- Inlines ---------------------------------------------------------
+    # Os campos de um inline são gerados pelo ``BaseInlineFormSet`` do inline,
+    # que não passa pelo ``formfield_for_*`` do ModelAdmin. Este mixin liga
+    # nos inlines do ModelAdmin uma versão que aplica as MESMAS regras
+    # (select2 de digitação em FK/M2M, respeitando queryset/status/disabled).
+    @staticmethod
+    def _aplicar_em_inlines(modeladmin):
+        admin_site = modeladmin.admin_site
+        for inline_cls in getattr(modeladmin, 'inlines', ()) or ():
+            if getattr(inline_cls, '_select2_aplicado', False):
+                continue
+            original_fk = inline_cls.formfield_for_foreignkey
+            original_m2m = inline_cls.formfield_for_manytomany
+
+            def formfield_for_foreignkey(inline_self, db_field, request, **kwargs):
+                formfield = original_fk(inline_self, db_field, request, **kwargs)
+                return Select2AdminModelAdminMixin._autocomplete(
+                    admin_site, formfield, db_field,
+                    admin.widgets.AutocompleteSelect)
+
+            def formfield_for_manytomany(inline_self, db_field, request, **kwargs):
+                formfield = original_m2m(inline_self, db_field, request, **kwargs)
+                return Select2AdminModelAdminMixin._autocomplete(
+                    admin_site, formfield, db_field,
+                    admin.widgets.AutocompleteSelectMultiple)
+
+            inline_cls.formfield_for_foreignkey = formfield_for_foreignkey
+            inline_cls.formfield_for_manytomany = formfield_for_manytomany
+            inline_cls._select2_aplicado = True
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._aplicar_em_inlines(self)
+
+
 class FilterByStatusMixin:
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -221,16 +438,16 @@ class PreFaturadoFilterAdminMixin(SimpleListFilter):
 
     def lookups(self, request, model_admin):
         return (
-            ('True', 'Sim'),
-            ('False', 'Não'),
+            ('1', 'Sim'),
+            ('0', 'Não'),
         )
 
     def queryset(self, request, queryset):
-        # Definindo como padrão os objetos não faturados
-        if self.value() is None or self.value() == 'False':
-            return queryset.filter(pre_faturado=False)
-        elif self.value() == 'True':
+        # Sem seleção, mostrar ambos os estados; os atalhos superiores passam 1/0.
+        if self.value() == '1':
             return queryset.filter(pre_faturado=True)
+        if self.value() == '0':
+            return queryset.filter(pre_faturado=False)
         return queryset
 # LISTAR USERS ATIVOS NO ADMIN E SE NECESSARIO ALTERAR PARA STATUS I
 

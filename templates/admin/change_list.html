@@ -16,12 +16,19 @@
       #changelist table thead th:first-child {width: inherit}
     </style>
   {% endif %}
+  <style>
+    /* A barra de ações é exibida SEMPRE (topo e rodapé da tabela): esta regra
+       devolve ao checkbox a coluna que o Django reserva. */
+    #changelist table thead th.action-checkbox-column,
+    #changelist table tbody td.action-checkbox { width: 1.5em; }
+  </style>
 {% endblock %}
 
 {% block extrahead %}
   {{ block.super }}
   {{ media.js }}
   <script src="{% static 'admin/js/filters.js' %}" defer></script>
+  <script src="{% static 'js/admin_changelist_actions.js' %}" defer></script>
 {% endblock %}
 
 {% block bodyclass %}{{ block.super }} app-{{ opts.app_label }} model-{{ opts.model_name }} change-list{% endblock %}
@@ -61,13 +68,32 @@
         {% block search %}{% search_form cl %}{% endblock %}
         {% block date_hierarchy %}{% if cl.date_hierarchy %}{% date_hierarchy cl %}{% endif %}{% endblock %}
         <form id="changelist-form" method="post"{% if cl.formset and cl.formset.is_multipart %} enctype="multipart/form-data"{% endif %} novalidate>{% csrf_token %}
-        {% if cl.formset %}
-          <div>{{ cl.formset.management_form }}</div>
-        {% endif %}
         {% block result_list %}
-          {% if action_form and actions_on_top and cl.show_admin_actions %}{% admin_actions %}{% endif %}
-          {% result_list cl %}
-          {% if action_form and actions_on_bottom and cl.show_admin_actions %}{% admin_actions %}{% endif %}
+          {% comment %}
+            Barra de ações ACIMA da tabela e NOVAMENTE logo abaixo dela, antes
+            da paginação. O Django só cria `cl.formset` quando o ModelAdmin
+            tem `list_editable`; sem ela usamos `result_list` (como o
+            template padrão do Django faz).
+          {% endcomment %}
+          {% if action_form and cl.show_admin_actions %}{% admin_actions %}{% endif %}
+          {% if cl.formset %}
+            <div>{{ cl.formset.management_form }}</div>
+          {% endif %}
+          {% if cl.linhas_renderizadas %}
+            {% comment %}
+              ModelAdmin com `list_editable`: o Django não gera a <table>, só
+              <tr> soltas (o navegador as descarta). O ChangeList editável
+              entrega todas as colunas do `list_display` prontas em
+              `cl.linhas_renderizadas`, então a tabela é montada no servidor.
+              O `{{ cl.formset }}` NÃO é mais renderizado: seus widgets já
+              estão dentro das células (e os campos ocultos vêm no
+              management_form acima); renderizá-lo criaria campos duplicados.
+            {% endcomment %}
+            {% include "admin/change_list_results_editavel.html" %}
+          {% else %}
+            {% result_list cl %}
+          {% endif %}
+          {% if action_form and cl.show_admin_actions %}{% admin_actions %}{% endif %}
         {% endblock %}
         {% block pagination %}{% pagination cl %}{% endblock %}
         </form>

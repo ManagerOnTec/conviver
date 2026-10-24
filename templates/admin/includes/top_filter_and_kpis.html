@@ -2,7 +2,20 @@
 <div class="admin-dashboard-kpis" id="admin-dashboard-kpis">
   {% for card in kpi_cards %}
     <div class="kpi-card {{ card.color_class|default:'kpi-blue' }}">
-      <div class="kpi-icon">{{ card.icon|default:'📊' }}</div>
+      <div class="kpi-icon">
+        {# SVG inline: não depende do CDN do Font Awesome carregar. #}
+        {% if card.icon == 'fa-file-invoice' %}<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm8 1.5V8h4.5L14 3.5ZM8 12h8v2H8v-2Zm0 4h8v2H8v-2Z"/></svg>
+        {% elif card.icon == 'fa-calendar-days' %}<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M7 2v2h10V2h2v2h2a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h2V2h2Zm13 8H4v10h16V10ZM6 12h3v3H6v-3Zm5 0h3v3h-3v-3Zm5 0h2v3h-2v-3Z"/></svg>
+        {% elif card.icon == 'fa-receipt' %}<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M5 2l2 2 2-2 2 2 2-2 2 2 2-2v20l-2-2-2 2-2-2-2 2-2-2-2 2V2Zm3 6h8v2H8V8Zm0 4h8v2H8v-2Zm0 4h5v2H8v-2Z"/></svg>
+        {% elif card.icon == 'fa-users' %}<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM2 20c0-3.3 3.1-6 7-6s7 2.7 7 6v1H2v-1Zm15.5-5.9c2.6.5 4.5 2.5 4.5 5v1h-4v-1c0-1.9-.7-3.6-1.9-4.8l1.4-.2Z"/></svg>
+        {% elif card.icon == 'fa-money-bill-wave' %}<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M2 6h20v12H2V6Zm10 2a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM5 8a2 2 0 0 1-2 2v4a2 2 0 0 1 2 2h14a2 2 0 0 1 2-2v-4a2 2 0 0 1-2-2H5Z"/></svg>
+        {% elif card.icon == 'fa-circle-check' %}<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm-1.2 14.6-4.2-4.2 1.4-1.4 2.8 2.8 6-6 1.4 1.4-7.4 7.4Z"/></svg>
+        {% elif card.icon == 'fa-hourglass-half' %}<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M6 2h12v5l-4 5 4 5v5H6v-5l4-5-4-5V2Zm2 2v2.3L12 11l4-4.7V4H8Zm8 16v-2.3L12 13l-4 4.7V20h8Z"/></svg>
+        {% elif card.icon == 'fa-sack-dollar' %}<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M9 2h6l-1.5 3h2.2c2.6 2.7 4.3 6 4.3 9.2 0 4.4-3.6 7.8-8 7.8s-8-3.4-8-7.8C4 11 5.7 7.7 8.3 5h2.2L9 2Zm3.8 7v1.2c-1.3.2-2.3 1-2.3 2.2 0 1.5 1.5 1.9 2.7 2.2 1 .3 1.3.5 1.3.9 0 .5-.5.8-1.4.8-.9 0-1.6-.3-2.2-.7l-.6 1.6c.7.4 1.5.6 2.5.7V19h1.2v-1.2c1.4-.2 2.4-1 2.4-2.3 0-1.5-1.4-2-2.7-2.3-1-.3-1.3-.4-1.3-.8 0-.4.4-.7 1.2-.7.8 0 1.4.2 2 .6l.6-1.5c-.6-.3-1.3-.5-2.2-.6V9h-1.2Z"/></svg>
+        {% elif card.icon == 'fa-triangle-exclamation' %}<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M12 2 1 21h22L12 2Zm-1 6h2v7h-2V8Zm0 9h2v2h-2v-2Z"/></svg>
+        {% else %}<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M4 20V10h4v10H4Zm6 0V4h4v16h-4Zm6 0v-7h4v7h-4Z"/></svg>
+        {% endif %}
+      </div>
       <div class="kpi-body">
         <span class="kpi-title">{{ card.title }}</span>
         <span class="kpi-value">{{ card.value }}</span>
@@ -41,19 +54,19 @@
       {% endfor %}
       <div class="top-patient-search-group">
         <span class="top-patient-search-icon">
-          <i class="fas fa-search"></i> 👤 Paciente:
+          <i class="fas fa-search"></i> {{ top_filter_search_label|default:'Paciente' }}:
         </span>
         <input type="text"
                name="q"
                value="{{ search_query|default:'' }}"
                class="top-patient-search-input"
-               placeholder="Digitar Nome do Paciente, CPF, RG ou Nº do Atendimento..."
+               placeholder="{{ top_filter_search_placeholder|default:'Digitar Nome do Paciente, CPF, RG ou Nº do Atendimento...' }}"
                autocomplete="off">
         {% if search_query %}
-          <button type="button" class="top-patient-clear-btn" onclick="document.querySelector('.top-patient-search-input').value=''; document.getElementById('topPatientSearchForm').submit();" title="Limpar busca de paciente">✕</button>
+          <button type="button" class="top-patient-clear-btn" onclick="document.querySelector('.top-patient-search-input').value=''; document.getElementById('topPatientSearchForm').submit();" title="Limpar busca">✕</button>
         {% endif %}
         <button type="submit" class="top-patient-search-btn">
-          <i class="fas fa-search"></i> Buscar Paciente
+          <i class="fas fa-search"></i> Buscar
         </button>
       </div>
     </form>
@@ -86,11 +99,11 @@
 
     {% if top_extra_filters %}
     <div class="top-filter-row">
-      <span class="filter-group-label">Status & Módulo:</span>
+      <span class="filter-group-label">{{ top_extra_filter_label|default:'Status & Saldo' }}:</span>
       <div class="top-filter-presets">
         {% for btn in top_extra_filters %}
         <a href="{{ btn.url }}" class="top-preset-btn {% if btn.active %}active{% endif %}">
-          {% if btn.icon %}<span>{{ btn.icon }}</span>{% endif %}
+          {% if btn.icon %}<i class="fas {{ btn.icon }}"></i>{% endif %}
           <span>{{ btn.label }}</span>
         </a>
         {% endfor %}
@@ -99,14 +112,16 @@
     {% endif %}
 
     {% if top_dropdown_subfilters %}
-    <div class="top-filter-row">
+    <div class="top-filter-row top-filter-selects">
       {% for sub in top_dropdown_subfilters %}
-        <span class="filter-group-label">{{ sub.label }}:</span>
-        <select class="top-subfilter-select" onchange="window.location.href=this.value;">
-          {% for opt in sub.options %}
-            <option value="{{ opt.url }}" {% if opt.selected %}selected{% endif %}>{{ opt.label }}</option>
-          {% endfor %}
-        </select>
+        <label class="top-subfilter-group">
+          <span class="filter-group-label">{{ sub.label }}:</span>
+          <select class="top-subfilter-select" onchange="if (this.value) window.location.href=this.value;">
+            {% for opt in sub.options %}
+              <option value="{{ opt.url }}" {% if opt.selected %}selected{% endif %}>{{ opt.label }}</option>
+            {% endfor %}
+          </select>
+        </label>
       {% endfor %}
     </div>
     {% endif %}

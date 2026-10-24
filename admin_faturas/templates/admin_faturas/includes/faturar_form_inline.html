@@ -1,0 +1,4 @@
+<form method="post" action="{% url 'admin:admin_faturas_prefatura_faturar' original.pk %}" style="display:inline;">
+  {% csrf_token %}
+  <button type="submit" class="button">Faturar</button>
+</form>

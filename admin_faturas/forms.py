@@ -15,8 +15,8 @@ class ConvenioForm(FilterByStatusMixin, forms.ModelForm):
 
     class Meta:
         model = Convenio
-
         fields = '__all__'
+        exclude = ['fatura_vig_inicial', 'fatura_vig_final']
 
         widgets = {
             'inicio_vigencia': AdminDateWidget(),
@@ -24,13 +24,25 @@ class ConvenioForm(FilterByStatusMixin, forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        # Força a reaplicação do queryset DEPOIS dos __init__ da MRO.
         super().__init__(*args, **kwargs)
+        self._aplicar_filtro_cliente()
 
-        # 🔹 Filtra somente Pessoas com classificacao 'cliente'
+    def _aplicar_filtro_cliente(self):
+        """Somente PACIENTES ativos podem ser cliente do convênio.
+
+        Precisa rodar depois do ``FilterByStatusMixin.__init__`` (primeiro da
+        MRO): ele percorre todos os ModelChoiceField e reescreve o queryset
+        para ``status='A'`` de TODAS as Pessoas, o que incluía funcionários.
+        """
+        if 'cliente' not in self.fields:
+            return
         self.fields['cliente'].queryset = Pessoa.objects.filter(
             classificacao_pessoa='paciente',
-            status='A'
+            status='A',
         )
+        # O select2 de múltipla escolha dispensa o help_text de "Ctrl/Cmd".
+        self.fields['cliente'].help_text = None
 
     def clean(self):
         cleaned_data = super().clean()
@@ -62,6 +74,17 @@ class ConvenioForm(FilterByStatusMixin, forms.ModelForm):
                 'valor_diaria', "Informe apenas um valor, mensal ou diário!")
 
         return cleaned_data
+
+    def clean_cliente(self):
+        clientes = self.cleaned_data.get('cliente')
+        if clientes:
+            invalidos = clientes.exclude(
+                classificacao_pessoa='paciente', status='A')
+            if invalidos.exists():
+                raise ValidationError(
+                    'Somente pacientes ativos podem ser vinculados como '
+                    'cliente do convênio.')
+        return clientes
 
     def clean_convenio(self):
         return self.cleaned_data['convenio'].title()

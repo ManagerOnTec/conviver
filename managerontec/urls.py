@@ -23,10 +23,6 @@ urlpatterns = [
     path('admin_prescricoes/', include('admin_prescricoes.urls')),
     path('admin_pagamentos/', include('admin_pagamentos.urls')),
 
-    path('apptesouraria/', include('apptesouraria.urls')),
-    path('appconciliacao/', include('appconciliacao.urls')),
-    path('appcartao/', include('appcartao.urls')),
-    path('appbaixa_fatura/', include('appbaixa_fatura.urls')),
     # Login/logout do admin redirecionam para a tela única do sistema.
     # Ver managerontec/admin_site.py.
     path('admin/', (get_admin_urls(), 'admin', 'admin')),

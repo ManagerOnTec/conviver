@@ -18,6 +18,24 @@ from admin_financeiro.models import CompetenciaBancaria, MovimentoBancario
 from dominios.utils import EncryptedTextField, validate_anexo_file
 from django.core.validators import FileExtensionValidator
 
+def periodo_cobranca(competencia, dia_envio):
+    # Intervalo inclusivo coberto por uma competência e seu dia de envio.
+    if competencia.month == 1:
+        ano_anterior, mes_anterior = competencia.year - 1, 12
+    else:
+        ano_anterior, mes_anterior = competencia.year, competencia.month - 1
+    ultimo_dia_mes_anterior = calendar.monthrange(
+        ano_anterior, mes_anterior)[1]
+
+    if dia_envio == 1:
+        inicio = date(ano_anterior, mes_anterior, 1)
+        fim = date(ano_anterior, mes_anterior, ultimo_dia_mes_anterior)
+    else:
+        dia_inicio = min(dia_envio + 1, ultimo_dia_mes_anterior)
+        inicio = date(ano_anterior, mes_anterior, dia_inicio)
+        # O período termina no próprio dia de envio, não na véspera.
+        fim = competencia
+    return inicio, fim
 class Convenio(models.Model):
     convenio = models.CharField(max_length=255, verbose_name='Convênio',
                                 help_text='Informe o nome do convênio do contrato')
@@ -83,7 +101,7 @@ class Convenio(models.Model):
 
     class Meta:
         verbose_name = 'Convênio'
-        verbose_name_plural = '1. Convênios'
+        verbose_name_plural = '1. Convênios/Contratos'
         ordering = ['-pk']
 
     def __str__(self):
@@ -141,41 +159,26 @@ class PreFatura(models.Model):
         super().save(*args, **kwargs)
 
     def create_fatura(self):
+        # Sem taxa cadastrada (None) = sem retenção: 0.
+        # `Decimal(x or 0)` com x=None já vira 0; o divisor também precisa ser
+        # Decimal — `Decimal / int` levanta TypeError.
         retencao_percentual = Decimal(
-            self.convenio.tx_retencao_nf or 0) / Decimal(100)
+            self.convenio.tx_retencao_nf or 0) / Decimal('100')
         retencao = retencao_percentual * self.valor
-        valor_fatura = self.valor - retencao - \
-            Decimal(self.convenio.vl_retencao_nf or 0)
+        retencao_fixa = Decimal(self.convenio.vl_retencao_nf or 0)
+        valor_fatura = self.valor - retencao - retencao_fixa
         competencia = self.competencia
         dia_envio = self.dia_envio
+        periodo_inicio, periodo_fim = periodo_cobranca(competencia, dia_envio)
 
-        # Ajuste do período de tratamento para um mês anterior
-        if dia_envio == 1:
-            if competencia.month == 1:
-                mes_anterior = 12
-                ano_anterior = competencia.year - 1
-            else:
-                mes_anterior = competencia.month - 1
-                ano_anterior = competencia.year
-
-            dia_final_mes_anterior = calendar.monthrange(
-                ano_anterior, mes_anterior)[1]
-            periodo_tratamento = f"Período de 01/{mes_anterior:02d}/{ano_anterior % 100:02d} a {dia_final_mes_anterior}/{mes_anterior:02d}/{ano_anterior % 100:02d}"
-        else:
-            if competencia.month == 1:
-                mes_anterior = 12
-                ano_anterior = competencia.year - 1
-            else:
-                mes_anterior = competencia.month - 1
-                ano_anterior = competencia.year
-
-            dia_final_mes_anterior = calendar.monthrange(
-                ano_anterior, mes_anterior)[1]
-            dia_final = dia_envio - 1
-            if dia_final == 0:
-                dia_final = dia_final_mes_anterior
-
-            periodo_tratamento = f"Período de {dia_envio}/{mes_anterior:02d}/{ano_anterior % 100:02d} a {dia_final}/{competencia.month:02d}/{competencia.year % 100:02d}"
+        # Os valores da pré-fatura são sempre brutos. Preserva-se o valor bruto
+        # também na fatura; somente valor_fatura desconta retenções.
+        periodo_inicio = max(periodo_inicio, self.convenio.inicio_vigencia)
+        periodo_fim = min(periodo_fim, self.convenio.final_vigencia)
+        periodo_tratamento = (
+            f"Período de {periodo_inicio:%d/%m/%y} a "
+            f"{periodo_fim:%d/%m/%y}"
+        )
 
         # Criação da descrição
         descricao_internacao = self.convenio.get_descricao_internacao_display()
@@ -243,11 +246,11 @@ class Fatura(PreFatura):
         max_length=50, verbose_name='NF', help_text='Nota Fiscal', blank=True, null=True)
     periodo_tratamento = models.CharField(
         max_length=255, verbose_name='Período', help_text='Período de Tratamento', blank=True, null=True)
-    faturado = models.BooleanField(default=False, verbose_name='Faturado')    
+    faturado = models.BooleanField(default=False, verbose_name='Faturado')
     anexo_nf = models.FileField(upload_to='anexos/nf/%Y/%m/', verbose_name='Anexo NF', blank=True, null=True, help_text='Adicione arquivos dos formatos PDF, JPG, JPEG, PNG.',
                                       validators=[FileExtensionValidator(['pdf', 'jpg', 'jpeg', 'png']), validate_anexo_file])
 
-    
+
 
     class Meta:
         verbose_name = 'Fatura'
@@ -256,8 +259,10 @@ class Fatura(PreFatura):
 
     def save(self, *args, **kwargs):
         if not self.valor_fatura:
-            tx_retencao = (self.convenio.tx_retencao_nf or 0) / \
-                100 * self.valor
+            # Sem taxa cadastrada (None) = sem retenção: 0. Divisor em Decimal
+            # porque `Decimal / int` levanta TypeError.
+            tx_retencao = Decimal(
+                self.convenio.tx_retencao_nf or 0) / Decimal('100') * self.valor
             vl_retencao = Decimal(self.convenio.vl_retencao_nf or 0)
             self.valor_fatura = self.valor - tx_retencao - vl_retencao
 

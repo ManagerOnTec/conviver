@@ -24,6 +24,7 @@ class ContaAdmin(admin.ModelAdmin):
 @admin.register(TransacaoFinanceira)
 class TransacaoFinanceiraAdmin(ExportToXLSMixin, admin.ModelAdmin):
     list_display = ['transacao_financeira', 'tipo', 'movimento', ]
-    search_fields = ['tipo',]
+    # Necessário para o select2 de digitação (autocomplete) nas Baixas de Fatura.
+    search_fields = ['transacao_financeira', 'tipo',]
 
     actions = ['export_as_xls']

@@ -3,7 +3,7 @@ from asyncio import format_helpers
 from datetime import datetime
 from django.utils import timezone
 from django.contrib import admin
-from dominios.utils import StatusFilterAdminMixin, ExportToXLSMixin
+from dominios.utils import StatusFilterAdminMixin, ExportToXLSMixin, Select2AdminModelAdminMixin
 from .models import Estado, Cidade, Genero, Pessoa, Empresa, Estabelecimento, PessoaCampos, EmpresaCampos, TipoAtendimento, Pais
 from .forms import EstadoForm, CidadeForm, PessoaAdminForm, EmpresaForm, EstabelecimentoForm, PessoaCamposForm, EmpresaCamposForm, TipoAtendimentoForm, PaisForm, GeneroForm
 from django.contrib import messages
@@ -307,7 +307,7 @@ class IdadeFilter(admin.SimpleListFilter):
         return queryset
 
 
-class PessoaAdmin(ExportToXLSMixin, admin.ModelAdmin):
+class PessoaAdmin(ExportToXLSMixin, Select2AdminModelAdminMixin, admin.ModelAdmin):
     form = PessoaAdminForm
 
     actions = ['export_as_xls']
@@ -369,7 +369,7 @@ class PessoaAdmin(ExportToXLSMixin, admin.ModelAdmin):
         super().save_model(request, obj, form, change)
 
 
-class EmpresaAdmin(ExportToXLSMixin, admin.ModelAdmin):
+class EmpresaAdmin(ExportToXLSMixin, Select2AdminModelAdminMixin, admin.ModelAdmin):
     form = EmpresaForm
 
     actions = ['export_as_xls']

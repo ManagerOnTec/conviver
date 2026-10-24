@@ -1,0 +1,70 @@
+<div class="results">
+{% comment %}
+  Campos OCULTOS do formset (a PK "id" e os read-only do form, ex.
+  "prefatura_ptr"). As células da tabela trazem apenas os widgets visíveis;
+  sem este bloco o Django trata cada linha como registro NOVO e a listagem
+  volta com '"id": ["Este campo é obrigatório."]' (?e=1), sem salvar nada.
+  Ficam FORA da <table> porque <input> solto dentro de <tr> é HTML inválido.
+{% endcomment %}
+{% for form, celulas, pk in cl.linhas_renderizadas %}{% if form %}{% for campo_hidden in form.hidden_fields %}{{ campo_hidden }}{% endfor %}{% endif %}{% endfor %}
+<table id="result_list">
+  <thead>
+    <tr>
+{% for header in cl.cabecalhos %}
+  <th scope="col"{{ header.class_attrib }}>
+    {% if header.class_attrib == ' class="action-checkbox-column"' %}
+      <div class="text"><input type="checkbox" id="action-toggle"{% if cl.model_admin.selecao_desabilitada %} disabled title="A seleção enviaria o formulário de edição em linha (campos ocultos duplicados)"{% endif %}></div>
+    {% elif header.sortable %}
+      <div class="text"><a href="{{ header.url_primary }}">{{ header.text|capfirst }}</a></div>
+    {% else %}
+      <div class="text"><span>{{ header.text|capfirst }}</span></div>
+    {% endif %}
+  </th>
+{% endfor %}
+</tr>
+</thead>
+<tbody>
+{% for form, celulas, pk in cl.linhas_renderizadas %}
+<tr class="form-row">
+  <td class="action-checkbox"><input type="checkbox" class="action-select" name="_selected_action" value="{{ pk }}"{% if cl.model_admin.selecao_desabilitada %} disabled{% endif %}></td>
+  {% for celula in celulas %}
+      <td>{{ celula.contents }}</td>
+    {% endfor %}
+  </tr>
+{% empty %}
+  <tr><td colspan="99" class="empty">Nenhum registro encontrado.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+<script>
+(function () {
+  document.addEventListener('click', function (event) {
+    const button = event.target.closest('.js-faturar-prefatura');
+    if (!button) return;
+    event.preventDefault();
+
+    // Os filtros da listagem vão na própria query string da URL do POST:
+    // o Django então recarrega a changelist exatamente com o recorte atual
+    // (inclusive filtros por Lookup, como convenio__convenio__exact).
+    const origem = new URL(window.location.href);
+    const destino = new URL(button.dataset.url, window.location.origin);
+    origem.searchParams.forEach(function (value, key) {
+      if (key === '_selected_action' || key === 'index' || key === 'select_across') return;
+      destino.searchParams.append(key, value);
+    });
+
+    const form = document.createElement('form');
+    form.method = 'post';
+    form.action = destino.href;
+    form.style.display = 'none';
+    const csrf = document.createElement('input');
+    csrf.type = 'hidden';
+    csrf.name = 'csrfmiddlewaretoken';
+    csrf.value = button.dataset.csrf;
+    form.appendChild(csrf);
+    document.body.appendChild(form);
+    form.submit();
+  });
+})();
+</script>
+</div>

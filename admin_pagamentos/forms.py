@@ -1,6 +1,5 @@
 from .models import BaixaPagamento, ClassificacaoFornecedor, Fornecedor, ClassificacaoPagamento, Pagamento
 from admin_financeiro.models import MovimentoBancario, CompetenciaBancaria
-from apptesouraria.models import SaldoCaixa
 from django.core.exceptions import ValidationError
 from admin_cadastros_financeiros.models import TransacaoFinanceira
 from django import forms

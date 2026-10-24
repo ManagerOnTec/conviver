@@ -36,6 +36,17 @@ class AdminDashboardAndTopFilterMixin:
             }
         ]
 
+    def get_top_filter_presets(self, request):
+        """Presets de período da barra superior.
+
+        Sobrescreva para trazer presets próprios do módulo (ex.: Competência no
+        financeiro). O mixin detecta a sobrescrita e usa a sua lista em vez de
+        Hoje/Ontem/7 dias/Mês. Retorne uma lista de
+        ``{'label', 'url', 'active'}``. Se o módulo tiver presets próprios,
+        devolva ``None`` para indicar que não quer os presets padrão.
+        """
+        return None
+
     def get_top_extra_filters(self, request):
         """
         Sobrescreva para retornar botões rápidos adicionais (ex: Ativos, Inativos, Por tipo).
@@ -50,6 +61,16 @@ class AdminDashboardAndTopFilterMixin:
 
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}
+
+        # Alguns widgets de data geram parâmetros vazios (ex.: campo inicial e
+        # final sem valor). Remova-os antes do Django ChangeList converter
+        # esses valores para DateField, o que geraria IncorrectLookupParameters.
+        if any('' in request.GET.getlist(chave)
+               for chave in request.GET.keys()):
+            request.GET = request.GET.copy()
+            for chave in list(request.GET.keys()):
+                if any(valor == '' for valor in request.GET.getlist(chave)):
+                    request.GET.pop(chave, None)
 
         # 1. Configuração do campo de data
         date_field = getattr(self, 'dashboard_date_field', 'dt_registro')
@@ -79,39 +100,49 @@ class AdminDashboardAndTopFilterMixin:
             return url
 
         current_periodo = request.GET.get('periodo', '')
-        current_date_gte = request.GET.get(date_gte_key, '')
-        current_date_lte = request.GET.get(date_lte_key, '')
+        current_date_gte = request.GET.get(date_gte_key) or ''
+        current_date_lte = request.GET.get(date_lte_key) or ''
 
-        # Determina preset ativo
-        presets = [
-            {
-                'label': 'Todos',
-                'url': build_preset_url({}),
-                'active': not current_periodo and not current_date_gte and not current_date_lte,
-            },
-            {
-                'label': 'Hoje',
-                'url': build_preset_url({'periodo': 'hoje', date_gte_key: f"{today} 00:00:00", date_lte_key: f"{today} 23:59:59"}),
-                'active': current_periodo == 'hoje' or (current_date_gte.startswith(str(today)) and current_date_lte.startswith(str(today))),
-            },
-            {
-                'label': 'Ontem',
-                'url': build_preset_url({'periodo': 'ontem', date_gte_key: f"{yesterday} 00:00:00", date_lte_key: f"{yesterday} 23:59:59"}),
-                'active': current_periodo == 'ontem',
-            },
-            {
-                'label': 'Últimos 7 dias',
-                'url': build_preset_url({'periodo': '7dias', date_gte_key: f"{last_7_days} 00:00:00"}),
-                'active': current_periodo == '7dias',
-            },
-            {
-                'label': 'Mês Atual',
-                'url': build_preset_url({'periodo': 'mes_atual', date_gte_key: f"{first_day_month} 00:00:00"}),
-                'active': current_periodo == 'mes_atual',
-            },
-        ]
+        # Presets do período: o próprio módulo pode trazer os seus
+        # (ex.: Competência do financeiro) no lugar de Hoje/Ontem/7 dias.
+        presets_customizados = self.get_top_filter_presets(request)
+        if presets_customizados is not None:
+            presets = presets_customizados
+        else:
+            presets = [
+                {
+                    'label': 'Todos',
+                    'url': build_preset_url({}),
+                    'active': not current_periodo and not current_date_gte and not current_date_lte,
+                },
+                {
+                    'label': 'Hoje',
+                    'url': build_preset_url({'periodo': 'hoje', date_gte_key: f"{today} 00:00:00", date_lte_key: f"{today} 23:59:59"}),
+                    'active': current_periodo == 'hoje' or (current_date_gte.startswith(str(today)) and current_date_lte.startswith(str(today))),
+                },
+                {
+                    'label': 'Ontem',
+                    'url': build_preset_url({'periodo': 'ontem', date_gte_key: f"{yesterday} 00:00:00", date_lte_key: f"{yesterday} 23:59:59"}),
+                    'active': current_periodo == 'ontem',
+                },
+                {
+                    'label': 'Últimos 7 dias',
+                    'url': build_preset_url({'periodo': '7dias', date_gte_key: f"{last_7_days} 00:00:00"}),
+                    'active': current_periodo == '7dias',
+                },
+                {
+                    'label': 'Mês Atual',
+                    'url': build_preset_url({'periodo': 'mes_atual', date_gte_key: f"{first_day_month} 00:00:00"}),
+                    'active': current_periodo == 'mes_atual',
+                },
+            ]
 
-        has_active_top_filter = bool(current_periodo or current_date_gte or current_date_lte)
+        has_active_top_filter = bool(
+            current_periodo or current_date_gte or current_date_lte
+            or presets_customizados is not None and any(
+                p.get('active') and p.get('label') not in ('Todos',)
+                for p in presets_customizados)
+        )
 
         # 3. Calcula KPIs baseados no queryset filtrado atual
         try:
@@ -127,6 +158,8 @@ class AdminDashboardAndTopFilterMixin:
             'top_filter_config': True,
             'top_filter_presets': presets,
             'top_extra_filters': self.get_top_extra_filters(request),
+            'top_extra_filter_label': getattr(
+                self, 'top_extra_filter_label', 'Status & Módulo'),
             'top_dropdown_subfilters': self.get_top_dropdown_subfilters(request),
             'has_active_top_filter': has_active_top_filter,
             'date_field_gte': date_gte_key,
@@ -135,6 +168,12 @@ class AdminDashboardAndTopFilterMixin:
             'current_date_lte': current_date_lte.split(' ')[0] if current_date_lte else '',
             'search_query': request.GET.get('q', ''),
             'current_paciente_id': request.GET.get('paciente_id', ''),
+            # Cada módulo pode renomear a busca superior (default: paciente).
+            'top_filter_search_label': getattr(
+                self, 'top_filter_search_label', 'Paciente'),
+            'top_filter_search_placeholder': getattr(
+                self, 'top_filter_search_placeholder',
+                'Digitar Nome do Paciente, CPF, RG ou Nº do Atendimento...'),
         })
 
         return super().changelist_view(request, extra_context=extra_context)

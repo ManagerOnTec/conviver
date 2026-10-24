@@ -171,6 +171,10 @@ class CompetenciaBancariaAdmin(AdminEstabelecimentoPadraoMixin, ExportToXLSMixin
 
     actions = ['export_as_xls'] # Registrar a ação no admin
 
+    # Necessário para o select2 de digitação (autocomplete) nas Baixas de Fatura.
+    search_fields = ['descricao', 'controle_bancario__conta__observacao',
+                     'estabelecimento__estabelecimento']
+
 
     readonly_fields = ['dt_registro', 'us_registro', 'dt_atualizacao', 'us_atualizacao']
 
@@ -185,7 +189,7 @@ class CompetenciaBancariaAdmin(AdminEstabelecimentoPadraoMixin, ExportToXLSMixin
     def save_model(self, request, obj, form, change):
         if not change:
             obj.us_registro = request.user
-            obj.dt_registro = timezone.now()           
+            obj.dt_registro = timezone.now()
         else:
             obj.us_atualizacao = request.user
             obj.dt_atualizacao = timezone.now()
@@ -196,6 +200,10 @@ class CompetenciaBancariaAdmin(AdminEstabelecimentoPadraoMixin, ExportToXLSMixin
 @admin.register(ControleBancario)
 class ControleBancarioAdmin(AdminEstabelecimentoPadraoMixin, ExportToXLSMixin, admin.ModelAdmin):
     list_display = ['conta']  # Exibir a conta no controle bancário
+
+    # Necessário para o select2 de digitação (autocomplete) na Competência Bancária.
+    search_fields = ['conta__agencia__numero_agencia', 'conta__numero_conta',
+                     'conta__observacao']
      
     actions = ['export_as_xls'] # Registrar a ação no admin
 

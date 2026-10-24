@@ -113,6 +113,9 @@
         {% endblock %}
 
         {% block after_related_objects %}{% endblock %}
+        {% if faturar_form_template %}
+          {% include faturar_form_template %}
+        {% endif %}
 
         {% block submit_buttons_bottom %}
           <div class="admin-submit-row-wrapper">
