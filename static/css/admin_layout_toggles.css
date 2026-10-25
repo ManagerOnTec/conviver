@@ -1208,3 +1208,197 @@ html.hide-top-filter div.xfull {
 .top-patient-clear-btn:hover {
     color: #ef4444;
 }
+
+/* MENU DE TELAS DO MÓDULO NO BREADCRUMB
+   O item do app é um botão (mesmo visual dos demais itens) que abre um painel
+   com todas as telas do módulo. O painel é `position: fixed` e posicionado
+   pelo JS do template: assim nunca é cortado pelo overflow da barra. */
+.bc-menu {
+    position: relative;
+    display: inline-flex !important;
+    align-items: center !important;
+}
+
+.admin-breadcrumbs-area .breadcrumbs .bc-menu-toggle {
+    max-width: 320px;
+}
+
+.admin-breadcrumbs-area .breadcrumbs .bc-menu-toggle > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bc-menu-caret {
+    font-size: 0.68rem !important;
+    margin-left: 2px;
+    transition: transform 0.2s ease;
+    opacity: 0.9;
+}
+
+.bc-menu.is-open > .bc-menu-toggle {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #ec4899 100%) !important;
+    border-color: #f9a8d4 !important;
+    box-shadow: 0 5px 18px rgba(124, 58, 237, 0.5) !important;
+}
+
+.bc-menu.is-open > .bc-menu-toggle .bc-menu-caret {
+    transform: rotate(180deg);
+}
+
+.bc-menu-panel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 10050;
+    display: none;
+    width: min(360px, calc(100vw - 24px));
+    max-height: min(70vh, 440px);
+    overflow: hidden;
+    flex-direction: column;
+    background: var(--body-bg, #fff);
+    color: var(--body-fg, #212529);
+    border: 1px solid rgba(124, 58, 237, 0.35);
+    border-radius: 10px;
+    box-shadow: 0 14px 34px rgba(15, 23, 42, 0.28);
+}
+
+.bc-menu.is-open > .bc-menu-panel {
+    display: flex;
+    animation: bc-menu-in 0.16s ease-out;
+}
+
+@keyframes bc-menu-in {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.bc-menu-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: linear-gradient(135deg, rgba(79, 70, 229, 0.10) 0%, rgba(236, 72, 153, 0.10) 100%);
+    border-bottom: 1px solid var(--hairline-color, #e9ecef);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6d28d9;
+}
+
+.bc-menu-header > span {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bc-menu-app-link {
+    color: #6d28d9 !important;
+    font-size: 0.8rem;
+    padding: 2px 4px;
+    border-radius: 4px;
+    text-decoration: none !important;
+}
+
+.bc-menu-app-link:hover {
+    background: rgba(109, 40, 217, 0.12);
+}
+
+.bc-menu-items {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 6px;
+    gap: 2px;
+}
+
+.bc-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    color: var(--body-fg, #212529) !important;
+    text-decoration: none !important;
+    font-size: 0.85rem;
+    font-weight: 500;
+    line-height: 1.3;
+    white-space: normal;
+}
+
+.bc-menu-item:hover,
+.bc-menu-item:focus-visible {
+    background: rgba(124, 58, 237, 0.10);
+    color: #5b21b6 !important;
+    outline: none;
+}
+
+.bc-menu-item-icon {
+    color: #7c3aed !important;
+    font-size: 0.8rem;
+    width: 14px;
+    flex-shrink: 0;
+}
+
+.bc-menu-item-name {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.bc-menu-item.is-active {
+    background: rgba(124, 58, 237, 0.14);
+    color: #5b21b6 !important;
+    font-weight: 700;
+}
+
+/* A regra geral dos botões do breadcrumb usa `!important`; o filtro de tela
+   também precisa reforçar a cor para o item atual ficar legível. */
+.admin-breadcrumbs-area .breadcrumbs .bc-menu-panel .bc-menu-item,
+.admin-breadcrumbs-area .breadcrumbs .bc-menu-panel .bc-menu-item:hover,
+.admin-breadcrumbs-area .breadcrumbs .bc-menu-panel .bc-menu-item:focus {
+    background: transparent !important;
+    color: var(--body-fg, #212529) !important;
+    border: none !important;
+    box-shadow: none !important;
+    transform: none !important;
+    padding: 8px 10px !important;
+    border-radius: 6px !important;
+    font-size: 0.85rem !important;
+    font-weight: 500 !important;
+    letter-spacing: 0 !important;
+    line-height: 1.35 !important;
+    display: flex !important;
+}
+
+.admin-breadcrumbs-area .breadcrumbs .bc-menu-panel .bc-menu-item:hover,
+.admin-breadcrumbs-area .breadcrumbs .bc-menu-panel .bc-menu-item:focus-visible {
+    background: rgba(124, 58, 237, 0.10) !important;
+    color: #5b21b6 !important;
+}
+
+.admin-breadcrumbs-area .breadcrumbs .bc-menu-panel .bc-menu-item.is-active {
+    background: rgba(124, 58, 237, 0.14) !important;
+    color: #5b21b6 !important;
+    font-weight: 700 !important;
+}
+
+.bc-menu-item-check {
+    color: #7c3aed !important;
+    font-size: 0.75rem;
+}
+
+/* Último item do caminho ("Adicionar", instância, "Excluir") */
+.bc-trail-current {
+    border-style: dashed !important;
+    opacity: 0.95 !important;
+}
+
+/* Em telas estreitas, o botão do app encolhe em vez de empurrar o breadcrumb */
+@media (max-width: 720px) {
+    .admin-breadcrumbs-area .breadcrumbs .bc-menu-toggle {
+        max-width: 46vw;
+    }
+}

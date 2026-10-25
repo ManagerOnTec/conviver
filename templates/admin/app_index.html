@@ -1,22 +1,16 @@
 {% extends "admin/index.html" %}
-{% load i18n static %}
+{% load i18n static bc_apps %}
 
 {% block bodyclass %}{{ block.super }} app-{{ app_label }}{% endblock %}
 
 {% if not is_popup %}
 {% block nav-breadcrumbs %}
 <div class="admin-subnav-container">
-  <div class="admin-breadcrumbs-area">
+ <div class="admin-breadcrumbs-area">
     <nav aria-label="{% translate 'Breadcrumbs' %}">
-      <div class="breadcrumbs">
-        <a href="{% url 'admin:index' %}" class="breadcrumb-home-btn" title="Home"><i class="fas fa-home"></i> <span>Home</span></a>
-        <span class="breadcrumb-separator">&rsaquo;</span>
-        {% for app in app_list %}
-          <a href="{{ app.app_url }}" class="breadcrumb-item-btn breadcrumb-app-btn" title="{{ app.name }}"><i class="fas fa-layer-group"></i> <span>{{ app.name }}</span></a>
-        {% endfor %}
-      </div>
+      {% block breadcrumbs %}{% breadcrumbs_app app_label %}{% endblock %}
     </nav>
-  </div>
+ </div>
   <div class="admin-view-controls-bar" id="admin-view-controls-bar" role="toolbar" aria-label="Controles de Exibição">
     <span class="view-controls-title" title="Painéis de visualização">
       <svg class="ctrl-svg-icon" viewBox="0 0 20 20" fill="currentColor" width="13" height="13">

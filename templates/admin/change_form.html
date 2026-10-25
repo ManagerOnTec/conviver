@@ -17,19 +17,17 @@
 {% block coltype %}colM{% endblock %}
 {% block bodyclass %}{{ block.super }} app-{{ opts.app_label }} model-{{ opts.model_name }} change-form admin-custom-change-form{% endblock %}
 
+{# O base.html do Django imprime título e subtítulo acima do formulário — e o
+   subtítulo É o __str__ do objeto (ex.: o HTML inteiro da evolução). Na tela de
+   change-form a orientação já vem do breadcrumb + card, então nada disso é
+   duplicado aqui. #}
+{% block content_title %}{% endblock %}
+{% block content_subtitle %}{% endblock %}
+
 {% if not is_popup %}
 {% block breadcrumbs %}
-<div class="breadcrumbs">
-  <a href="{% url 'admin:index' %}" class="breadcrumb-home-btn" title="Home"><i class="fas fa-home"></i> <span>Home</span></a>
-  <span class="breadcrumb-separator">&rsaquo;</span>
-  <a href="{% url 'admin:app_list' app_label=opts.app_label %}" class="breadcrumb-item-btn breadcrumb-app-btn" title="{{ opts.app_config.verbose_name }}"><i class="fas fa-layer-group"></i> <span>{{ opts.app_config.verbose_name }}</span></a>
-  <span class="breadcrumb-separator">&rsaquo;</span>
-  {% if has_view_permission %}
-    <a href="{% url opts|admin_urlname:'changelist' %}" class="breadcrumb-item-btn breadcrumb-model-btn" title="{{ opts.verbose_name_plural|capfirst }}"><i class="fas fa-table-list"></i> <span>{{ opts.verbose_name_plural|capfirst }}</span></a>
-  {% else %}
-    <span class="breadcrumb-item-btn breadcrumb-model-btn"><i class="fas fa-table-list"></i> <span>{{ opts.verbose_name_plural|capfirst }}</span></span>
-  {% endif %}
-</div>
+  {# O item do app no breadcrumb abre a lista de telas do módulo. #}
+  {% include "admin/includes/breadcrumbs.html" %}
 {% endblock %}
 {% endif %}
 
@@ -52,9 +50,9 @@
         <div>
           <h2 class="admin-form-main-title">
             {% if add %}
-              Cadastrar Novo: {{ opts.verbose_name|capfirst }}
+              {% translate 'Add' %} {{ opts.verbose_name|capfirst }}
             {% else %}
-              Editar: {{ original|default:opts.verbose_name|capfirst }}
+              {% translate 'Edit' %} {{ opts.verbose_name|capfirst }}
             {% endif %}
           </h2>
           <span class="admin-form-subtitle">
@@ -71,7 +69,13 @@
         {% if change and not is_popup %}
           <ul class="object-tools admin-form-tools">
             {% block object-tools-items %}
-              {% change_form_object_tools %}
+              {% if has_change_permission %}
+                {# Só as ações que NÃO repetem o objeto: o link "Visualizar" do Django
+                   imprime o __str__ do objeto (ex.: todo o HTML da evolução), e em
+                   registros somente-leitura ele levava para a mesma tela. #}
+                <li><a href="{% url opts|admin_urlname:'history' original.pk|admin_urlquote %}"
+                       class="historylink">{% translate 'History' %}</a></li>
+              {% endif %}
             {% endblock %}
           </ul>
         {% endif %}

@@ -1,0 +1,120 @@
+{% load i18n %}
+{# Breadcrumb Home > App (lista das telas do modulo) > Modelo > caminho. Contexto: dominios/breadcrumbs.py. #}
+<div class="breadcrumbs bc-bar">
+  <a href="{% url 'admin:index' %}" class="breadcrumb-home-btn" title="{% translate 'Home' %}">
+    <i class="fas fa-home"></i><span>{% translate 'Home' %}</span></a>
+
+  {% if app_telas %}
+  <span class="breadcrumb-separator">&rsaquo;</span>
+  {% include "admin/includes/breadcrumb_app_menu.html" %}
+
+  {% if app_modelo_atual %}
+  <span class="breadcrumb-separator">&rsaquo;</span>
+  {% if app_modelo_url %}
+  <a href="{{ app_modelo_url }}" class="breadcrumb-item-btn breadcrumb-model-btn"
+    title="Listagem de {{ app_modelo_atual }}"><i class="fas fa-table-list"></i><span>{{ app_modelo_atual }}</span></a>
+  {% else %}
+  <span class="breadcrumb-item-btn breadcrumb-model-btn" title="{{ app_modelo_atual }}"><i
+      class="fas fa-table-list"></i><span>{{ app_modelo_atual }}</span></span>
+  {% endif %}
+  {% endif %}
+
+  {% for rotulo, url in app_trail %}
+  <span class="breadcrumb-separator">&rsaquo;</span>
+  {% if url %}
+  <a href="{{ url }}" class="breadcrumb-item-btn" title="{{ rotulo }}"><span>{{ rotulo }}</span></a>
+  {% else %}
+  <span class="breadcrumb-item-btn bc-trail-current" title="{{ rotulo }}"><span>{{ rotulo }}</span></span>
+  {% endif %}
+  {% endfor %}
+
+  {% else %}
+  {# Fallback: alguma tela que não passou pelo contexto acima (ex.: histórico).
+     Monta o mesmo padrão App > Modelo a partir de `opts`/`title`. #}
+  {% with app_nome=app_nome|default:opts.app_config.verbose_name %}
+  {% if app_nome %}
+  <span class="breadcrumb-separator">&rsaquo;</span>
+  <a href="{% url 'admin:app_list' app_label=opts.app_label %}" class="breadcrumb-item-btn breadcrumb-app-btn"
+    title="{{ app_nome }}"><i class="fas fa-layer-group"></i><span>{{ app_nome }}</span></a>
+  {% endif %}
+  {% if opts or title %}
+  <span class="breadcrumb-separator">&rsaquo;</span>
+  <span class="breadcrumb-item-btn breadcrumb-model-btn" title="{{ title|default:opts.verbose_name_plural }}"><i
+      class="fas fa-table-list"></i><span>{{ title|default:opts.verbose_name_plural }}</span></span>
+  {% endif %}
+  {% endwith %}
+  {% endif %}
+</div>
+
+{% if app_telas %}
+<script>
+  /* Menu do app no breadcrumb: abre/fecha a lista de telas do módulo. */
+  (function () {
+    function fecharTodos(exceto) {
+      document.querySelectorAll('.bc-menu.is-open').forEach(function (menu) {
+        if (menu === exceto) { return; }
+        menu.classList.remove('is-open');
+        var btn = menu.querySelector('[data-bc-dropdown]');
+        if (btn) { btn.setAttribute('aria-expanded', 'false'); }
+      });
+    }
+
+    /* O painel é fixo: abre logo abaixo do botão, alinhado à esquerda dele e
+       sem sair da tela (em telas estreitas ele desliza para dentro). */
+    function posicionar(btn, menu) {
+      var painel = menu.querySelector('.bc-menu-panel');
+      if (!painel) { return; }
+      var r = btn.getBoundingClientRect();
+      var largura = painel.offsetWidth;
+      var esquerda = Math.min(r.left, window.innerWidth - largura - 12);
+      painel.style.top = (r.bottom + 6) + 'px';
+      painel.style.left = Math.max(12, esquerda) + 'px';
+    }
+
+    document.querySelectorAll('[data-bc-dropdown]').forEach(function (btn) {
+      btn.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        var menu = btn.closest('.bc-menu');
+        var abrir = !menu.classList.contains('is-open');
+        fecharTodos(menu);
+        posicionar(btn, menu);
+        menu.classList.toggle('is-open', abrir);
+        btn.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+        if (abrir) {
+          var ativo = menu.querySelector('.bc-menu-item.is-active');
+          if (ativo) { ativo.focus({ preventScroll: true }); }
+        }
+      });
+
+      // Teclado: setas percorrem as telas, Esc fecha e devolve o foco.
+      btn.closest('.bc-menu').addEventListener('keydown', function (ev) {
+        var menu = ev.currentTarget;
+        var itens = Array.prototype.slice.call(menu.querySelectorAll('.bc-menu-item'));
+        var noBotao = document.activeElement === btn;
+
+        // Botão fechado só responde a setas: no Tab o menu segue o fluxo normal.
+        if (noBotao && ev.key !== 'ArrowDown' && ev.key !== 'ArrowUp') { return; }
+
+        if (ev.key === 'Escape') {
+          ev.preventDefault();
+          menu.classList.remove('is-open');
+          btn.setAttribute('aria-expanded', 'false');
+          btn.focus();
+        } else if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+          ev.preventDefault();
+          if (!menu.classList.contains('is-open')) { btn.click(); return; }
+          var i = itens.indexOf(document.activeElement);
+          var proximo = ev.key === 'ArrowDown' ? i + 1 : i - 1;
+          if (proximo < 0) { proximo = itens.length - 1; }
+          if (proximo >= itens.length) { proximo = 0; }
+          if (itens[proximo]) { itens[proximo].focus(); }
+        }
+      });
+    });
+
+    document.addEventListener('click', function () { fecharTodos(null); });
+    window.addEventListener('resize', function () { fecharTodos(null); });
+    window.addEventListener('scroll', function () { fecharTodos(null); }, true);
+  })();
+</script>
+{% endif %}

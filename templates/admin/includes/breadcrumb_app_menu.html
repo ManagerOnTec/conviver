@@ -1,0 +1,29 @@
+{% load i18n %}
+<span class="bc-menu">
+ <button type="button" class="breadcrumb-item-btn breadcrumb-app-btn bc-menu-toggle" data-bc-dropdown
+    aria-haspopup="true" aria-expanded="false" title="{{ app_nome }} — escolher outra tela do módulo">
+    <i class="fas fa-layer-group"></i>
+    <span>{{ app_nome }}</span>
+    <i class="fas fa-chevron-down bc-menu-caret"></i>
+ </button>
+ <div class="bc-menu-panel" role="menu" aria-label="Telas de {{ app_nome }}">
+    <div class="bc-menu-header">
+      <i class="fas fa-layer-group"></i>
+      <span>{{ app_nome }}</span>
+      <a href="{{ app_telas_indice_url|default:'#' }}" class="bc-menu-app-link" title="Abrir o painel deste módulo">
+        <i class="fas fa-up-right-from-square"></i>
+      </a>
+    </div>
+    <div class="bc-menu-items">
+      {% for tela in app_telas %}
+        <a href="{{ tela.url }}" role="menuitem"
+          class="bc-menu-item{% if tela.nome == app_modelo_atual %} is-active{% endif %}"
+          {% if tela.nome == app_modelo_atual %}aria-current="page"{% endif %}>
+          <i class="fas fa-table-list bc-menu-item-icon"></i>
+          <span class="bc-menu-item-name">{{ tela.nome }}</span>
+          {% if tela.nome == app_modelo_atual %}<i class="fas fa-check bc-menu-item-check"></i>{% endif %}
+        </a>
+      {% endfor %}
+    </div>
+ </div>
+</span>

@@ -36,6 +36,7 @@ from datetime import datetime
 from django.contrib import admin
 from .models import Convenio, PreFatura, Fatura, BaixaFatura
 from .changelist_editavel import ChangeListEditavel  # noqa: F401
+from .changelist_editavel import ChangeListEditavel  # noqa: F401
 
 
 class DateInput(forms.DateInput):

@@ -66,6 +66,12 @@ def get_admin_urls():
 
     Mantém o namespace ``admin`` e todos os registros de models intactos.
     """
+    # Aqui os admins de TODOS os apps já foram registrados (o autodiscover
+    # acontece quando o admin é carregado), então o breadcrumb de "telas do
+    # módulo" pode ser aplicado a cada ModelAdmin de uma vez. Idempotente.
+    from dominios.breadcrumbs import instalar_breadcrumbs
+    instalar_breadcrumbs(admin.site)
+
     urlpatterns = []
 
     for pattern in admin.site.get_urls():
