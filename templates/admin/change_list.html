@@ -49,6 +49,24 @@
           {% block object-tools-items %}
             {% change_list_object_tools %}
           {% endblock %}
+          {% comment %}
+            Botão "Salvar" da listagem editável (`list_editable`) no CANTO
+            SUPERIOR DIREITO da tela, junto aos botões "Adicionar". O POST
+            com `_save` é tratado pelo próprio Django (formset do changelist)
+            ou pelo handler custom (ex.: `salvar_baixas_da_listagem`). Sem
+            `formset` (listagem não editável) o botão não aparece. O botão
+            fica FORA do `#changelist-form` — o `submit` com
+            `form="changelist-form"` o associa ao form da listagem.
+          {% endcomment %}
+          {% if cl.formset %}
+            <li>
+              <input type="submit" name="_save" value="Salvar"
+                     class="default btn-salvar-listagem"
+                     form="changelist-form"
+                     style="cursor: pointer; border: none; padding: 5px 14px;
+                            border-radius: 4px; font-weight: 600;">
+            </li>
+          {% endif %}
         </ul>
     {% endblock %}
     {% if cl.formset and cl.formset.errors %}

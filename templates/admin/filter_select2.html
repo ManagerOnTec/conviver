@@ -1,0 +1,42 @@
+{% load i18n %}
+{% comment %}
+Filtro lateral em DROPDOWN com busca (select2 do admin).
+O select recarrega a listagem já com `?competencia=<pk>`; o "— Todas —"
+  limpa o filtro. Usado para Competência Bancária (abertas e fechadas).
+  {% endcomment %}
+  <details data-filter-title="{{ title }}" open>
+    <summary>
+      {% blocktranslate with filter_title=title %} By {{ filter_title }} {% endblocktranslate %}
+    </summary>
+    <div style="padding: 4px 0;">
+      <input type="search" class="js-filtro-busca" placeholder="Buscar…"
+        style="width: 100%; margin-bottom: 6px; padding: 4px 6px;" autocomplete="off">
+      <select class="js-filtro-select2"
+              style="width: 100%; padding: 5px; font-size: .9em;">
+        {% for choice in choices %}
+          <option value="{{ choice.url }}" {% if choice.selected %}selected{% endif %}>{{ choice.display }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </details>
+  <script>
+    (function () {
+      if (window.__filtroSelectPronto) return;
+      window.__filtroSelectPronto = true;
+      document.addEventListener('change', function (evento) {
+        var select = evento.target.closest('.js-filtro-select2');
+        if (!select) return;
+        window.location.href = select.value || window.location.pathname;
+      });
+      document.addEventListener('input', function (evento) {
+        var busca = evento.target.closest('.js-filtro-busca');
+        if (!busca) return;
+        var termo = busca.value.toLowerCase();
+        var select = busca.parentNode.querySelector('.js-filtro-select2');
+        Array.prototype.forEach.call(select.options, function (opcao) {
+          opcao.hidden = termo !== '' &&
+            opcao.text.toLowerCase().indexOf(termo) === -1;
+        });
+      });
+    })();
+  </script>

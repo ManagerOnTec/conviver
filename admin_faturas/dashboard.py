@@ -40,7 +40,11 @@ class ConvenioPagadorFilter(admin.SimpleListFilter):
 
     def queryset(self, request, queryset):
         valor = self.value()
-        if not valor:
+        # O admin entrega o valor como string; a listagem editável usa a
+        # mesma lista que o `ChangeList` monta para os filtros laterais.
+        if isinstance(valor, (list, tuple)):
+            valor = valor[0] if valor else None
+        if not valor or not isinstance(valor, str):
             return queryset
         model = queryset.model
         if any(field.name == 'convenio' for field in model._meta.get_fields()):

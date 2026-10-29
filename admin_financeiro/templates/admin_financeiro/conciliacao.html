@@ -1,0 +1,82 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+{% block title %}Conciliação – {{ extrato.competencia_bancaria }}{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <h1>Conciliação bancária — {{ extrato.competencia_bancaria }}</h1>
+
+  <div class="module">
+    <h2>Resumo</h2>
+    <table>
+      <tr><th>Extrato</th><td>{{ extrato.get_tipo_display }} · {{ extrato.dt_inicio|date:"d/m/Y" }} a {{ extrato.dt_fim|date:"d/m/Y" }}</td></tr>
+      <tr><th>Saldo do extrato</th><td>R$ {{ conciliacao.saldo_informado }}</td></tr>
+      <tr><th>Saldo calculado (sistema)</th><td>R$ {{ conciliacao.saldo_calculado }}</td></tr>
+      <tr><th>Divergência</th><td>
+        {% if conciliacao.divergencia == 0 %}<span style="color:green">✓ Sem divergência</span>
+        {% else %}<span style="color:red">R$ {{ conciliacao.divergencia }}</span>{% endif %}
+      </td></tr>
+      <tr><th>Linhas pendentes</th><td>{{ pendentes }}</td></tr>
+      <tr><th>Status</th><td>
+        {% if conciliacao.finalizada %}<strong>FINALIZADA</strong> — a competência pode ser fechada.
+        {% else %}Em andamento{% endif %}
+      </td></tr>
+    </table>
+  </div>
+
+  {% if not conciliacao.finalizada %}
+  <form method="post">
+    {% csrf_token %}
+    <div class="submit-row" style="justify-content:flex-start; border:none;">
+      <button type="submit" name="acao" value="sugerir" class="button">Sugerir conciliações (data + valor)</button>
+    </div>
+    <div class="results">
+    <table id="conciliacao">
+      <thead>
+        <tr>
+          <th><input type="checkbox" onclick="document.querySelectorAll('input.linecheck').forEach(c => c.checked = this.checked)"></th>
+          <th>Data</th><th>Valor</th><th>Descrição</th><th>Documento</th>
+          <th>Status</th><th>Movimento conciliado</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for linha in linhas %}
+        <tr>
+          <td><input type="checkbox" class="linecheck" name="linhas" value="{{ linha.pk }}"></td>
+          <td>{{ linha.dt_lancamento|date:"d/m/Y" }}</td>
+          <td style="text-align:right; {% if linha.valor < 0 %}color:#c00{% endif %}">R$ {{ linha.valor }}</td>
+          <td>{{ linha.descricao }}</td>
+          <td>{{ linha.documento|default_if_none:'' }}</td>
+          <td>{{ linha.get_status_display }}</td>
+          <td>
+            {% if linha.movimento_bancario %}
+              ✓ <a href="{% url 'admin:admin_financeiro_movimentobancario_change' linha.movimento_bancario.pk %}">#{{ linha.movimento_bancario.pk }}</a>
+            {% else %}
+              <select name="movimento_{{ linha.pk }}">
+                <option value="">— lançar/vincular depois —</option>
+                {% for mov in movimentos %}
+                  <option value="{{ mov.pk }}">#{{ mov.pk }} · {{ mov.dt_movimento|date:"d/m/Y" }} · {{ mov.valor_entrada|default:mov.valor_saida }} · {{ mov.observacao|default_if_none:''|truncatechars:30 }}</option>
+                {% endfor %}
+              </select>
+            {% endif %}
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7">Nenhuma linha importada.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <div class="submit-row" style="justify-content:flex-start; border:none;">
+      <button type="submit" name="acao" value="conciliar" class="default">Conciliar selecionadas</button>
+      <button type="submit" name="acao" value="ignorar">Ignorar selecionadas</button>
+      <button type="submit" name="acao" value="finalizar">Finalizar conciliação</button>
+    </div>
+  </form>
+  {% endif %}
+
+  <div class="submit-row" style="justify-content:flex-start; border:none;">
+    <a href="{% url 'admin:admin_financeiro_extratoimportado_changelist' %}">← Voltar aos extratos</a>
+  </div>
+</div>
+{% endblock %}

@@ -47,6 +47,60 @@ def admin_logout(request, extra_context=None):
     return logout_view(request)
 
 
+def _get_app_list_com_extras(request, app_label=None):
+    """`AdminSite.get_app_list` + as páginas próprias (Conciliação etc.)."""
+    return _com_telas_extras(
+        admin.site.get_app_list(request, app_label))
+
+
+def _com_telas_extras(app_list):
+    """Acrescenta ao menu as páginas PRÓPRIAS (que não são ModelAdmin).
+
+    Hoje: "4. Conciliação Bancária" no app do Financeiro — a tela dedicada
+    de importação/conciliação de extrato. Mantém a ordenação por número.
+    """
+    from django.urls import NoReverseMatch, reverse
+
+    def _numero(nome):
+        prefixo = nome.strip().split(' ')[0].rstrip('.')
+        return int(prefixo) if prefixo.isdigit() else None
+
+    paginas = [('admin_financeiro', '4. Conciliação Bancária',
+                'admin_financeiro_conciliacao')]
+    extras = {}
+    for app_label, nome, rota in paginas:
+        try:
+            url = reverse(rota)
+        except NoReverseMatch:
+            continue
+        extras.setdefault(app_label, []).append({
+            'name': nome,
+            'object_name': 'conciliacao_bancaria',
+            'admin_url': url,
+            'add_url': None,
+            'view_only': True,
+            'numero': _numero(nome),
+        })
+    if not extras:
+        return app_list
+    for app in app_list:
+        novas = extras.get(app.get('app_label'))
+        if not novas:
+            continue
+        # IDEMPOTENTE: não duplica um item já presente (mesma URL).
+        existentes = {(m.get('admin_url') or '') for m in app.get('models', [])}
+        acrescentar = [m for m in novas
+                       if (m.get('admin_url') or '') not in existentes]
+        if not acrescentar:
+            continue
+        app['models'] = list(app.get('models', [])) + acrescentar
+        app['models'].sort(key=lambda m: (
+            _numero(m.get('name', '')) is None,
+            _numero(m.get('name', '')) or 0,
+            (m.get('name') or '').lower()))
+    return app_list
+
+
 def admin_index(request, extra_context=None):
     """
     Índice do admin.
@@ -71,6 +125,23 @@ def get_admin_urls():
     # módulo" pode ser aplicado a cada ModelAdmin de uma vez. Idempotente.
     from dominios.breadcrumbs import instalar_breadcrumbs
     instalar_breadcrumbs(admin.site)
+
+    # O ÍNDICE do admin (e o menu de "telas do módulo" do breadcrumb) passa a
+    # listar as páginas PRÓPRIAS — a Conciliação Bancária (item 4 do
+    # Financeiro) não é ModelAdmin, então não viria do `get_app_list` padrão.
+    # Aplicado UMA única vez (o `get_admin_urls` pode ser chamado várias vezes
+    # pelo URL resolver): envolver duas vezes duplicava o item do menu.
+    site_atual = admin.site
+    if not getattr(site_atual, '_telas_extras_aplicadas', False):
+        _get_app_list_original = site_atual.get_app_list
+
+        def _get_app_list(self, request, app_label=None):
+            return _com_telas_extras(
+                _get_app_list_original(request, app_label))
+
+        site_atual.get_app_list = _get_app_list.__get__(
+            site_atual, type(site_atual))
+        site_atual._telas_extras_aplicadas = True
 
     urlpatterns = []
 

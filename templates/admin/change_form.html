@@ -70,9 +70,6 @@
           <ul class="object-tools admin-form-tools">
             {% block object-tools-items %}
               {% if has_change_permission %}
-                {# Só as ações que NÃO repetem o objeto: o link "Visualizar" do Django
-                   imprime o __str__ do objeto (ex.: todo o HTML da evolução), e em
-                   registros somente-leitura ele levava para a mesma tela. #}
                 <li><a href="{% url opts|admin_urlname:'history' original.pk|admin_urlquote %}"
                        class="historylink">{% translate 'History' %}</a></li>
               {% endif %}

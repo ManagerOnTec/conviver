@@ -25,7 +25,9 @@
   <script src="{% static 'js/admin_layout_toggles.js' %}" defer></script>
 {% endblock %}
 
-{% block title %}{% if change and opts %}{{ opts.verbose_name_plural }}{% else %}{{ subtitle|default:title }}{% endif %} | {{ site_title|default:_("Django site admin") }}{% endblock %}
+{# `change` só existe no change_form; na listagem, usar `title` (fallback: #}
+{# o verbose_name do modelo) — sem isso o {% if %} levanta VariableDoesNotExist. #}
+{% block title %}{% if title %}{{ title }}{% elif opts %}{{ opts.verbose_name_plural }}{% else %}{{ site_title }}{% endif %} | {{ site_title|default:_("Django site admin") }}{% endblock %}
 
 {% block branding %}
 <div id="site-name"><a href="{% url 'admin:index' %}">{{ site_header|default:_("Django administration") }}</a></div>

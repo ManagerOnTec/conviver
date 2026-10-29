@@ -1,0 +1,17 @@
+{% load admin_list %}
+{% load i18n %}
+<p class="paginator">
+{% if pagination_required %}
+{% for i in page_range %}
+    {% paginator_number cl i %}
+{% endfor %}
+{% endif %}
+{{ cl.result_count }} {% if cl.result_count == 1 %}{{ cl.opts.verbose_name }}{% else %}{{ cl.opts.verbose_name_plural }}{% endif %}
+{% if show_all_url %}<a href="{{ show_all_url }}" class="showall">{% translate 'Show all' %}</a>{% endif %}
+{% comment %}
+  O botão "Salvar" do `list_editable` (do Django) saiu da paginação: o
+  `change_list.html` deste projeto renderiza os botões ACIMA e ABAIXO da
+  tabela em TODAS as listagens editáveis (qualquer ModelAdmin com
+  `list_editable` gera `cl.formset`).
+{% endcomment %}
+</p>

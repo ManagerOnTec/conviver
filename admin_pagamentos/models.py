@@ -317,8 +317,13 @@ class BaixaPagamento(models.Model):
         'Pagamento', on_delete=models.CASCADE, verbose_name='Pagamento'
     )
     competencia_bancaria = models.ForeignKey(
-        'admin_financeiro.CompetenciaBancaria', on_delete=models.PROTECT, verbose_name='Competência', blank=True, null=True
+        'admin_financeiro.CompetenciaBancaria', on_delete=models.PROTECT, verbose_name='Competência Bancária', blank=True, null=True
     )
+    # Pagamento em DINHEIRO: informa a competência de CAIXA (tesouraria).
+    competencia_caixa = models.ForeignKey(
+        'admin_tesouraria.CompetenciaCaixa', on_delete=models.PROTECT,
+        verbose_name='Competência de Caixa', blank=True, null=True,
+        help_text='Obrigatória quando a transação movimenta CAIXA.')
     transacao_financeira = models.ForeignKey(
         TransacaoFinanceira, on_delete=models.PROTECT, verbose_name='Transação Financeira'
     )
@@ -351,30 +356,78 @@ class BaixaPagamento(models.Model):
         verbose_name = "Baixa de Pagamento"
         verbose_name_plural = "6. Baixa de Pagamentos"
 
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        movimento = (self.transacao_financeira.movimento
+                     if self.transacao_financeira_id else None)
+        if movimento == 'caixa':
+            comp = self.competencia_caixa
+            if comp is None:
+                raise ValidationError({
+                    'competencia_caixa':
+                        'Pagamento em DINHEIRO: informe a COMPETÊNCIA DE CAIXA '
+                        'aberta.'})
+            if comp.dt_fechamento:
+                raise ValidationError({
+                    'competencia_caixa':
+                        f'O caixa "{comp}" está FECHADO: escolha outro caixa '
+                        'aberto.'})
+            if not comp.validar_periodo(self.dt_pagamento):
+                raise ValidationError({
+                    'dt_pagamento':
+                        'A data do pagamento está fora do período da '
+                        'competência de caixa.'})
+            if self.competencia_bancaria_id:
+                raise ValidationError({
+                    'competencia_bancaria':
+                        'Transação de CAIXA não usa competência bancária '
+                        '(limpe o campo).'})
+        elif movimento == 'banco' and self.competencia_bancaria is None:
+            raise ValidationError({
+                'competencia_bancaria':
+                    'Pagamento por BANCO: informe a competência bancária.'})
+        return super().clean()
+
     def save(self, *args, **kwargs):
-        # Atualiza o saldo da fatura quando uma baixa é registrada
-        if not self.pk:  # Se for uma nova baixa
+        # Baixa de pagamento: saldo do pagamento + movimento do lado correto.
+        if not self.pk:
             self.pagamento.atualizar_saldo(self.valor_pagamento)
-        super(BaixaPagamento, self).save(*args, **kwargs)
-
-        # Geração de Movimento Bancário se for uma transação do tipo 'banco'
-        if self.transacao_financeira.movimento == 'banco':
-        # Verifica se o campo competencia_bancaria foi preenchido
-            if self.competencia_bancaria:
-            # Importação dinâmica para evitar importação circular
-                from django.apps import apps
-                
-                MovimentoBancario = apps.get_model('admin_financeiro', 'MovimentoBancario')
-
+        super().save(*args, **kwargs)
+        if not self.pk:
+            return
+        movimento = self.transacao_financeira.movimento
+        if movimento == 'banco' and self.competencia_bancaria_id and not \
+                self.__dict__.get('_mov_banco_gerado'):
+            from admin_financeiro.models import MovimentoBancario
+            existe = MovimentoBancario.objects.filter(
+                baixa_pagamento=self).exists()
+            if not existe:
                 MovimentoBancario.objects.create(
                     competencia_bancaria=self.competencia_bancaria,
                     transacao_financeira=self.transacao_financeira,
-                    valor_entrada=0,  # Define o valor de entrada como 0 (confirme se está correto)
-                    valor_saida=self.valor_pagamento,  # Define o valor de saída como o valor do pagamento
+                    valor_entrada=0,
+                    valor_saida=self.valor_pagamento,
+                    dt_movimento=self.dt_pagamento,
+                    baixa_pagamento=self,
+                    observacao=f'Pagamento #{self.pagamento_id}',
                     us_registro=self.us_registro,
                     estabelecimento=self.estabelecimento,
-                    status='A'  # Define o status como ativo por padrão
-                )
+                    status='A')
+        elif movimento == 'caixa' and self.competencia_caixa_id:
+            from admin_tesouraria.models import MovimentoCaixa
+            existe = MovimentoCaixa.objects.filter(
+                pagamento=self.pagamento).exists()
+            if not existe:
+                MovimentoCaixa.objects.create(
+                    competencia_caixa=self.competencia_caixa,
+                    dt_movimento=self.dt_pagamento,
+                    tipo='S',
+                    origem='pagamento',
+                    valor_saida=self.valor_pagamento,
+                    transacao_financeira=self.transacao_financeira,
+                    pagamento=self.pagamento,
+                    observacao=f'Pagamento #{self.pagamento_id}',
+                    us_registro=self.us_registro)
 
     def __str__(self):
         return f"Baixa do pagamento {self.pagamento.id} / Valor: {self.valor_pagamento} / Pago em: {self.dt_pagamento}"

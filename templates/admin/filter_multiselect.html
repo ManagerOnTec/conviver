@@ -1,0 +1,56 @@
+{% load i18n %}
+{% comment %}
+Filtro lateral em MÚLTIPLA escolha (vários bancos ao mesmo tempo).
+Cada marcação reenvia a listagem com o parâmetro repetido na query string
+(`?banco=1&banco=2`); o backend lê TODOS por `getlist`.
+{% endcomment %}
+<details data-filter-title="{{ title }}" open>
+  <summary>
+    {% blocktranslate with filter_title=title %} By {{ filter_title }} {% endblocktranslate %}
+    <span class="multi-filter-hint" title="Pode marcar mais de um">múltiplo</span>
+  </summary>
+  <ul style="max-height: 220px; overflow-y: auto; padding-left: 0; list-style: none;">
+    {% for choice in choices %}
+      {% if choice.value is not None %}
+      <li style="margin: 2px 0;">
+        <label style="display: flex; gap: 6px; align-items: center; cursor: pointer;">
+          <input type="checkbox" class="js-multi-filter"
+                 data-param="{{ choice.parameter_name }}"
+                 value="{{ choice.value }}" {% if choice.selected %}checked{% endif %}>
+          <span>{{ choice.display }}</span>
+        </label>
+      </li>
+      {% endif %}
+    {% endfor %}
+    <li style="margin-top: 6px;">
+      <a href="#" class="js-multi-filter-clear" data-param="{{ spec.parameter_name }}" style="font-size: .85em;">Limpar
+        seleção</a>
+    </li>
+  </ul>
+</details>
+<script>
+  (function () {
+    if (window.__multiFilterPronto) return;
+    window.__multiFilterPronto = true;
+    document.addEventListener('change', function (evento) {
+      var caixa = evento.target.closest('.js-multi-filter');
+      if (!caixa) return;
+      var url = new URL(window.location.href);
+      var parametro = caixa.dataset.param;
+      url.searchParams.delete(parametro);
+      document.querySelectorAll('.js-multi-filter[data-param="' + parametro + '"]')
+        .forEach(function (c) { if (c.checked) url.searchParams.append(parametro, c.value); });
+      url.searchParams.delete('p');
+      window.location.href = url.toString();
+    });
+    document.addEventListener('click', function (evento) {
+      var limpar = evento.target.closest('.js-multi-filter-clear');
+      if (!limpar) return;
+      evento.preventDefault();
+      var url = new URL(window.location.href);
+      url.searchParams.delete(limpar.dataset.param);
+      url.searchParams.delete('p');
+      window.location.href = url.toString();
+    });
+  })();
+</script>

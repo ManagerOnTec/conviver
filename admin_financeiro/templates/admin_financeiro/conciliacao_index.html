@@ -1,0 +1,74 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% block title %}Conciliação Bancária{% endblock %}
+
+{% block breadcrumbs %}
+  {# Breadcrumb PADRÃO do app Financeiro (Home > Financeiro > tela). #}
+  {% include "admin/includes/breadcrumbs.html" %}
+{% endblock %}
+
+{% block content %}
+<h1>Conciliação Bancária</h1>
+
+<div class="module" style="padding: 14px;">
+  <h2>1. Escolha a competência</h2>
+  <form method="get" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+    <label for="competencia"><strong>Competência (aberta):</strong></label>
+    <select name="competencia" id="competencia" onchange="this.form.submit()" style="min-width: 420px;">
+      {% for comp in competencias %}
+        <option value="{{ comp.pk }}" {% if competencia and comp.pk == competencia.pk %}selected{% endif %}>
+          {{ comp }} — Saldo atual: R$ {{ comp.saldo_atual }}
+        </option>
+      {% empty %}
+        <option value="">Nenhuma competência aberta</option>
+      {% endfor %}
+    </select>
+    <noscript><button type="submit" class="button">Carregar</button></noscript>
+  </form>
+
+  {% if not competencias %}
+    <p class="help" style="color:#b45309;">
+      Não há competência bancária ABERTA. Abra uma nova competência no menu
+      “Competências Bancárias” (uma por banco) para importar o extrato.
+    </p>
+  {% endif %}
+</div>
+
+{% if competencia %}
+<div class="module" style="padding: 14px; margin-top: 12px;">
+  <h2>2. Importar extrato desta competência</h2>
+  <p>
+    <strong>Banco:</strong>
+    {{ competencia.controle_bancario.conta.agencia.banco }} ·
+    Ag. {{ competencia.controle_bancario.conta.agencia.numero_agencia }} ·
+    Conta {{ competencia.controle_bancario.conta.numero_conta }}
+  </p>
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="hidden" name="competencia" value="{{ competencia.pk }}">
+    <input type="file" name="arquivo" accept=".ofx,.pdf" required>
+    <button type="submit" name="acao" value="importar" class="default">Importar extrato (OFX/PDF)</button>
+  </form>
+  {% if extrato %}
+    <p style="margin-top:12px;">
+      Último extrato: <strong>{{ extrato.get_tipo_display }}</strong>
+      de {{ extrato.dt_inicio|date:"d/m/Y" }} a {{ extrato.dt_fim|date:"d/m/Y" }}
+      · {{ extrato.linhas.count }} linha(s)
+      · saldo final <strong>R$ {{ extrato.saldo_final_extrato }}</strong>
+    </p>
+    <p>
+      <a class="button" href="/conciliacao-bancaria/{{ extrato.pk }}/">
+        Abrir conciliação →
+      </a>
+      {% if conciliacao %}
+        {% if conciliacao.finalizada %}
+          <span style="color:#15803d; font-weight:600; margin-left:8px;">✓ Conciliação finalizada</span>
+        {% else %}
+          <span style="color:#b45309; margin-left:8px;">Conciliação em andamento</span>
+        {% endif %}
+      {% endif %}
+    </p>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

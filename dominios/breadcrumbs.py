@@ -40,14 +40,44 @@ def telas_do_app(admin_site, request, app_label):
     if not app_atual:
         return []
 
+    # As páginas PRÓPRIAS (ex.: Conciliação Bancária) já vêm no `models` do
+    # app: o `admin.site.get_app_list` é envolvido em `managerontec/
+    # admin_site.py` para acrescentá-las. Somar aqui de novo DUPLICAVA o item
+    # no menu.
     telas = [
         {'nome': m['name'], 'url': m['admin_url'],
          'numero': _numero_ordem(m['name'])}
         for m in app_atual.get('models', []) if m.get('admin_url')
     ]
-    telas.sort(key=lambda t: (t['numero'] is None, t['numero'] or 0,
-                              t['nome'].lower()))
-    return telas
+    # Dedupe defensivo (mesma URL só uma vez), caso alguma fonte repita.
+    vistos = set()
+    unicas = []
+    for tela in telas:
+        if tela['url'] in vistos:
+            continue
+        vistos.add(tela['url'])
+        unicas.append(tela)
+    unicas.sort(key=lambda t: (t['numero'] is None, t['numero'] or 0,
+                               t['nome'].lower()))
+    return unicas
+
+
+def _telas_extras(request):
+    """{app_label: [{nome, url, numero}]} das páginas próprias."""
+    from django.urls import NoReverseMatch, reverse
+    extras = {}
+    paginas = [
+        ('admin_financeiro', '4. Conciliação Bancária',
+         'admin_financeiro_conciliacao'),
+    ]
+    for app_label, nome, rota in paginas:
+        try:
+            url = reverse(rota)
+        except NoReverseMatch:
+            continue
+        extras.setdefault(app_label, []).append({
+            'nome': nome, 'url': url, 'numero': _numero_ordem(nome)})
+    return extras
 
 
 def breadcrumbs_context(admin_site, request, app_label, modelo_nome='',

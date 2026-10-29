@@ -3,6 +3,9 @@ from django.urls import path, include, reverse_lazy
 from django.conf import settings
 from django.conf.urls.static import static
 from admin_relatorios.views import TextoPadraoFiltradoPorTipoView
+from admin_financeiro.conciliacao_view import (
+    conciliacao_index, conciliacao_detalhe,
+)
 from managerontec.admin_site import get_admin_urls
 
 # Define o destino do link "Ver o site" no Django Admin.
@@ -30,6 +33,11 @@ urlpatterns = [
 
     path('select2/', include('django_select2.urls')),
     path('chaining/', include('smart_selects.urls')),
+    # CONCILIAÇÃO BANCÁRIA — tela própria do financeiro (fora da competência)
+    path('conciliacao-bancaria/', conciliacao_index,
+         name='admin_financeiro_conciliacao'),
+    path('conciliacao-bancaria/<int:extrato_id>/', conciliacao_detalhe,
+         name='admin_financeiro_conciliacao_detalhe'),
     path(
         'texto-padrao/<str:tipo_documento>/',  # Ex: /texto-padrao/atas/
         TextoPadraoFiltradoPorTipoView.as_view(),

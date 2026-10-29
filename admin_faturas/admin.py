@@ -25,7 +25,7 @@ from django.db import models
 from admin_cadastros.utils import EstabelecimentoFilterAdminMixin
 from admin_cadastros.models import Pessoa
 from admin_cadastros_financeiros.models import TransacaoFinanceira
-from admin_financeiro.models import CompetenciaBancaria
+from admin_financeiro.models import CompetenciaBancaria, MovimentoBancario
 from django.contrib import admin
 from django.utils.translation import gettext_lazy as _
 from django import forms
@@ -70,12 +70,17 @@ class CustomDateFilter(admin.SimpleListFilter):
         return formatted_dates
 
     def queryset(self, request, queryset):
-        if self.value():
+        valor = self.value()
+        # O valor pode chegar como lista (a listagem editável monta os
+        # `used_parameters` do próprio request); usa o primeiro.
+        if isinstance(valor, (list, tuple)):
+            valor = valor[0] if valor else None
+        if valor:
             try:
                 # Tenta converter o valor da URL para uma data no formato 'yyyy-mm-dd'
-                date_obj = datetime.strptime(self.value(), '%Y-%m-%d')
+                date_obj = datetime.strptime(valor, '%Y-%m-%d')
                 return queryset.filter(competencia=date_obj)
-            except ValueError:
+            except (ValueError, TypeError):
                 return queryset
         return queryset
 
@@ -1069,8 +1074,117 @@ class NotaFiscalFilter(admin.SimpleListFilter):
                 | Q(nr_nota_fiscal__in=('', 'N/A'))
             )
         return queryset
-class FaturaAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Select2AdminModelAdminMixin, ExportToXLSMixin, admin.ModelAdmin):
 
+
+class BaixaFaturaInline(admin.TabularInline):
+    """Baixas (recebimentos) da fatura, dentro do formulário da FATURA.
+
+    Uma fatura tem VÁRIAS baixas: aqui o usuário registra/edita os
+    recebimentos parciais sem sair da tela da fatura. O `fatura_baixada`
+    (M2M) não aparece no inline: é justamente o vínculo com a fatura aberta,
+    fixado pelo `save_formset` de quem hospeda o inline.
+    """
+
+    model = BaixaFatura
+    form = BaixaFaturaForm
+    # A baixa tem MAIS DE UM vínculo com Fatura (parent link `fatura_ptr` +
+    # o M2M `fatura_baixada`): sem dizer qual, o formset não sabe a FK.
+    fk_name = 'fatura_ptr'
+    extra = 0
+    can_delete = True
+    show_change_link = True
+    fields = ('valor_baixa', 'dt_recebimento', 'transacao_financeira',
+              'competencia_bancaria', 'observacao')
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            'transacao_financeira', 'competencia_bancaria')
+
+    def get_formset(self, request, obj=None, **kwargs):
+        """O form do inline conhece a fatura (cópia herdada/telas)."""
+        base = super().get_formset(request, obj, **kwargs)
+        FormOriginal = base.form
+
+        # O queryset do formset filtra pelo parent link (`fatura_ptr`) — mas
+        # cada baixa tem o PRÓPRIO retrato (linha pai criada no save), então
+        # as baixas da fatura aberta NÃO estão lá. O vínculo real é o M2M
+        # `fatura_baixada`: filtra por ele (e o `fk_name` continua o
+        # `fatura_ptr`, que é o que o formset usa para ligar novas linhas).
+        class FormSetComM2M(base):
+            def get_queryset(self):
+                if self.instance is not None and self.instance.pk:
+                    # SUBSTITUI o queryset (não acrescenta filtro): o base
+                    # já vem com `fatura_ptr = fatura aberta` — mas cada baixa
+                    # tem o PRÓPRIO retrato (linha pai criada no save), então
+                    # nenhuma baixa tem esse parent link e o filtro do base
+                    # devolveria sempre vazio. O vínculo real é o M2M.
+                    return BaixaFatura.objects.filter(
+                        fatura_baixada__in=[self.instance.pk]
+                    ).order_by('-dt_recebimento')
+                return super().get_queryset()
+
+            def add_fields(self, form, index):
+                # O fk (`fatura_ptr`) É a pk da baixa: o Django já trata este
+                # caso (`self._pk_field == self.fk` → InlineForeignKeyField
+                # pk_field=True). Só que o `initial` dele é a pk da INSTÂNCIA
+                # DO FORMSET (a fatura aberta) — e aqui cada baixa tem o
+                # PRÓPRIO retrato (pk diferente). Corrige por linha: o valor
+                # hidden tem de ser a pk DA BAIXA (que é o fatura_ptr dela).
+                super().add_fields(form, index)
+                campo = form.fields.get('fatura_ptr')
+                if campo is not None:
+                    # O fk (`fatura_ptr`) É a pk da baixa — e cada baixa tem o
+                    # PRÓPRIO retrato. O campo precisa EXISTIR (o
+                    # `_construct_form` do base o exige), mas como
+                    # IntegerField opcional: o `construct_instance` IGNORA
+                    # (o campo do modelo é auto_created, editable=False) e o
+                    # `InlineForeignKeyField` (que validaria contra a fatura
+                    # aberta) sai. O valor real vai no hidden `pk_linha`,
+                    # usado pelo `_construct_form` abaixo.
+                    from django import forms as _forms
+                    form.fields['fatura_ptr'] = _forms.IntegerField(
+                        required=False, widget=_forms.HiddenInput)
+                    form.fields['pk_linha'] = _forms.IntegerField(
+                        required=False, widget=_forms.HiddenInput)
+                    if form.instance is not None and form.instance.pk:
+                        form.fields['pk_linha'].initial = form.instance.pk
+
+            def _construct_form(self, i, **kwargs):
+                form = super()._construct_form(i, **kwargs)
+                # Reaponta a instância do form para a baixa REAL da linha (a
+                # pk vem do hidden `pk_linha` no POST; no GET, do queryset).
+                pk_linha = None
+                if form.is_bound:
+                    try:
+                        pk_linha = int(form.data.get(
+                            form.add_prefix('pk_linha')) or 0)
+                    except (TypeError, ValueError):
+                        pk_linha = None
+                else:
+                    pk_linha = form.instance.pk
+                if pk_linha and pk_linha != form.instance.pk:
+                    obj = BaixaFatura.objects.filter(pk=pk_linha).first()
+                    if obj is not None:
+                        form.instance = obj
+                return form
+
+        FormSetComM2M.__name__ = base.__name__
+        FormSetComM2M.__qualname__ = base.__qualname__
+        base = FormSetComM2M
+
+        class FormComFatura(FormOriginal):
+            def __init__(self, *args, **form_kwargs):
+                if obj is not None:
+                    form_kwargs.setdefault('fatura_origem', obj)
+                super().__init__(*args, **form_kwargs)
+
+        FormComFatura.__name__ = FormOriginal.__name__
+        FormComFatura.__qualname__ = FormOriginal.__qualname__
+        base.form = FormComFatura
+        return base
+
+
+class FaturaAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Select2AdminModelAdminMixin, ExportToXLSMixin, admin.ModelAdmin):
     dashboard_competencia_field = 'competencia'
     dashboard_vencimento_field = 'dt_vencimento'
     dashboard_valor_field = 'valor_fatura'
@@ -1219,6 +1333,39 @@ class FaturaAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Select
 
     readonly_fields = ['us_registro', 'dt_registro',
                        'us_atualizacao', 'dt_atualizacao', 'pre_faturado']
+
+    # Cada fatura recebe VÁRIAS baixas (recebimentos parciais) direto no seu
+    # formulário.
+    inlines = [BaixaFaturaInline]
+
+    def save_formset(self, request, form, formset, change):
+        """Amarra cada baixa do inline à fatura que está sendo editada."""
+        instancias = formset.save(commit=False)
+        for instancia in instancias:
+            if isinstance(instancia, BaixaFatura):
+                if instancia._state.adding:
+                    instancia.us_registro_baixa = request.user
+                    instancia.status = 'A'
+                    # O `save_new` do formset apontou o parent link para a
+                    # fatura aberta (`fatura_ptr_id = 102`): como a pk da
+                    # baixa É o parent link, gravar faria UPDATE da baixa
+                    # herdada de mesma pk. Zera: o `save()` do modelo cria o
+                    # retrato próprio.
+                    instancia.fatura_ptr_id = None
+                    instancia.pk = None
+                else:
+                    instancia.us_atualizacao_baixa = request.user
+                instancia.fatura = form.instance
+                # Baixa NOVA: a cópia herdada (NOT NULL) é preenchida a partir
+                # da fatura aberta, no save() do modelo.
+                instancia._herdados_congelados = not instancia._state.adding
+                instancia.save()
+                # Garante o vínculo M2M com a fatura aberta.
+                if instancia.pk_fatura_baixada() != form.instance.pk:
+                    instancia.fatura_baixada.set([form.instance])
+        for obj in formset.deleted_objects:
+            obj.delete()
+        formset.save_m2m()
 
     list_display_links = ('id', 'convenio')
 
@@ -1409,6 +1556,166 @@ class FaturaAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Select
 
 # TODO: APOS IMPLANTAR O CAIXA, FIELD COMPETENCIA_CAIXA NA TRANSACAO_FINANCEIRA DE MOVIMENTO IGUAL CAIXA
 
+
+class SaldoFaturaFilter(SaldoFilter):
+    """Saldo da fatura listada: em aberto, baixada (liquidada) ou ambas.
+
+    A listagem é de FATURAS: o mesmo filtro de saldo da listagem de baixas,
+    reaproveitado — o título fica o da listagem de baixas."""
+    title = 'Saldo'
+    parameter_name = 'saldo'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('aberto', 'Com saldo (em aberto)'),
+            ('zero', 'Sem saldo (baixada)'),
+        )
+
+    def queryset(self, request, queryset):
+        valor = self.value()
+        # A listagem editável monta os `used_parameters` como lista.
+        if isinstance(valor, (list, tuple)):
+            valor = valor[0] if valor else None
+        if valor == 'aberto':
+            return queryset.filter(valor_saldo__gt=0)
+        if valor == 'zero':
+            return queryset.filter(valor_saldo__lte=0)
+        return queryset
+
+
+class DataRecebimentoFilter(admin.SimpleListFilter):
+    """Data de recebimento das baixas já registradas da fatura.
+
+    A listagem é de FATURAS: o filtro entra pelas baixas ligadas a ela
+    (M2M `fatura_baixada`)."""
+    title = 'Data de Recebimento'
+    parameter_name = 'dt_recebimento'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('hoje', 'Hoje'),
+            ('mes', 'Neste mês'),
+            ('nao', 'Sem recebimento'),
+        )
+
+    def queryset(self, request, queryset):
+        valor = self.value()
+        if isinstance(valor, (list, tuple)):
+            valor = valor[0] if valor else None
+        hoje = timezone.localdate()
+        if valor == 'hoje':
+            return queryset.filter(
+                baixas__dt_recebimento=hoje).distinct()
+        if valor == 'mes':
+            return queryset.filter(
+                baixas__dt_recebimento__year=hoje.year,
+                baixas__dt_recebimento__month=hoje.month).distinct()
+        if valor == 'nao':
+            return queryset.exclude(baixas__isnull=False).distinct()
+        return queryset
+
+
+class CompetenciaBancariaFilter(admin.SimpleListFilter):
+    """Competência bancária das baixas ligadas à fatura listada."""
+    title = 'Competência Bancária'
+    parameter_name = 'competencia_bancaria'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('aberta', 'Competência aberta'),
+            ('fechada', 'Competência fechada'),
+            ('sem', 'Sem competência'),
+        )
+
+    def queryset(self, request, queryset):
+        valor = self.value()
+        if isinstance(valor, (list, tuple)):
+            valor = valor[0] if valor else None
+        if valor == 'aberta':
+            return queryset.filter(
+                baixas__competencia_bancaria__dt_fechamento_competencia=None,
+                baixas__competencia_bancaria__isnull=False,
+            ).distinct()
+        if valor == 'fechada':
+            return queryset.filter(
+                baixas__competencia_bancaria__dt_fechamento_competencia=None,
+            ).exclude(
+                baixas__competencia_bancaria=None,
+            ).distinct()
+        if valor == 'sem':
+            return queryset.exclude(baixas__competencia_bancaria=None) \
+                .exclude(baixas__isnull=False).distinct()
+        return queryset
+
+
+class ClienteFaturaFilter(admin.SimpleListFilter):
+    """Cliente (campo texto livre da fatura) — busca por início do nome."""
+    title = 'Cliente'
+    parameter_name = 'cliente_filtro'
+
+    def lookups(self, request, model_admin):
+        clientes = (Fatura.objects.filter(faturado=True, status='A')
+                    .exclude(cliente__isnull=True).exclude(cliente='')
+                    .values_list('cliente', flat=True).distinct())
+        # O campo `cliente` acumula VÁRIOS nomes separados por ';': a opção
+        # lista os PRIMEIROS nomes distintos (até 30) para não virar lista
+        # infinita.
+        nomes = {}
+        for valor in clientes:
+            for parte in str(valor).split(';'):
+                parte = parte.strip()
+                if parte and parte not in nomes:
+                    nomes[parte] = len(nomes) + 1
+                if len(nomes) >= 30:
+                    break
+            if len(nomes) >= 30:
+                break
+        return [(f'c{chave}', nome) for nome, chave in sorted(
+            nomes.items(), key=lambda item: item[1])]
+
+    def queryset(self, request, queryset):
+        valor = self.value()
+        if isinstance(valor, (list, tuple)):
+            valor = valor[0] if valor else None
+        if not valor or not valor.startswith('c'):
+            return queryset
+        indice = int(valor[1:]) - 1
+        clientes = (Fatura.objects.filter(faturado=True, status='A')
+                    .exclude(cliente__isnull=True).exclude(cliente='')
+                    .values_list('cliente', flat=True).distinct())
+        nomes = []
+        for valor_cliente in clientes:
+            for parte in str(valor_cliente).split(';'):
+                parte = parte.strip()
+                if parte and parte not in nomes:
+                    nomes.append(parte)
+        if indice < len(nomes):
+            return queryset.filter(cliente__icontains=nomes[indice]) \
+                .distinct()
+        return queryset
+
+
+class VencimentoDateFilter(CustomDateFilter):
+    """Filtro de data da barra lateral para o VENCIMENTO da fatura listada.
+
+    O `CustomDateFilter` (competência) serve de base: só troca o campo e o
+    parâmetro — o `<input type="date">` e a leitura da URL são os mesmos."""
+    title = _('Vencimento')
+    parameter_name = 'dt_vencimento'
+
+    def queryset(self, request, queryset):
+        valor = self.value()
+        if isinstance(valor, (list, tuple)):
+            valor = valor[0] if valor else None
+        if valor:
+            try:
+                date_obj = datetime.strptime(valor, '%Y-%m-%d')
+                return queryset.filter(dt_vencimento=date_obj)
+            except (ValueError, TypeError):
+                return queryset
+        return queryset
+
+
 class BaixaFaturaAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Select2AdminModelAdminMixin, ExportToXLSMixin, admin.ModelAdmin):
     form = BaixaFaturaForm
 
@@ -1422,26 +1729,111 @@ class BaixaFaturaAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, S
     # de listagem editável não é usado e o <thead> fica sem o checkbox
     # "selecionar todos". A edição em linha continua desligada.
     def get_changelist(self, request, **kwargs):
-        from .changelist_editavel import ChangeListEditavel
-        return ChangeListEditavel
+        from .changelist_editavel import ChangeListBaixaFatura
+        return ChangeListBaixaFatura
 
     actions = ['export_as_xls']
 
-    list_display = ('id',  'fatura', 'valor_baixa', 'dt_recebimento',
-                    'transacao_financeira', 'competencia_bancaria', 'estabelecimento', 'status')
+    # O template da listagem editável lê este atributo.
+    selecao_desabilitada = False
 
-    list_display_links = ['id', 'fatura']
+    # A listagem é das FATURAS finalizadas em aberto (contas a receber).
+    # Colunas de identificação vêm da fatura; só os campos exclusivos da
+    # baixa são editáveis.
+    list_display = (
+        'id', 'convenio', 'cliente', 'competencia', 'dt_vencimento',
+        'valor_fatura', 'valor_saldo', 'estabelecimento',
+        'valor_baixa', 'valor_adicional', 'valor_total_empacotado',
+        'dt_recebimento', 'transacao_financeira',
+        'competencia_bancaria', 'observacao',
+    )
 
-    search_fields = ('id', 'valor_baixa',)
+    list_editable = [
+        'valor_baixa', 'valor_adicional', 'dt_recebimento',
+        'transacao_financeira', 'competencia_bancaria', 'observacao',
+    ]
+
+    list_display_links = ['id']
+
+    search_fields = ('id', 'convenio__convenio', 'cliente',
+                     'nr_nota_fiscal', 'convenio__pagador_pj__empresa',
+                     'convenio__pagador_pf__nome')
 
     readonly_fields = ['us_registro', 'dt_registro',
-                       'us_atualizacao', 'dt_atualizacao', 'estabelecimento']
+                       'us_atualizacao', 'dt_atualizacao']
 
-    list_filter = ['transacao_financeira', CustomDateFilter,
-                   ConvenioPagadorFilter, StatusFilterAdminMixin,
-                   EstabelecimentoFilterAdminMixin]
+    # O form do admin edita SÓ os campos próprios da baixa: os HERDADOS são
+    # cópia do estado da fatura no recebimento (preenchidos pelo
+    # `save()`/`_post_clean` do form) — exibi-los editáveis gravaria valores
+    # dessincronizados com a fatura.
+    fields = ('fatura_baixada', 'valor_baixa', 'valor_adicional',
+              'baixas_empacotadas', 'dt_recebimento',
+              'transacao_financeira', 'competencia_bancaria', 'observacao')
+
+    list_filter = [VencimentoDateFilter, CustomDateFilter,
+                   ConvenioPagadorFilter, SaldoFaturaFilter,
+                   StatusFilterAdminMixin, EstabelecimentoFilterAdminMixin,
+                   ClienteFaturaFilter, DataRecebimentoFilter,
+                   CompetenciaBancariaFilter]
+
+    # A ordenação padrão do modelo (`-dt_recebimento`) não existe na fatura
+    # listada: as contas a receber saem por vencimento.
+    ordering = ['dt_vencimento', 'id']
 
     list_per_page = 99
+
+    # ------------------------------------------------------------------
+    # CONJUNTO DE TRABALHO: faturas finalizadas com saldo
+    # ------------------------------------------------------------------
+    def faturas_pendentes(self, request):
+        """Faturas finalizadas, ativas, do estabelecimento da sessão.
+
+        É a base da listagem: cada linha é uma fatura em que o usuário pode
+        lançar a baixa. O padrão recorta pelo VENCIMENTO DO MÊS ATUAL (a
+        conta a receber do mês); os filtros laterais/da barra superior podem
+        ampliar (vencidas, a vencer, outros meses) — e o filtro "Saldo"
+        decide entre com/sem saldo (o padrão traz AMBAS: uma fatura já
+        parcialmente baixada ainda pode receber outra baixa).
+        """
+        hoje = timezone.localdate()
+        base = {'faturado': True}
+        # O status 'A' é o PADRÃO: vale enquanto o filtro lateral de status
+        # não pedir outro ('I' = inativas; aí a base não força e o filtro
+        # aplica a escolha do usuário).
+        if not any(chave.startswith('status') for chave in request.GET):
+            base['status'] = 'A'
+        # O recorte "vencimento do mês atual" é o PADRÃO: vale enquanto o
+        # usuário não pedir outro vencimento/competência (aí os filtros da
+        # URL mandam — inclusive "Todos", que limpa o recorte do mês).
+        filtro_periodo = any(chave.startswith(('dt_vencimento', 'competencia'))
+                             for chave in request.GET)
+        if not filtro_periodo:
+            base['dt_vencimento__year'] = hoje.year
+            base['dt_vencimento__month'] = hoje.month
+        faturas = Fatura.objects.filter(
+            **base).select_related('convenio', 'estabelecimento')
+
+        perfil = getattr(request.user, 'perfil', None)
+        if perfil is not None:
+            estabelecimento, liberado = self._estabelecimento_da_sessao(
+                request, perfil)
+            # O estabelecimento da sessão é o PADRÃO: quando o usuário filtra
+            # por outro (dropdown do topo / filtro lateral), a base NÃO
+            # restringe — o filtro escolhido prevalece. O recorte de segurança
+            # (só estabelecimentos liberados no perfil) fica no filtro.
+            filtro_estab = any(
+                chave.startswith('estabelecimento') for chave in request.GET)
+            if not filtro_estab:
+                if estabelecimento is not None and liberado:
+                    faturas = faturas.filter(estabelecimento=estabelecimento)
+                else:
+                    faturas = faturas.filter(
+                        estabelecimento__in=perfil.estabelecimento.all())
+        return faturas
+
+    def get_list_select_related(self, request):
+        return []
+
     # ------------------------------------------------------------------
     # DASHBOARD DE BAIXAS DE FATURA
     # ------------------------------------------------------------------
@@ -1452,7 +1844,8 @@ class BaixaFaturaAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, S
         mes = queryset.filter(
             dt_recebimento__year=hoje.year, dt_recebimento__month=hoje.month
         ).aggregate(t=Sum('valor_baixa'))['t'] or 0
-        faturas = queryset.values('fatura_id').distinct().count()
+        # M2M: a fatura baixada está no vínculo, não numa coluna da baixa.
+        faturas = queryset.values('fatura_baixada').distinct().count()
 
         return [
             {
@@ -1494,58 +1887,108 @@ class BaixaFaturaAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, S
 
         return queryset, use_distinct
 
-    def get_top_extra_filters(self, request):
-        """Baixas raramente têm status inativo: os atalhos são por recebimento."""
+    def get_top_dropdown_subfilters(self, request):
+        """Select de ESTABELECIMENTO no topo: o padrão é o estabelecimento da
+        sessão (ou os do perfil); aqui o usuário pode trocar/recortar mais."""
+        from admin_cadastros.models import Estabelecimento
+        perfil = getattr(request.user, 'perfil', None)
+        if perfil is None:
+            estabelecimentos = Estabelecimento.objects.filter(status='A')
+        else:
+            estabelecimentos = perfil.estabelecimento.filter(status='A')
+        opcoes = [(str(e.pk), str(e)) for e in estabelecimentos]
+        if not opcoes:
+            return []
+        atual = request.GET.get('estabelecimento__id__exact') or \
+            request.GET.get('estabelecimento')
+        return [{
+            'label': 'Estabelecimento',
+            'name': 'estabelecimento',
+            'value': atual or '',
+            'options': [{'value': '', 'label': 'Todos os meus'}] + [
+                {'value': valor, 'label': rotulo} for valor, rotulo in opcoes],
+        }]
+
+    def get_top_filter_presets(self, request):
+        """Presets da barra superior: VENCIMENTO (padrão = mês atual) e
+        competência. O "Venc. mês atual" é o padrão da listagem — quando nada
+        é filtrado, a base (`faturas_pendentes`) já recorta o mês."""
         hoje = timezone.localdate()
-        primeiro = hoje.replace(day=1)
+        ano, mes = hoje.year, hoje.month
+        if mes == 1:
+            mes_anterior = date(ano - 1, 12, 1)
+        else:
+            mes_anterior = date(ano, mes - 1, 1)
+        if mes == 12:
+            mes_proximo = date(ano + 1, 1, 1)
+        else:
+            mes_proximo = date(ano, mes + 1, 1)
+
+        def url_venc(**filtros):
+            params = self._query_params(request)
+            for chave in list(params.keys()):
+                if chave.startswith(('dt_vencimento__', 'competencia__')):
+                    params.pop(chave, None)
+            params.update(filtros)
+            query = params.urlencode()
+            return f'{request.path}?{query}' if query else request.path
+
+        def ativo(**filtros):
+            return all(request.GET.get(chave) == str(valor)
+                       for chave, valor in filtros.items())
+
+        sem_periodo = not any(
+            chave.startswith(('dt_vencimento', 'competencia'))
+            for chave in request.GET)
         return [
-            self.filtro_todos_status(request),
-            {
-                'label': 'Recebidas este mês',
-                'url': self._url_com(request, dt_recebimento__gte=primeiro.isoformat()),
-                'active': 'dt_recebimento__gte' in request.GET,
-                'icon': 'fa-calendar-days',
-            },
-            {
-                'label': 'Inativas',
-                'url': self._url_com(request, status='I'),
-                'active': request.GET.get('status') == 'I',
-                'icon': 'fa-ban',
-            },
+            {'label': f'Venc. {mes:02d}/{ano} (mês atual)',
+             'url': url_venc(),
+             'active': sem_periodo},
+            {'label': f'Venc. {mes_anterior:%m/%Y}',
+             'url': url_venc(dt_vencimento__year=mes_anterior.year,
+                             dt_vencimento__month=mes_anterior.month),
+             'active': ativo(dt_vencimento__year=mes_anterior.year,
+                             dt_vencimento__month=mes_anterior.month)},
+            {'label': f'Venc. {mes_proximo:%m/%Y}',
+             'url': url_venc(dt_vencimento__year=mes_proximo.year,
+                             dt_vencimento__month=mes_proximo.month),
+             'active': ativo(dt_vencimento__year=mes_proximo.year,
+                             dt_vencimento__month=mes_proximo.month)},
+            {'label': 'Vencidas',
+             'url': url_venc(dt_vencimento__lt=hoje.isoformat()),
+             'active': request.GET.get('dt_vencimento__lt') == hoje.isoformat()},
+            {'label': 'A vencer',
+             'url': url_venc(dt_vencimento__gte=hoje.isoformat()),
+             'active': request.GET.get('dt_vencimento__gte') == hoje.isoformat()},
+            {'label': f'Competência {mes:02d}/{ano}',
+             'url': url_venc(competencia__year=ano, competencia__month=mes),
+             'active': ativo(competencia__year=ano, competencia__month=mes)},
+            {'label': 'Competência anterior',
+             'url': url_venc(competencia__year=mes_anterior.year,
+                             competencia__month=mes_anterior.month),
+             'active': ativo(competencia__year=mes_anterior.year,
+                             competencia__month=mes_anterior.month)},
         ]
 
-    def get_top_dropdown_subfilters(self, request):
-        return super().get_top_dropdown_subfilters(request)
-
     def get_top_extra_filters(self, request):
-        """Baixa não tem pré-faturado nem saldo: atalhos por recebimento."""
-        hoje = timezone.localdate()
-        primeiro = hoje.replace(day=1)
+        """Atalhos de SALDO: o padrão traz com e sem saldo; os atalhos
+        restringem a contas em aberto (a receber) ou já baixadas."""
         return [
-            self.filtro_todos_status(request),
             {
-                'label': 'Somente Ativos',
-                'url': self._url_com(request, status='A'),
-                'active': request.GET.get('status') == 'A',
+                'label': 'Em aberto',
+                'url': self._url_com(request, saldo='aberto'),
+                'active': request.GET.get('saldo') == 'aberto',
+                'icon': 'fa-hourglass-half',
+            },
+            {
+                'label': 'Baixadas',
+                'url': self._url_com(request, saldo='zero'),
+                'active': request.GET.get('saldo') == 'zero',
                 'icon': 'fa-circle-check',
             },
-            {
-                'label': f'Recebidas em {hoje:%m/%Y}',
-                'url': self._url_com(request, dt_recebimento__gte=primeiro.isoformat()),
-                'active': 'dt_recebimento__gte' in request.GET,
-                'icon': 'fa-calendar-days',
-            },
-            {
-                'label': 'Últimos 7 dias',
-                'url': self._url_com(
-                    request,
-                    dt_recebimento__gte=(hoje - timedelta(days=7)).isoformat()),
-                'active': 'dt_recebimento__gte' in request.GET,
-                'icon': 'fa-calendar-week',
-            },
         ]
 
-    top_extra_filter_label = 'Status & Recebimento'
+    top_extra_filter_label = 'Saldo'
 
     def get_form(self, request, obj=None, **kwargs):
         # O super() já inclui a filtragem/inicialização de 'estabelecimento'
@@ -1559,16 +2002,33 @@ class BaixaFaturaAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, S
 
             estabelecimentos_permitidos = perfil_usuario.estabelecimento.all()
 
-            form_instance.fields['fatura'].queryset = Fatura.objects.filter(
-                valor_saldo__gt=0, status='A', faturado=True, estabelecimento__in=estabelecimentos_permitidos
-            )
+            # `fatura_baixada` é M2M: o queryset recorta as opções do campo.
+            # A fatura da própria baixa (ao editar) sai do recorte de saldo,
+            # senão o valor atual desapareceria da listagem. O campo do form
+            # é CLONE por instância (ver `BaixaFaturaForm.__init__`), então
+            # este recorte vale só para este form.
+            from django.db.models import Q
+            campo_fatura = form_instance.fields.get('fatura_baixada')
+            if campo_fatura is not None:
+                fatura_ids = [obj.pk_fatura_baixada()] if obj is not None else []
+                campo_fatura.queryset = Fatura.objects.filter(
+                    Q(valor_saldo__gt=0, status='A', faturado=True,
+                      estabelecimento__in=estabelecimentos_permitidos)
+                    | Q(pk__in=fatura_ids)
+                ).distinct()
+                # A fatura da própria baixa pode estar fora do recorte de
+                # saldo (já liquidada): mantê-la válida, senão o campo
+                # desabilitado falha com "não é uma das escolhas".
+                from admin_faturas.models import BaixaFatura as _BF
+                campo_fatura.queryset = _BF.queryset_faturas_baixadas(
+                    campo_fatura.queryset)
 
             form_instance.fields['transacao_financeira'].queryset = TransacaoFinanceira.objects.filter(
                 tipo='entrada', status='A'
             )
 
             form_instance.fields['competencia_bancaria'].queryset = CompetenciaBancaria.objects.filter(
-                dt_fechamento_competencia__isnull = True, status='A'
+                dt_fechamento_competencia__isnull=True, status='A'
             )
 
         # Encadeia em vez de substituir o __init__ aplicado pelo mixin.
@@ -1576,6 +2036,106 @@ class BaixaFaturaAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, S
 
         return form
 
+    # ------------------------------------------------------------------
+    # LISTAGEM EDITÁVEL: um form de baixa (nova) por fatura listada
+    # ------------------------------------------------------------------
+    def get_changelist_form(self, request, **kwargs):
+        """Form de cada linha da listagem.
+
+        A listagem mostra faturas ainda não baixadas: cada linha CRIA uma
+        baixa, então o form é sempre um `BaixaFatura` novo apontando para a
+        fatura da linha (montado em `ChangeListBaixaFatura`).
+
+        Usa o próprio `BaixaFaturaForm`: o form genérico do changelist
+        (`modelform_factory` sobre `get_fields()`) desabilita a cópia da
+        fatura mas ela ainda apareceria como obrigatória no formset.
+        """
+        return BaixaFaturaForm
+
+    def _changelist_baixas(self, request):
+        """ChangeList da listagem atual (para reaproveitar os forms)."""
+        from .changelist_editavel import ChangeListBaixaFatura
+
+        list_display = self.get_list_display(request)
+        return ChangeListBaixaFatura(
+            request, self.model, list_display,
+            self.get_list_display_links(request, list_display),
+            self.get_list_filter(request), self.date_hierarchy,
+            self.get_search_fields(request), self.get_list_select_related(request),
+            self.list_per_page, self.list_max_show_all,
+            tuple(self.list_editable), self, self.get_sortable_by(request),
+            self.search_help_text)
+
+    def salvar_baixas_da_listagem(self, request):
+        """Cria a baixa de cada linha preenchida. Retorna os forms inválidos."""
+        if request.method != 'POST' or '_save' not in request.POST:
+            return []
+
+        changelist = self._changelist_baixas(request)
+        forms = changelist.forms_das_faturas()
+
+        # Só a linha efetivamente ALTERADA pelo usuário é validada/salva — o
+        # restante do POST (todas as demais linhas da listagem) é ignorado:
+        # `has_changed()` do Django compara o POST com o `initial` de cada
+        # form, então só a linha digitada entra no loop.
+        preenchidos = [(form, fatura)
+                       for form, fatura in zip(forms,
+                                               changelist.faturas_pendentes())
+                       if form.has_changed()]
+
+        invalidos = []
+        criadas = 0
+        for form, fatura in preenchidos:
+            if not form.is_valid():
+                invalidos.append(form)
+                continue
+
+            # A fatura vem do form (`_post_clean`); as demais colunas da
+            # baixa que não estão na listagem são completadas aqui.
+            obj = form.save(commit=False)
+            object.__setattr__(obj, 'fatura_baixada_ids', [fatura.pk])
+            obj.estabelecimento_baixa = fatura.estabelecimento
+            obj.us_registro_baixa = request.user
+            obj.status = 'A'
+            try:
+                obj.save()
+            except ValidationError as erro:
+                # Validação do MODELO (ex.: valor da baixa acima do saldo):
+                # vira erro da linha (o form fica destacado), não um 500.
+                if hasattr(erro, 'message_dict'):
+                    for campo, msgs in erro.message_dict.items():
+                        if campo in form.fields:
+                            form.add_error(campo, msgs)
+                        else:
+                            form.add_error(None, msgs)
+                else:
+                    form.add_error(None, erro.messages)
+                invalidos.append(form)
+                continue
+            criadas += 1
+
+        if criadas:
+            messages.success(
+                request, f'{criadas} baixa(s) registrada(s) com sucesso.')
+        if invalidos:
+            messages.error(
+                request, f'{len(invalidos)} linha(s) com erro. Corrija os '
+                         'campos destacados e salve novamente.')
+        return invalidos
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = dict(extra_context or {})
+        # Só é POST de EDIÇÃO EM LINHA quando '_save' está no POST (o botão
+        # "Salvar" da listagem). POST de AÇÃO em lote (`action`) e de busca
+        # avançada seguem o fluxo normal do Django (aqui um redirect cedo
+        # desviava as ações em lote — elas nunca eram executadas).
+        if request.method == 'POST' and '_save' in request.POST:
+            extra_context['baixa_forms_com_erro'] = \
+                self.salvar_baixas_da_listagem(request)
+            # Depois de salvar, recarrega a lista (as baixas feitas saem dela).
+            if not extra_context['baixa_forms_com_erro']:
+                return redirect(request.get_full_path())
+        return super().changelist_view(request, extra_context)
 
     def save_model(self, request, obj, form, change):
         """
@@ -1589,10 +2149,43 @@ class BaixaFaturaAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, S
             obj.us_atualizacao = request.user
             obj.dt_atualizacao = timezone.now()
 
-        if obj.fatura:
-            obj.estabelecimento = obj.fatura.estabelecimento
+        fatura = form.cleaned_data.get('fatura_baixada') \
+            if hasattr(form, 'cleaned_data') else None
+        if fatura:
+            # O vínculo (`fatura_baixada_ids`) é gravado pelo
+            # `BaixaFatura.save()` — a FK herdada `fatura` SÓ é usada pelo
+            # `__setattr__` para espelhar o vínculo.
+            obj.fatura = fatura[0]
+            obj.estabelecimento_baixa = fatura[0].estabelecimento
 
         super().save_model(request, obj, form, change)
+
+    def save_related(self, request, form, formsets, change):
+        """Grava o vínculo M2M (`fatura_baixada`) junto com a baixa.
+
+        O `save_m2m()` do ModelForm tentaria gravar o vínculo com a instância
+        SEM pk (`save_model` grava via `save(commit=False)`) — e levantaria
+        "Cannot add ... the value for field 'fatura' is None". O vínculo já
+        foi gravado no `BaixaFatura.save()` (via `fatura_baixada_ids`),
+        então aqui só REAFIRMA (agora com a baixa já no banco).
+        """
+        # O `save_m2m()` gerado pelo ModelForm chama
+        # `fatura_baixada.set(None)` para instâncias novas — com a baixa sem
+        # pk, isso explode. Neutraliza (o vínculo já está no banco, gravado
+        # pelo `BaixaFatura.save()`).
+        def _save_m2m_seguro():
+            if form.instance.pk:
+                faturas = (form.cleaned_data or {}).get('fatura_baixada')
+                if faturas:
+                    # Através de PKs: a PK da Fatura é o parent link
+                    # `prefatura_ptr` (OneToOneField) e o `get_foreign_
+                    # related_value` do through devolve None para instâncias
+                    # em memória (o `fatura` FK herdado não existe na fatura).
+                    form.instance.fatura_baixada.set(
+                        [f.pk for f in faturas])
+        form.save_m2m = _save_m2m_seguro
+        super().save_related(request, form, formsets, change)
+        _save_m2m_seguro()
 
 
 # Registro dos admins no Django

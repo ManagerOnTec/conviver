@@ -567,8 +567,16 @@ class CustomPermissionRequiredMixin(UserPassesTestMixin, PermissionRequiredMixin
             </script>
             '''
             return HttpResponse(js, content_type='text/html')
-        else:
-            raise PermissionDenied
+        # Usuário LOGADO sem permissão: mensagem amigável (a página branca
+        # "403 Forbidden" do Django confundia — parecia erro do sistema).
+        js = '''
+        <script>
+            alert("Voce nao tem permissao para acessar esta tela. " +
+                  "Solicite acesso ao administrador do sistema.");
+            window.location.href = "/";
+        </script>
+        '''
+        return HttpResponse(js, content_type='text/html', status=200)
 
     def dispatch(self, request, *args, **kwargs):
         if not self.request.user.is_authenticated:

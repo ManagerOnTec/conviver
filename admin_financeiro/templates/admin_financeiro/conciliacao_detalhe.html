@@ -1,0 +1,114 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% block title %}Conciliação – {{ competencia }}{% endblock %}
+
+{% block breadcrumbs %}
+  {# Breadcrumb PADRÃO do app Financeiro (Home > Financeiro > tela). #}
+  {% include "admin/includes/breadcrumbs.html" %}
+{% endblock %}
+
+{% block content %}
+<h1>Conciliação — {{ competencia }}</h1>
+
+<div class="module" style="padding: 14px;">
+  <h2>Resumo</h2>
+  <table style="width:auto;">
+    <tr><th>Extrato</th><td>{{ extrato.get_tipo_display }} · {{ extrato.dt_inicio|date:"d/m/Y" }} a {{ extrato.dt_fim|date:"d/m/Y" }}</td></tr>
+    <tr><th>Linhas</th><td>{{ extrato.linhas.count }} · pendentes: <strong>{{ pendentes }}</strong></td></tr>
+    <tr><th>Saldo do extrato (banco)</th><td>R$ {{ conciliacao.saldo_informado }}</td></tr>
+    <tr><th>Saldo do sistema</th><td>R$ {{ conciliacao.saldo_calculado }}</td></tr>
+    <tr><th>Divergência</th><td>
+      {% if conciliacao.divergencia == 0 %}
+        <span style="color:#15803d; font-weight:600;">✓ Sem divergência</span>
+      {% else %}
+        <span style="color:#b91c1c; font-weight:600;">R$ {{ conciliacao.divergencia }}</span>
+      {% endif %}
+    </td></tr>
+    <tr><th>Status</th><td>
+      {% if conciliacao.finalizada %}<strong style="color:#15803d;">FINALIZADA</strong> — a competência pode ser fechada
+      {% else %}Em andamento{% endif %}
+    </td></tr>
+  </table>
+</div>
+
+{% if conciliacao.finalizada %}
+<div class="module" style="padding:12px; margin-top:10px;">
+  <h2>Histórico da conciliação finalizada</h2>
+  <p>
+    Finalizada em <strong>{{ conciliacao.dt_conciliacao|date:"d/m/Y H:i" }}</strong>
+    por <strong>{{ conciliacao.us_registro }}</strong>.
+    {% if conciliacao.dt_conciliacao %}
+      Todas as linhas do extrato foram conferidas
+      ({{ linhas.count }} linha(s)) e o saldo bateu com o banco.
+    {% endif %}
+  </p>
+  <p class="help">
+    O que foi feito, linha a linha, está na tabela abaixo (somente leitura).
+    Se precisar corrigir algo, reabra a conciliação abaixo (a competência
+    não pode estar fechada).
+  </p>
+</div>
+{% endif %}
+<form method="post">
+  {% csrf_token %}
+  {% if not conciliacao.finalizada %}
+  <div class="submit-row" style="border:none; justify-content:flex-start; gap:8px; flex-wrap:wrap;">
+    <button type="submit" name="acao" value="sugerir" class="button">Sugerir conciliações (data + valor)</button>
+    <button type="submit" name="acao" value="lancar" class="button">Lançar movimentos das linhas pendentes</button>
+    <button type="submit" name="acao" value="conciliar" class="default">Conciliar selecionadas</button>
+    <button type="submit" name="acao" value="ignorar">Ignorar selecionadas</button>
+    <button type="submit" name="acao" value="finalizar">Finalizar conciliação</button>
+  </div>
+  {% endif %}
+
+  <div class="results">
+    <table id="conciliacao">
+      <thead>
+        <tr>
+          <th><input type="checkbox" onclick="document.querySelectorAll('input.linecheck').forEach(function(c){c.checked=this.checked});"></th>
+          <th>Data</th><th>Valor</th><th>Descrição</th><th>Documento</th>
+          <th>Status</th><th>Movimento conciliado</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for linha in linhas %}
+        <tr>
+          <td>{% if not conciliacao.finalizada %}<input type="checkbox" class="linecheck" name="linhas" value="{{ linha.pk }}">{% else %}—{% endif %}</td>
+          <td>{{ linha.dt_lancamento|date:"d/m/Y" }}</td>
+          <td style="text-align:right; {% if linha.valor < 0 %}color:#b91c1c{% else %}color:#15803d{% endif %}">
+            R$ {{ linha.valor }}
+          </td>
+          <td>{{ linha.descricao }}</td>
+          <td>{{ linha.documento|default_if_none:"" }}</td>
+          <td>{{ linha.get_status_display }}</td>
+          <td>
+            {% if linha.movimento_bancario %}
+              ✓ <a href="{% url 'admin:admin_financeiro_movimentobancario_change' linha.movimento_bancario.pk %}">
+                Mov. #{{ linha.movimento_bancario.pk }}
+              </a>
+            {% else %}
+              <select name="movimento_{{ linha.pk }}">
+                <option value="">— vincular a um movimento —</option>
+                {% for mov in movimentos %}
+                  <option value="{{ mov.pk }}">
+                    #{{ mov.pk }} · {{ mov.dt_movimento|date:"d/m/Y" }} ·
+                    E: {{ mov.valor_entrada|default_if_none:"-" }} /
+                    S: {{ mov.valor_saida|default_if_none:"-" }} ·
+                    {{ mov.observacao|default_if_none:""|truncatechars:28 }}
+                  </option>
+                {% endfor %}
+              </select>
+            {% endif %}
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7">Nenhuma linha importada.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</form>
+<div style="margin-top:14px;">
+  <a href="/conciliacao-bancaria/?competencia={{ competencia.pk }}">← Voltar</a>
+</div>
+{% endblock %}

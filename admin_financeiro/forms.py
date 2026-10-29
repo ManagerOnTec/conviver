@@ -10,19 +10,35 @@ class CompetenciaBancariaForm(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
         controle_bancario = cleaned_data.get('controle_bancario')
-        dt_fechamento_competencia = cleaned_data.get('dt_fechamento_competencia')
+        dt_fechamento = cleaned_data.get('dt_fechamento_competencia')
 
-        # Verifica se está tentando abrir um novo saldo sem uma data de fechamento
-        if not dt_fechamento_competencia:
-            competencia_bancaria = CompetenciaBancaria.objects.filter(
+        # Uma competência ABERTA por BANCO (controle bancário = conta): para
+        # abrir uma nova é obrigatório FECHAR a anterior DESTE banco. Bancos
+        # diferentes têm competências abertas independentes.
+        if not dt_fechamento and controle_bancario is not None:
+            abertas = CompetenciaBancaria.objects.filter(
                 controle_bancario=controle_bancario,
-                dt_fechamento_competencia__isnull=True
-            ).exclude(pk=self.instance.pk)  # Excluir o saldo atual no caso de edição
-
-            if competencia_bancaria.exists():
+                dt_fechamento_competencia__isnull=True,
+            ).exclude(pk=self.instance.pk)
+            if abertas.exists():
+                aberta = abertas.first()
                 raise ValidationError(
-                    'Já existe uma competência aberta para este controle bancário. Feche a competência antes de abrir uma nova.'
-                )
+                    'Já existe a competência "%s" ABERTA para o banco %s. '
+                    'Feche-a (com a conciliação finalizada) antes de abrir '
+                    'uma nova competência para este mesmo banco.'
+                    % (aberta.descricao, controle_bancario.conta))
+
+        # Fechar pela tela exige a conciliação finalizada e sem divergência.
+        if dt_fechamento and self.instance.pk:
+            conc = getattr(self.instance, 'conciliacao', None)
+            pendente = conc is None or not conc.finalizada \
+                or abs(conc.divergencia or 0) >= 0.01
+            if pendente:
+                raise ValidationError(
+                    'Para fechar a competência é necessário finalizar a '
+                    'CONCILIAÇÃO BANCÁRIA (importar o extrato e conciliar) '
+                    'sem divergência de saldo. Use o menu '
+                    '“4. Conciliação Bancária”.')
 
         return cleaned_data
 
