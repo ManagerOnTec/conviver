@@ -226,6 +226,19 @@ class BaixaFaturaForm(forms.ModelForm):
         type(self)._meta = BaixaFaturaForm._meta
         instancia = self.instance
 
+        # Baixa de fatura é uma ENTRADA NO BANCO: o campo de transação só
+        # oferece transações de entrada que movimentam banco (o recorte vale
+        # para o admin, o inline e a listagem editável).
+        campo_transacao = self.fields.get('transacao_financeira')
+        if campo_transacao is not None:
+            try:
+                from admin_cadastros_financeiros.models import \
+                    TransacaoFinanceira
+                campo_transacao.queryset = campo_transacao.queryset.filter(
+                    tipo='entrada', movimento='banco', status='A')
+            except Exception:
+                pass  # nunca derruba o form por causa do recorte
+
         # Na listagem, a instância é NOVA (sem pk) e o `fatura_origem` vem do
         # ChangeList; no admin/inline, a fatura sai do próprio vínculo.
         if self._fatura_origem is None and instancia is not None:

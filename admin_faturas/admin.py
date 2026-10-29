@@ -1734,6 +1734,12 @@ class BaixaFaturaAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, S
 
     actions = ['export_as_xls']
 
+    # Recorte da BUSCA do select2 de transação: baixa de fatura é ENTRADA NO
+    # BANCO (o queryset do form já recorta; isto recorta a busca do widget).
+    select2_querysets = {
+        'transacao_financeira': TransacaoFinanceira.objects.filter(
+            tipo='entrada', movimento='banco', status='A')}
+
     # O template da listagem editável lê este atributo.
     selecao_desabilitada = False
 
@@ -2023,9 +2029,11 @@ class BaixaFaturaAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, S
                 campo_fatura.queryset = _BF.queryset_faturas_baixadas(
                     campo_fatura.queryset)
 
-            form_instance.fields['transacao_financeira'].queryset = TransacaoFinanceira.objects.filter(
-                tipo='entrada', status='A'
-            )
+            # Baixa de fatura é sempre uma ENTRADA NO BANCO: transações de
+            # caixa (ou 'nenhum') não entram no recorte.
+            form_instance.fields['transacao_financeira'].queryset = (
+                TransacaoFinanceira.objects.filter(
+                    tipo='entrada', movimento='banco', status='A'))
 
             form_instance.fields['competencia_bancaria'].queryset = CompetenciaBancaria.objects.filter(
                 dt_fechamento_competencia__isnull=True, status='A'

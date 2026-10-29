@@ -1,6 +1,6 @@
 from django.contrib import admin
 from .models import Banco, Agencia, Conta, TransacaoFinanceira
-from dominios.utils import ExportToXLSMixin
+from dominios.utils import ExportToXLSMixin, Select2AdminModelAdminMixin
 
 
 @admin.register(Banco)
@@ -22,7 +22,10 @@ class ContaAdmin(admin.ModelAdmin):
 
 
 @admin.register(TransacaoFinanceira)
-class TransacaoFinanceiraAdmin(ExportToXLSMixin, admin.ModelAdmin):
+class TransacaoFinanceiraAdmin(Select2AdminModelAdminMixin, ExportToXLSMixin,
+                               admin.ModelAdmin):
+    # Precisa do mixin: é o admin de DESTINO do select2 de transação usado em
+    # faturas/pagamentos, e é aqui que o recorte do campo é aplicado na busca.
     list_display = ['transacao_financeira', 'tipo', 'movimento', ]
     # Necessário para o select2 de digitação (autocomplete) nas Baixas de Fatura.
     search_fields = ['transacao_financeira', 'tipo',]

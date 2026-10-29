@@ -579,7 +579,7 @@ class MovimentoBancarioAdmin(CompetenciaAbertaMixin, FaturasDashboardMixin, Expo
     # lançamento manual o usuário descreve (o sistema prefixa "Lançamento
     # manual"); nos movimentos de baixa a `origem` é gravada automaticamente.
     fields = ['competencia_bancaria', 'transacao_financeira', 'valor_entrada',
-              'valor_saida', 'observacao', 'status']
+              'valor_saida', 'competencia_caixa', 'observacao', 'status']
 
     list_display = [
         'competencia_bancaria', 'dt_movimento', 'transacao_financeira',
@@ -645,13 +645,27 @@ class MovimentoBancarioAdmin(CompetenciaAbertaMixin, FaturasDashboardMixin, Expo
         form = super().get_form(request, obj, **kwargs)
 
         def form_init(form_instance, *args, **kwargs):
-            form_instance.fields['transacao_financeira'].queryset = TransacaoFinanceira.objects.filter(
-                movimento='banco', status='A'
-            )
+            # Movimento bancário aceita transações de BANCO e as de
+            # TRANSFERÊNCIA (depósito/saque), que geram o lado do banco.
+            form_instance.fields['transacao_financeira'].queryset = (
+                TransacaoFinanceira.objects.filter(
+                    status='A',
+                    movimento__in=['banco', 'deposito', 'saque']))
 
             form_instance.fields['competencia_bancaria'].queryset = CompetenciaBancaria.objects.filter(
                 dt_fechamento_competencia__isnull = True, status='A'
             )
+
+            # SAQUE: o dinheiro sai do banco e entra no caixa escolhido aqui.
+            campo_caixa = form_instance.fields.get('competencia_caixa')
+            if campo_caixa is not None:
+                from admin_tesouraria.models import CompetenciaCaixa
+                campo_caixa.queryset = CompetenciaCaixa.objects.filter(
+                    dt_fechamento__isnull=True, status='A')
+                campo_caixa.help_text = (
+                    'SAQUE: o dinheiro sai do banco e ENTRA neste caixa '
+                    '(a entrada é gerada automaticamente). '
+                    'Depósito: deixe em branco.')
 
         # Encadeia em vez de substituir o __init__ aplicado pelo mixin.
         chain_form_init(form, form_init)

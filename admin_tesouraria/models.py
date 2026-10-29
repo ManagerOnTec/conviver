@@ -324,6 +324,10 @@ class MovimentoCaixa(models.Model):
         return (self.valor_entrada or 0) - (self.valor_saida or 0)
     valor.short_description = 'Valor'
 
+    # Lançamento que o SISTEMA cria (par de uma transferência do outro app):
+    # não passa pelas regras de "onde deve ser digitado".
+    _estado_automatico = False
+
     def clean(self):
         """Validação do lançamento (tipo, valores, período e banco)."""
         from django.core.exceptions import ValidationError as VE
@@ -357,8 +361,32 @@ class MovimentoCaixa(models.Model):
         transacao = self.transacao_financeira
         if transacao is not None and not _transacao_movimenta_caixa(transacao):
             erros['transacao_financeira'] = (
-                'Escolha uma transação que MOVIMENTE CAIXA (cadastre a '
-                'transação com "movimenta caixa" marcado).')
+                'Escolha uma transação que MOVIMENTE CAIXA (ou de '
+                'DEPÓSITO/SAQUE, que movimentam caixa e banco).')
+        # 4b) a ORIGEM do movimento tem de casar com o MOVIMENTO da transação.
+        #
+        # REGRA DO SENTIDO: a transferência é lançada no lado de ORIGEM do
+        # dinheiro e o sistema cria o lado de destino.
+        #   • depósito (caixa → banco): lança no CAIXA (saída) e entra no banco;
+        #   • saque (banco → caixa):    lança no BANCO (saída) e entra no caixa.
+        # Por isso o CAIXA só aceita `deposito` como transferência digitada; o
+        # `saque_banco` que aparece aqui é o par criado automaticamente.
+        if transacao is not None:
+            mov = (getattr(transacao, 'movimento', '') or '').lower()
+            if mov == 'saque' and self.origem == 'saque_banco' and not \
+                    self._estado_automatico:
+                erros['origem'] = (
+                    'Saque deve ser lançado no BANCO (é lá que o dinheiro sai). '
+                    'O sistema cria a entrada neste caixa automaticamente.')
+            elif mov == 'deposito' and self.origem != 'deposito_banco':
+                erros['origem'] = (
+                    'A transação é de DEPÓSITO (caixa → banco): selecione a '
+                    'origem “Depósito em banco”.')
+            elif self.origem in ('deposito_banco', 'saque_banco') and \
+                    mov not in ('deposito', 'saque'):
+                erros['transacao_financeira'] = (
+                    'Para depósito/saque escolha uma transação cadastrada como '
+                    '“Depósito (Caixa → Banco)” ou “Saque (Banco → Caixa)”.')
         # 5) transferência com banco exige competência bancária ABERTA
         if self.origem in ('deposito_banco', 'saque_banco'):
             banco = self.competencia_bancaria
@@ -383,6 +411,10 @@ class MovimentoCaixa(models.Model):
                                     .estabelecimento)
             if self.dt_movimento is None:
                 self.dt_movimento = timezone.localdate()
+        # O par criado AUTOMATICAMENTE pelo banco (entrada do saque) é aceito
+        # mesmo vindo de uma transação de 'saque'.
+        object.__setattr__(self, '_estado_automatico',
+                           bool(kwargs.pop('_automatico', False)))
         self.clean()
         super().save(*args, **kwargs)
         self.competencia_caixa.recalcular_saldos()
@@ -402,24 +434,33 @@ class MovimentoCaixa(models.Model):
 
 
 def _transacao_movimenta_caixa(transacao):
-    """A transação financeira é de CAIXA?
+    """A transação pode ser usada em um movimento de CAIXA?
 
-    Usa o campo `movimento` do cadastro de Transação Financeira: 'caixa'.
-    (Depósito/saque banco⇄caixa pode ser movimentado por uma transação de
-    caixa; o lado do banco herda a mesma transação.)
+    Vale para `movimento='caixa'` (caixa puro) e também para as
+    TRANSFERÊNCIAS `deposito` (caixa → banco, saída do caixa) e `saque`
+    (banco → caixa, entrada no caixa) — nesses casos o lado BANCO é gerado
+    automaticamente e usa a mesma transação.
     """
-    return (getattr(transacao, 'movimento', '') or '').lower() == 'caixa'
+    movimento = (getattr(transacao, 'movimento', '') or '').lower()
+    return movimento in ('caixa', 'deposito', 'saque')
 
 
 def _transacao_movimenta_banco(transacao):
-    return (getattr(transacao, 'movimento', '') or '').lower() == 'banco'
+    movimento = (getattr(transacao, 'movimento', '') or '').lower()
+    return movimento in ('banco', 'deposito', 'saque')
 
 
 def _sincronizar_banco(movimento_caixa):
-    """Cria o lançamento do lado BANCO da transferência (e vice-versa).
+    """Cria/atualiza o lançamento do lado BANCO da transferência.
 
-    Depósito: SAÍDA do caixa → ENTRADA no banco.
-    Saque:    ENTRADA no caixa → SAÍDA no banco.
+    O sentido vem do `origem` do movimento:
+
+    - `deposito_banco` (caixa → banco): a SAÍDA é no caixa; no banco entra
+      dinheiro → gera **ENTRADA** no banco.
+    - `saque_banco` (banco → caixa): a SAÍDA é no banco; o caixa recebe a
+      ENTRADA automaticamente → gera **SAÍDA** no banco.
+
+    O par compartilha `transferencia_id` (excluir um apaga o outro).
     """
     from admin_financeiro.models import MovimentoBancario
     from uuid import uuid4
@@ -433,15 +474,17 @@ def _sincronizar_banco(movimento_caixa):
             transferencia_id=movimento_caixa.transferencia_id)
     deposito = movimento_caixa.origem == 'deposito_banco'
     valor = movimento_caixa.valor_entrada or movimento_caixa.valor_saida
-    descricao = (f'{"Depósito" if deposito else "Saque"} em dinheiro '
-                 f'({movimento_caixa.competencia_caixa.controle_caixa.descricao})')
-    # já existe o par desta transferência?
+    descricao = (
+        f'{"Depósito" if deposito else "Saque"} em dinheiro '
+        f'({movimento_caixa.competencia_caixa.controle_caixa.descricao})')
+    # Já existe o par desta transferência?
     existente = MovimentoBancario.objects.filter(
         transferencia_id=movimento_caixa.transferencia_id).first()
     dados = dict(
         competencia_bancaria=banco,
         transacao_financeira=movimento_caixa.transacao_financeira,
         dt_movimento=movimento_caixa.dt_movimento,
+        # Depósito: entra no banco. Saque: sai do banco.
         valor_entrada=valor if deposito else None,
         valor_saida=None if deposito else valor,
         observacao=descricao[:250],
@@ -451,9 +494,11 @@ def _sincronizar_banco(movimento_caixa):
         status='A',
         transferencia_id=movimento_caixa.transferencia_id,
     )
+    # `_automatico=True`: este é o PAR da transferência — não pode gerar de
+    # volta o lançamento do caixa (loop infinito).
     if existente is not None:
         for campo, val in dados.items():
             setattr(existente, campo, val)
-        existente.save()
+        existente.save(_automatico=True)
     else:
-        MovimentoBancario.objects.create(**dados)
+        MovimentoBancario(**dados).save(_automatico=True)

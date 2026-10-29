@@ -195,6 +195,15 @@ class MovimentoBancario(models.Model):
     transferencia_id = models.CharField(
         max_length=36, blank=True, null=True, editable=False,
         verbose_name='ID da transferência', db_index=True)
+
+    # SAQUE lançado a partir do BANCO: informa de qual CAIXA entra o dinheiro
+    # (a entrada no caixa é gerada automaticamente).
+    competencia_caixa = models.ForeignKey(
+        'admin_tesouraria.CompetenciaCaixa', on_delete=models.PROTECT,
+        blank=True, null=True, related_name='movimentos_banco_saque',
+        verbose_name='Caixa de destino (saque)',
+        help_text='Saque: o dinheiro sai do banco e entra neste caixa '
+                  '(competência de caixa aberta).')
     
  
     us_registro = models.ForeignKey(
@@ -294,6 +303,35 @@ class MovimentoBancario(models.Model):
                  f'da competência "{comp.descricao}" (aberta em '
                  f'{comp.dt_abertura_competencia:%d/%m/%Y}).'})
 
+        # TRANSFERÊNCIA pelo lado do BANCO:
+        #  - saque: exige o CAIXA de destino (entrada gerada nele);
+        #  - depósito lançado no banco (entrada): não usa o campo de caixa.
+        transacao = self.transacao_financeira
+        movimento_transacao = (getattr(transacao, 'movimento', '') or '').lower()
+        if self.competencia_caixa_id:
+            caixa = self.competencia_caixa
+            if caixa.dt_fechamento:
+                raise ValidationError(
+                    {'competencia_caixa':
+                     f'O caixa "{caixa}" está FECHADO: a entrada do saque '
+                     'não pode ser lançada nele.'})
+            if not caixa.validar_periodo(self.dt_movimento):
+                raise ValidationError(
+                    {'competencia_caixa':
+                     'A data do saque está fora do período da competência de '
+                     'caixa escolhida.'})
+        if movimento_transacao == 'saque' and not self.competencia_caixa_id:
+            raise ValidationError(
+                {'competencia_caixa':
+                 'Saque do banco: informe o CAIXA que recebe o dinheiro '
+                 '(competência de caixa aberta). A entrada no caixa é gerada '
+                 'automaticamente.'})
+        if movimento_transacao == 'deposito' and (self.valor_saida or 0) > 0:
+            raise ValidationError(
+                {'valor_saida':
+                 'Depósito em banco é ENTRADA no banco (o dinheiro sai do '
+                 'caixa).'})
+
     def save(self, *args, **kwargs):
         # Atribui o estabelecimento com base na competência bancária
         if self.competencia_bancaria:
@@ -302,18 +340,83 @@ class MovimentoBancario(models.Model):
             raise ValueError('Competência bancária é obrigatória.')
         if self.dt_movimento is None:
             self.dt_movimento = timezone.localdate()
+        # `_automatico` = este lançamento é o PAR criado pelo caixa (depósito
+        # ou saque do outro lado): não gera de volta, senão vira loop.
+        automatico = bool(kwargs.pop('_automatico', False))
         self._validar_competencia()
         super().save(*args, **kwargs)
         # SALDOS da competência alimentados pelos movimentos (entradas − saídas).
         self.competencia_bancaria.recalcular_saldos()
+        # SAQUE lançado no BANCO: gera a ENTRADA no caixa escolhido.
+        if self.competencia_caixa_id and not automatico:
+            _sincronizar_caixa_do_saque(self)
 
     def delete(self, *args, **kwargs):
         competencia = self.competencia_bancaria
+        # Apaga o par CAIXA do saque (se houver) e recompõe o saldo dele.
+        if self.transferencia_id:
+            try:
+                from admin_tesouraria.models import MovimentoCaixa
+                pares = list(MovimentoCaixa.objects.filter(
+                    transferencia_id=self.transferencia_id))
+                competencias_caixa = {p.competencia_caixa for p in pares}
+                for par in pares:
+                    # O `delete()` do modelo recalcula o saldo do caixa.
+                    par.delete()
+                for comp_caixa in competencias_caixa:
+                    comp_caixa.recalcular_saldos()
+            except Exception:
+                pass
         super().delete(*args, **kwargs)
         competencia.recalcular_saldos()
 
     def __str__(self):
         return f"{self.transacao_financeira} Entrada: {self.valor_entrada} Saída: {self.valor_saida}"
+
+
+def _sincronizar_caixa_do_saque(movimento_banco):
+    """SAQUE lançado no BANCO → cria/atualiza a ENTRADA no caixa.
+
+    O banco é a origem do dinheiro: a saída já está nele; aqui é gerada a
+    ENTRADA na competência de caixa informada, com o mesmo
+    `transferencia_id` (excluir um apaga o outro).
+    """
+    from uuid import uuid4
+    from admin_tesouraria.models import CompetenciaCaixa, MovimentoCaixa
+
+    caixa = movimento_banco.competencia_caixa
+    if caixa is None:
+        return
+    if not movimento_banco.transferencia_id:
+        movimento_banco.transferencia_id = str(uuid4())
+        MovimentoBancario.objects.filter(pk=movimento_banco.pk).update(
+            transferencia_id=movimento_banco.transferencia_id)
+    valor = (movimento_banco.valor_saida or movimento_banco.valor_entrada or 0)
+    descricao = (f'Saque do banco ({movimento_banco.competencia_bancaria.descricao})')
+    existente = MovimentoCaixa.objects.filter(
+        transferencia_id=movimento_banco.transferencia_id).first()
+    dados = dict(
+        competencia_caixa=caixa,
+        dt_movimento=movimento_banco.dt_movimento,
+        tipo='E',
+        origem='saque_banco',
+        valor_entrada=valor,
+        valor_saida=None,
+        transacao_financeira=movimento_banco.transacao_financeira,
+        competencia_bancaria=movimento_banco.competencia_bancaria,
+        observacao=descricao[:250],
+        us_registro_id=movimento_banco.us_registro_id,
+        estabelecimento_id=caixa.estabelecimento_id,
+        status='A',
+        transferencia_id=movimento_banco.transferencia_id,
+    )
+    if existente is not None:
+        for campo, val in dados.items():
+            setattr(existente, campo, val)
+        existente.save(_automatico=True)
+    else:
+        MovimentoCaixa(**dados).save(_automatico=True)
+    caixa.recalcular_saldos()
 
 
 # ===========================================================================

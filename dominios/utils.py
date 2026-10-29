@@ -229,6 +229,18 @@ class Select2AdminModelAdminMixin:
         )
         return formfield
 
+    def register_select2_queryset(self, nome_campo, queryset):
+        """Declara o recorte de um campo do PRÓPRIO ModelAdmin.
+
+        Uso: no `get_form` (ou no `__init__` do form) do admin que hospeda o
+        campo, registre o queryset real usado na validação — a busca do
+        select2 (AutocompleteJsonView) passa a respeitá-lo, mesmo quando o
+        mesmo campo é usado em outro admin com outro recorte.
+        """
+        if self._select2_querysets is None:
+            self._select2_querysets = {}
+        self._select2_querysets[nome_campo] = queryset
+
     def get_search_results(self, request, queryset, search_term):
         """Aplica o recorte do campo também na busca do select2.
 
@@ -245,19 +257,51 @@ class Select2AdminModelAdminMixin:
             # Busca normal do changelist: sem recorte.
             return resultados, may_have_duplicates
 
-        fonte = request.GET.get('source_model')
+        # O `AutocompleteJsonView` manda `app_label` + `model_name` (o
+        # `source_model` é o nome usado por outros widgets/versões).
+        fonte = (request.GET.get('source_model')
+                 or request.GET.get('model_name'))
+        recorte = None
         if fonte == self.model._meta.model_name:
             # O select2 pertence a um campo DESTE próprio ModelAdmin
             # (ex.: campo de Pessoa no admin de Pessoa).
             recorte = (self.select2_querysets or {}).get(campo)
-            if recorte is None:
+            if recorte is None and self._select2_querysets:
                 # Widget aplicado pelo mixin: o queryset vem do form e é
                 # registrado em ``_select2_querysets``.
-                recorte = (self._select2_querysets or {}).get(campo)
+                recorte = self._select2_querysets.get(campo)
         else:
             # O select2 está em outro ModelAdmin (ex.: 'cliente' do Convênio)
-            # e busca neste modelo: o recorte mora no admin de origem.
-            recorte = (self._select2_querysets or {}).get(campo)
+            # e busca neste modelo: o recorte mora no admin de origem. A
+            # chave pode estar qualificada por `model_name` (evita que o
+            # recorte de um form vaze para outro que usa o mesmo campo) —
+            # o mapa qualificado está no admin que HOSPEDA o campo.
+            mapa = self._select2_querysets or {}
+            app_label = request.GET.get('app_label')
+            origem_admin = None
+            if app_label and fonte:
+                # Modelo do admin que hospeda o campo (ex.: baixafatura).
+                for modelo in self.admin_site._registry:
+                    if (modelo._meta.app_label == app_label
+                            and modelo._meta.model_name == fonte):
+                        origem_admin = self.admin_site._registry[modelo]
+                        break
+            if origem_admin is not None:
+                # Recorte declarado no admin de ORIGEM tem prioridade (é o
+                # que a tela realmente oferece).
+                declarado = getattr(origem_admin, 'select2_querysets', None)
+                if declarado and declarado.get(campo) is not None:
+                    recorte = declarado[campo]
+                else:
+                    mapa = (getattr(origem_admin,
+                                    '_select2_querysets', None) or mapa)
+            if recorte is None and fonte:
+                recorte = mapa.get(f'{fonte}:{campo}')
+            # Sem chave qualificada: NÃO cai na chave simples quando já existe
+            # algum recorte qualificado — a chave simples poderia ser de outro
+            # form que usa o mesmo campo (fatura × pagamento).
+            if recorte is None and not any(':' in k for k in mapa):
+                recorte = mapa.get(campo)
 
         if recorte is None:
             return resultados, may_have_duplicates
@@ -320,7 +364,12 @@ class Select2AdminModelAdminMixin:
             return
         if relacionado._select2_querysets is None:
             relacionado._select2_querysets = {}
-        relacionado._select2_querysets[db_field.name] = declarado
+        # Registra SEMPRE qualificado pelo admin que hospeda o campo, para o
+        # recorte de um form não vazar para outro que usa o mesmo campo
+        # (ex.: transação de ENTRADA na baixa de FATURA × de SAÍDA na baixa de
+        # PAGAMENTO). A chave simples é só fallback para admins antigos.
+        chave = f'{self.model._meta.model_name}:{db_field.name}'
+        relacionado._select2_querysets[chave] = declarado
 
     # --- Inlines ---------------------------------------------------------
     # Os campos de um inline são gerados pelo ``BaseInlineFormSet`` do inline,

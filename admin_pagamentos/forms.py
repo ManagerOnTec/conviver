@@ -89,6 +89,21 @@ class BaixaPagamentoForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # TRANSAÇÃO: pagamento é sempre SAÍDA (banco ou caixa). A própria
+        # transação escolhida define o lado: uma transação de ENTRADA é de
+        # fatura (recebimento), não de pagamento.
+        campo_transacao = self.fields.get('transacao_financeira')
+        if campo_transacao is not None:
+            try:
+                from admin_cadastros_financeiros.models import \
+                    TransacaoFinanceira
+                campo_transacao.queryset = \
+                    campo_transacao.queryset.filter(
+                        tipo='saida', status='A',
+                        movimento__in=['banco', 'caixa'])
+            except Exception:
+                pass  # nunca derruba o form por causa do recorte
+
         # Competência de CAIXA: só caixas ABERTOS. Competência bancária: só
         # bancos abertos (mesmo recorte do módulo financeiro).
         try:
@@ -123,6 +138,18 @@ class BaixaPagamentoForm(forms.ModelForm):
             cleaned_data['estabelecimento'] = pagamento.estabelecimento
         else:
             raise forms.ValidationError('Pagamento é obrigatório.')
+
+        # Pagamento só aceita transação de SAÍDA que movimente banco OU caixa.
+        if transacao_financeira:
+            if transacao_financeira.tipo != 'saida':
+                self.add_error(
+                    'transacao_financeira',
+                    'Em PAGAMENTO escolha uma transação de SAÍDA (as de '
+                    'entrada são de recebimento/fatura).')
+            elif transacao_financeira.movimento not in ('banco', 'caixa'):
+                self.add_error(
+                    'transacao_financeira',
+                    'Escolha uma transação que movimente BANCO ou CAIXA.')
 
         # Transação por BANCO exige competência bancária ABERTA.
         if transacao_financeira and transacao_financeira.movimento == 'banco':

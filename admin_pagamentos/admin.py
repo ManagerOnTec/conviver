@@ -226,13 +226,21 @@ class BaixaPagamentoAdmin(ExportToXLSMixin, AdminSaveModelAuditMixin, AdminEstab
                 valor_saldo__gt=0, status='A', estabelecimento__in=estabelecimentos_permitidos
             )
 
-            form_instance.fields['transacao_financeira'].queryset = TransacaoFinanceira.objects.filter(
-                tipo='entrada', status='A'
-            )
+            # Pagamento = SAÍDA (banco ou caixa). Entradas são de recebimento
+            # (baixa de fatura), por isso não aparecem aqui.
+            form_instance.fields['transacao_financeira'].queryset = (
+                TransacaoFinanceira.objects.filter(
+                    tipo='saida', movimento__in=['banco', 'caixa'],
+                    status='A'))
 
             form_instance.fields['competencia_bancaria'].queryset = CompetenciaBancaria.objects.filter(
                 dt_fechamento_competencia__isnull = True, status='A'
             )
+
+        # Recorte da BUSCA do select2: pagamento é SAÍDA (banco ou caixa).
+        self.select2_querysets = {
+            'transacao_financeira': TransacaoFinanceira.objects.filter(
+                tipo='saida', movimento__in=['banco', 'caixa'], status='A')}
 
         # Encadeia em vez de substituir o __init__ aplicado pelo mixin.
         chain_form_init(form, form_init)

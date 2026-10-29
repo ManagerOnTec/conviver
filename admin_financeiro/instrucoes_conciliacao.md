@@ -1,4 +1,4 @@
-# Módulo de Conciliação Bancária - ManagerOntec ERP
+# Modelo de Conciliação Bancária - ManagerOntec ERP
 
 ## Visão Geral
 
