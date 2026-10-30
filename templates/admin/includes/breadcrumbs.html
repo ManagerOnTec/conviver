@@ -29,8 +29,10 @@
   {% endfor %}
 
   {% else %}
-  {# Fallback: alguma tela que não passou pelo contexto acima (ex.: histórico).
-     Monta o mesmo padrão App > Modelo a partir de `opts`/`title`. #}
+  {% comment %}
+    Fallback: alguma tela que não passou pelo contexto acima (ex.: histórico).
+    Monta o mesmo padrão App > Modelo a partir de `opts`/`title`.
+  {% endcomment %}
   {% with app_nome=app_nome|default:opts.app_config.verbose_name %}
   {% if app_nome %}
   <span class="breadcrumb-separator">&rsaquo;</span>

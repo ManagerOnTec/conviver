@@ -16,6 +16,7 @@ from admin_cadastros.utils import EstabelecimentoFilterAdminMixin
 
 from .models import (ControleCaixa, CompetenciaCaixa, MovimentoCaixa,
                      ConferenciaCaixa)
+from .forms import MovimentoCaixaForm
 
 
 @admin.register(ControleCaixa)
@@ -137,6 +138,7 @@ class CompetenciaCaixaAdmin(AdminEstabelecimentoPadraoMixin,
 @admin.register(MovimentoCaixa)
 class MovimentoCaixaAdmin(AdminEstabelecimentoPadraoMixin, ExportToXLSMixin,
                           admin.ModelAdmin):
+    form = MovimentoCaixaForm
     list_display = ['dt_movimento', 'competencia_caixa', 'tipo', 'origem',
                     'valor_entrada', 'valor_saida', 'transacao_financeira',
                     'competencia_bancaria', 'observacao']
@@ -149,25 +151,10 @@ class MovimentoCaixaAdmin(AdminEstabelecimentoPadraoMixin, ExportToXLSMixin,
                        'dt_atualizacao', 'us_atualizacao', 'estabelecimento']
     date_hierarchy = 'dt_movimento'
 
-    def get_form(self, request, obj=None, **kwargs):
-        form = super().get_form(request, obj, **kwargs)
-
-        def form_init(form_instance, *a, **kw):
-            # Só competências de caixa ABERTAS.
-            form_instance.fields['competencia_caixa'].queryset = \
-                CompetenciaCaixa.objects.filter(
-                    dt_fechamento__isnull=True, status='A')
-            # Só transações que MOVIMENTAM CAIXA.
-            form_instance.fields['transacao_financeira'].queryset = \
-                TransacaoFinanceira.objects.filter(
-                    movimento='caixa', status='A')
-            # Transferência: só competências BANCÁRIAS abertas.
-            form_instance.fields['competencia_bancaria'].queryset = \
-                CompetenciaBancaria.objects.filter(
-                    dt_fechamento_competencia__isnull=True, status='A')
-
-        chain_form_init(form, form_init)
-        return form
+    # O recorte dos campos (competências de caixa abertas, transações de caixa/
+    # depósito/saque, competências bancárias abertas) é feito no
+    # `MovimentoCaixaForm.__init__`. Não repetir aqui: um recorte no
+    # `get_form` sobrescrevia o do form e tirava DEPÓSITO/SAQUE da lista.
 
     def save_model(self, request, obj, form, change):
         if not change:

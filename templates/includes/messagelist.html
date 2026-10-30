@@ -1,0 +1,39 @@
+{% comment %}
+  Mensagens do admin com as CORES do AGENTS.md (item 6):
+  sucesso → verde · alerta → amarelo · perigo → vermelho · informação → azul.
+
+  O nível é resolvido pelo `tags` (que pode chegar como "success
+  alert-success", "error alert-danger", etc.) e a cor fica na classe
+  canônica (`msg-success`/`msg-warning`/`msg-error`/`msg-info`), definida em
+  `static/css/admin_layout_toggles.css` (seção 7). Assim nenhuma tela depende
+  do CSS do Bootstrap/do tema estar carregado.
+{% endcomment %}
+{% if messages %}
+<div id="message-container" class="admin-messages">
+  {% for message in messages %}
+    {% with tags=message.tags|default:'' %}
+      {% if 'success' in tags %}
+        <div class="admin-message msg-success" role="status">
+          <span class="admin-message-icon" aria-hidden="true">✓</span>
+          <span class="admin-message-text">{{ message }}</span>
+        </div>
+      {% elif 'warning' in tags or 'alert' in tags %}
+        <div class="admin-message msg-warning" role="alert">
+          <span class="admin-message-icon" aria-hidden="true">⚠</span>
+          <span class="admin-message-text">{{ message }}</span>
+        </div>
+      {% elif 'error' in tags or 'danger' in tags %}
+        <div class="admin-message msg-error" role="alert">
+          <span class="admin-message-icon" aria-hidden="true">✕</span>
+          <span class="admin-message-text">{{ message }}</span>
+        </div>
+      {% else %}
+        <div class="admin-message msg-info" role="status">
+          <span class="admin-message-icon" aria-hidden="true">ℹ</span>
+          <span class="admin-message-text">{{ message }}</span>
+        </div>
+      {% endif %}
+    {% endwith %}
+  {% endfor %}
+</div>
+{% endif %}

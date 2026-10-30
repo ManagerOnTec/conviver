@@ -2,7 +2,11 @@
 {% if messages %}
 <div id="message-container" style="display: none;"> <!-- Container oculto inicialmente -->
     {% for message in messages %}
-    <div class="alert {{ message.tags }} alert-dismissible fade show mb-0 d-flex justify-content-center align-items-center"
+    {% comment %}
+      Cores do AGENTS.md (item 6): sucesso verde, alerta amarelo, perigo
+      vermelho — classes canônicas + as do Bootstrap, conforme o `MESSAGE_TAGS`.
+    {% endcomment %}
+    <div class="alert {{ message.tags }} alert-dismissible fade show mb-0 d-flex justify-content-center align-items-center{% if 'success' in message.tags %} msg-success{% elif 'warning' in message.tags or 'alert' in message.tags %} msg-warning{% elif 'error' in message.tags or 'danger' in message.tags %} msg-error{% else %} msg-info{% endif %}"
         style="font-size: 14px;">
         <span>Resposta: {{ message }}</span>
     </div>

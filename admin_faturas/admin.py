@@ -14,7 +14,7 @@ from .models import Convenio, PreFatura, Fatura, BaixaFatura, periodo_cobranca
 from .forms import BaixaFaturaForm, ConvenioForm, FaturaForm, PreFaturaForm
 from django.contrib import messages
 from django.utils import timezone
-from dominios.utils import ExportToXLSMixin, AdminEstabelecimentoPadraoMixin, StatusFilterAdminMixin, chain_form_init, Select2AdminModelAdminMixin
+from dominios.utils import ExportToXLSMixin, AdminEstabelecimentoPadraoMixin, StatusFilterAdminMixin, chain_form_init, Select2AdminModelAdminMixin, ExclusaoEmLoteComRegrasMixin, EdicaoComRegrasMixin
 from .dashboard import (
     ConvenioPagadorFilter, FaturasDashboardMixin, _money, _qtd,
 )
@@ -147,10 +147,11 @@ class EmpenhoConvenioFilter(admin.SimpleListFilter):
             return queryset.filter(
                 Q(empenho_global__isnull=True) | Q(empenho_global=''))
         return queryset
-class PreFaturaAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Select2AdminModelAdminMixin, ExportToXLSMixin, admin.ModelAdmin):
+class PreFaturaAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Select2AdminModelAdminMixin, ExportToXLSMixin, admin.ModelAdmin):
 
     form = PreFaturaForm
-    actions = ['export_as_xls', 'faturar_pre_faturas_em_lote']
+    actions = ['export_as_xls', 'faturar_pre_faturas_em_lote',
+               'excluir_selecionados']
     # Seleção para as ações em lote (ex.: "Faturar pré-faturas selecionadas").
     # O POST de uma ação é tratado ANTES de o Django olhar o formset
     # (`_save` ausente), então os campos ocultos do `changelist-form` não
@@ -219,6 +220,9 @@ class PreFaturaAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Sel
         # ModelAdmin.get_list_display() não recebe request; guarde-o para o
         # renderizador do botão, que precisa incluir o token CSRF do POST.
         self._current_request = request
+        # Edição em linha de linhas TRAVADAS pelo fluxo: recusa com mensagem.
+        if request.method == 'POST' and '_save' in request.POST:
+            self._recusar_edicoes_em_linha(request)
         return super().changelist_view(request, extra_context=extra_context)
     def get_list_display(self, request):
         self._current_request = request
@@ -346,7 +350,8 @@ class PreFaturaAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Sel
                     'gerar_fatura_button', 'competencia', 'dia_envio',
                     'dt_vencimento', 'valor',
                     'empenho', 'nr_contrato', 'nr_aditivo','estabelecimento', 'status',]
-    list_editable = ['valor', 'empenho', 'status']
+    list_editable_sempre = ['valor', 'empenho', 'status']
+    list_editable = list_editable_sempre
 
     list_display_links = ['id', 'convenio']
 
@@ -360,6 +365,29 @@ class PreFaturaAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Sel
     ordering = ['competencia', 'convenio', 'cliente', 'nr_contrato',
                 'nr_aditivo', 'valor', 'dia_envio', 'pre_faturado', 'id']
     list_per_page = 99
+
+    def list_editable_permitido(self, request):
+        """Pré-fatura que JÁ gerou a fatura não tem edição em linha.
+
+        A edição em linha passa pelas mesmas regras da tela de alteração
+        (`motivo_recusa_edicao`): as linhas travadas saem como texto (ver
+        `ChangeListEditavel.linha_renderizada`).
+        """
+        campos = list(self.list_editable_sempre)
+        # No recorte “Faturadas” a linha já está faturada: o `status` (coluna
+        # editável da listagem) vira texto, como no restante do fluxo.
+        if request.GET.get('pre_faturado_status') == 'sim' and 'status' in campos:
+            campos.remove('status')
+        return campos
+
+    def get_linhas_nao_editaveis(self, request):
+        """Pks (string) cujas colunas editaveis aparecem como TEXTO.
+
+        Pré-fatura com FATURA gerada: a tela de alteração já recusa
+        (`motivo_recusa_edicao`), então a listagem também não deixa editar.
+        """
+        return {str(pk) for pk in Fatura.objects.values_list(
+            'prefatura_ptr_id', flat=True)}
 
     # ------------------------------------------------------------------
     # DASHBOARD DE PRÉ-FATURAS
@@ -487,29 +515,51 @@ class PreFaturaAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Sel
             return True
         return False
 
+    def _recusa_exclusao(self, obj):
+        """Motivo para BLOQUEAR a exclusão, checando a pré-fatura E a fatura
+        gerada por ela (a fatura é objeto separado na herança multitable)."""
+        motivo = obj.motivo_recusa_exclusao()
+        if motivo:
+            return motivo
+        fato = Fatura.objects.filter(prefatura_ptr_id=obj.pk).first()
+        if fato is not None:
+            return fato.motivo_recusa_exclusao()
+        return None
+
     def delete_queryset(self, request, queryset):
-        """
-        Impede a exclusão de qualquer queryset de Fatura e exibe uma mensagem.
-        """
+        """Exclui só as pré-faturas SEM impedimento; as demais ficam com
+        mensagem amigável explicando o motivo."""
         if not self.has_delete_permission(request):
             messages.error(
                 request, "Não é possível excluir registros deste tipo.")
-            return HttpResponseRedirect(request.META.get('HTTP_REFERER', '/admin/'))
-        super().delete_queryset(request, queryset)
+            return
+        excluidas = 0
+        for obj in list(queryset):
+            motivo = self._recusa_exclusao(obj)
+            if motivo:
+                messages.warning(request, motivo)
+                continue
+            super().delete_model(request, obj)
+            excluidas += 1
+        if excluidas:
+            messages.success(
+                request, f'{excluidas} pré-fatura(s) excluída(s) com sucesso.')
 
     def delete_model(self, request, obj):
-        """
-        Customização da exclusão do modelo para exibir uma mensagem
-        se o usuário não tiver permissão.
-        """
+        """Exclusão de uma pré-fatura: só se ela não tiver fatura gerada, ou
+        se a fatura gerada puder ser excluída (regra da fatura)."""
         if not self.has_delete_permission(request, obj):
             messages.error(
                 request, "Não é possível excluir este objeto.")
             return
+        motivo = self._recusa_exclusao(obj)
+        if motivo:
+            messages.error(request, motivo)
+            return
         super().delete_model(request, obj)
 
 
-class ConvenioAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Select2AdminModelAdminMixin, ExportToXLSMixin, admin.ModelAdmin):
+class ConvenioAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Select2AdminModelAdminMixin, ExportToXLSMixin, admin.ModelAdmin):
     form = ConvenioForm
     dashboard_competencia_field = 'inicio_vigencia'
     dashboard_vencimento_field = 'final_vigencia'
@@ -634,7 +684,8 @@ class ConvenioAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Sele
         from .changelist_editavel import ChangeListEditavel
         return ChangeListEditavel
 
-    actions = ['export_as_xls', 'gerar_prefaturas_em_lote']
+    actions = ['export_as_xls', 'gerar_prefaturas_em_lote',
+               'excluir_selecionados']
 
     @admin.action(description='Gerar pré-faturas dos convênios selecionados')
     def gerar_prefaturas_em_lote(self, request, queryset):
@@ -687,9 +738,28 @@ class ConvenioAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Sele
     )
     search_fields = ['convenio',]
     list_display_links = ['id', 'convenio']
-    list_editable = ['status', 'valor_mensal',
-                     'valor_diaria', 'dia_envio', 'dias_pagamento', 'empenho_global']
+    list_editable_sempre = ['status', 'valor_mensal',
+                            'valor_diaria', 'dia_envio', 'dias_pagamento',
+                            'empenho_global']
+    list_editable = list_editable_sempre
     list_per_page = 99
+
+    def list_editable_permitido(self, request):
+        """Convênio COM pré-fatura gerada não tem edição em linha.
+
+        É a mesma regra da tela de alteração: com pré-fatura gerada o
+        convênio é somento leitura (as pré-faturas/faturas é que são
+        ajustadas, conforme o fluxo).
+        """
+        if request.GET.get('pre_faturado__exact') == '1':
+            # Recorte “Pré-Faturados”: nenhuma linha editável.
+            return []
+        return list(self.list_editable_sempre)
+
+    def get_linhas_nao_editaveis(self, request):
+        """Convênios COM pré-fatura gerada: editáveis só como texto."""
+        return {str(pk) for pk in PreFatura.objects.values_list(
+            'convenio_id', flat=True)}
 
     # Recorte da busca do select2: 'cliente' só lista pacientes ativos —
     # o mesmo queryset usado pelo ConvenioForm na validação/salvamento.
@@ -801,6 +871,57 @@ class ConvenioAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Sele
         return format_html('<span style="color:gray;">Duplicar</span>')
     duplicate_button.short_description = 'Duplicar'
     duplicate_button.allow_tags = True
+
+    def has_delete_permission(self, request, obj=None):
+        """Além da permissão do usuário, o CONVÊNIO com pré-fatura gerada não
+        pode ser excluído: primeiro se excluem as faturas e as pré-faturas
+        (cada uma tem regra própria de quando pode ser excluída)."""
+        if request.user.username != 'admin':
+            return False
+        if obj is not None:
+            motivo = self._motivo_recusa_exclusao_convenio(obj)
+            if motivo:
+                messages.error(request, motivo)
+                return False
+        return True
+
+    def _impedimento_extra_exclusao(self, obj):
+        """Regra da ação em lote (mesma do botão Excluir do convênio)."""
+        return self._motivo_recusa_exclusao_convenio(obj)
+
+    def _motivo_recusa_exclusao_convenio(self, obj):
+        """REGRA: só se exclui o convênio sem PRÉ-FATURA ligada a ele.
+
+        A fatura é tratada pela própria tela de fatura (que exige não ter
+        baixa), então aqui basta olhar um passo à frente.
+        """
+        if obj.pre_faturado or obj.prefaturas.exists():
+            return (f'O convênio “{obj}” já tem pré-fatura gerada e não pode '
+                    'ser excluído. Exclua primeiro a(s) PRÉ-FATURA(S) dele, em '
+                    '“2. Pré-Faturas”.')
+        return None
+
+    def delete_queryset(self, request, queryset):
+        """Só exclui os convênios SEM pré-fatura/fatura gerada; os demais
+        ficam com mensagem amigável."""
+        if not self.has_delete_permission(request):
+            return
+        excluidos = 0
+        for obj in list(queryset):
+            motivo = self._motivo_recusa_exclusao_convenio(obj)
+            if motivo:
+                messages.warning(request, motivo)
+                continue
+            super().delete_model(request, obj)
+            excluidos += 1
+        if excluidos:
+            messages.success(
+                request, f'{excluidos} convênio(s) excluído(s) com sucesso.')
+
+    def delete_model(self, request, obj):
+        if not self.has_delete_permission(request, obj):
+            return
+        super().delete_model(request, obj)
 
     def gerar_prefaturas_button(self, obj):
         if obj.pre_faturado:
@@ -1184,7 +1305,7 @@ class BaixaFaturaInline(admin.TabularInline):
         return base
 
 
-class FaturaAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Select2AdminModelAdminMixin, ExportToXLSMixin, admin.ModelAdmin):
+class FaturaAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Select2AdminModelAdminMixin, ExportToXLSMixin, admin.ModelAdmin):
     dashboard_competencia_field = 'competencia'
     dashboard_vencimento_field = 'dt_vencimento'
     dashboard_valor_field = 'valor_fatura'
@@ -1276,6 +1397,9 @@ class FaturaAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Select
     finalizar_fatura_button.allow_tags = True
     def changelist_view(self, request, extra_context=None):
         self._current_request = request
+        # Edição em linha de linhas TRAVADAS pelo fluxo: recusa com mensagem.
+        if request.method == 'POST' and '_save' in request.POST:
+            self._recusar_edicoes_em_linha(request)
         return super().changelist_view(request, extra_context=extra_context)
 
     def get_list_display(self, request):
@@ -1288,7 +1412,8 @@ class FaturaAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Select
         from .changelist_editavel import ChangeListEditavel
         return ChangeListEditavel
 
-    actions = ['export_as_xls', 'finalizar_faturas_em_lote']
+    actions = ['export_as_xls', 'finalizar_faturas_em_lote',
+               'excluir_selecionados']
 
     @admin.action(description='Finalizar faturas selecionadas')
     def finalizar_faturas_em_lote(self, request, queryset):
@@ -1375,7 +1500,20 @@ class FaturaAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Select
 
     list_display = ['id', 'convenio', 'cliente', 'get_documento_pagador', 'finalizar_fatura_button', 'periodo_tratamento', 'competencia', 'dia_envio', 'dt_vencimento', 'valor', 'valor_fatura', 'valor_saldo',
                     'dt_liquidacao', 'descricao', 'nr_nota_fiscal', 'anexo_nf', 'estabelecimento', 'status', ]
-    list_editable = ['valor_fatura', 'descricao', 'nr_nota_fiscal', 'anexo_nf', 'status']
+    list_editable_sempre = ['valor_fatura', 'descricao', 'nr_nota_fiscal',
+                            'anexo_nf', 'status']
+    list_editable = list_editable_sempre
+
+    def get_linhas_nao_editaveis(self, request):
+        """Faturas COM BAIXA: só texto na listagem.
+
+        Mesma regra da tela de alteração (`Fatura.motivo_recusa_edicao`):
+        fatura só se altera quando não tem baixa ligada a ela.
+        """
+        from admin_faturas.models import BaixaFatura as _BF
+        return {str(pk) for pk in _BF.objects.filter(
+                    fatura_baixada__isnull=False).values_list(
+                    'fatura_baixada__pk', flat=True)}
     search_fields = ['convenio__convenio',
                      'nr_contrato', 'nr_aditivo', 'descricao', 'nr_nota_fiscal']
     list_filter = [FaturadoStatusFilter, NotaFiscalFilter, ArquivoNotaFiscalFilter,
@@ -1508,31 +1646,45 @@ class FaturaAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Select
         super().save_model(request, obj, form, change)
 
     def has_delete_permission(self, request, obj=None):
-        """
-        Permitir a exclusão apenas para o usuário 'admin'.
-        """
-        if request.user.username == 'admin':
-            return True
-        return False
+        """Além da permissão do usuário, a FATURA FINALIZADA ou COM MOVIMENTO
+        não pode ser excluída (a aberta e sem movimento pode)."""
+        if request.user.username != 'admin':
+            return False
+        if obj is not None:
+            motivo = obj.motivo_recusa_exclusao()
+            if motivo:
+                messages.error(request, motivo)
+                return False
+        return True
 
     def delete_queryset(self, request, queryset):
-        """
-        Impede a exclusão de qualquer queryset de Fatura e exibe uma mensagem.
-        """
+        """Exclui só as faturas SEM impedimento (aberta e sem movimento); as
+        demais ficam com mensagem amigável."""
         if not self.has_delete_permission(request):
             messages.error(
                 request, "Não é possível excluir registros deste tipo.")
-            return HttpResponseRedirect(request.META.get('HTTP_REFERER', '/admin/'))
-        super().delete_queryset(request, queryset)
+            return
+        excluidas = 0
+        for obj in list(queryset):
+            motivo = obj.motivo_recusa_exclusao()
+            if motivo:
+                messages.warning(request, motivo)
+                continue
+            super().delete_model(request, obj)
+            excluidas += 1
+        if excluidas:
+            messages.success(
+                request, f'{excluidas} fatura(s) excluída(s) com sucesso.')
 
     def delete_model(self, request, obj):
-        """
-        Customização da exclusão do modelo para exibir uma mensagem
-        se o usuário não tiver permissão.
-        """
+        """Exclusão de uma fatura: só se estiver ABERTA e SEM movimento."""
         if not self.has_delete_permission(request, obj):
             messages.error(
                 request, "Não é possível excluir este objeto.")
+            return
+        motivo = obj.motivo_recusa_exclusao()
+        if motivo:
+            messages.error(request, motivo)
             return
         super().delete_model(request, obj)
 
@@ -1716,7 +1868,7 @@ class VencimentoDateFilter(CustomDateFilter):
         return queryset
 
 
-class BaixaFaturaAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Select2AdminModelAdminMixin, ExportToXLSMixin, admin.ModelAdmin):
+class BaixaFaturaAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Select2AdminModelAdminMixin, ExportToXLSMixin, admin.ModelAdmin):
     form = BaixaFaturaForm
 
     # Baixa não tem competência/vencimento próprios: o período é o recebimento.
@@ -1732,7 +1884,7 @@ class BaixaFaturaAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, S
         from .changelist_editavel import ChangeListBaixaFatura
         return ChangeListBaixaFatura
 
-    actions = ['export_as_xls']
+    actions = ['export_as_xls', 'excluir_selecionados']
 
     # Recorte da BUSCA do select2 de transação: baixa de fatura é ENTRADA NO
     # BANCO (o queryset do form já recorta; isto recorta a busca do widget).
@@ -1751,15 +1903,54 @@ class BaixaFaturaAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, S
         'valor_fatura', 'valor_saldo', 'estabelecimento',
         'valor_baixa', 'valor_adicional', 'valor_total_empacotado',
         'dt_recebimento', 'transacao_financeira',
-        'competencia_bancaria', 'observacao',
+        'competencia_bancaria', 'observacao', 'excluir_button',
     )
 
-    list_editable = [
+    list_editable_sempre = [
         'valor_baixa', 'valor_adicional', 'dt_recebimento',
         'transacao_financeira', 'competencia_bancaria', 'observacao',
     ]
+    list_editable = list_editable_sempre
+
+    def get_linhas_nao_editaveis(self, request):
+        """A grade é de FATURAS: a fatura COM BAIXA fica só leitura.
+
+        Mesma regra da tela de alteração (`Fatura.motivo_recusa_edicao`).
+        """
+        from admin_faturas.models import BaixaFatura as _BF
+        return {str(pk) for pk in _BF.objects.filter(
+            fatura_baixada__isnull=False).values_list(
+            'fatura_baixada__pk', flat=True)}
 
     list_display_links = ['id']
+
+    def excluir_button(self, obj):
+        """Botão de EXCLUIR a baixa registrada (na listagem de contas a
+        receber, cada linha é uma FATURA: a baixa dela é procurada pelo vínculo).
+
+        O botão só aparece quando a baixa existe e o bloqueio (se houver) sai
+        na dica de tela — a ação padrão "Excluir" não estava disponível aqui.
+        """
+        if isinstance(obj, BaixaFatura):
+            baixa = obj
+        else:
+            baixa = BaixaFatura.objects.filter(
+                fatura_baixada__in=[obj.pk]).first()
+        if baixa is None:
+            return '-'
+        motivo = baixa.motivo_recusa_exclusao()
+        if motivo:
+            return format_html(
+                '<span title="{}" style="color:#9ca3af; cursor:not-allowed;"'
+                '>Excluir</span>', motivo)
+        url = reverse('admin:admin_faturas_baixafatura_delete',
+                      args=[baixa.pk])
+        return format_html(
+            '<a class="button" style="padding:2px 8px; background:#b91c1c; '
+            'color:#fff;" href="{}" title="Excluir a baixa {} (devolve o '
+            'valor ao saldo da fatura)">Excluir</a>', url, baixa.pk)
+    excluir_button.short_description = 'Excluir baixa'
+    excluir_button.allow_tags = True
 
     search_fields = ('id', 'convenio__convenio', 'cliente',
                      'nr_nota_fiscal', 'convenio__pagador_pj__empresa',
@@ -2144,6 +2335,123 @@ class BaixaFaturaAdmin(AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, S
             if not extra_context['baixa_forms_com_erro']:
                 return redirect(request.get_full_path())
         return super().changelist_view(request, extra_context)
+
+    def has_delete_permission(self, request, obj=None):
+        """A baixa pode ser excluída quando o MOVIMENTO dela já saiu (a tela
+        de confirmação aparece e o valor volta ao saldo da fatura).
+
+        Com o movimento ainda vinculado a exclusão é RECUSADA com mensagem
+        amigável — nunca com a tela de erro de permissão (`PermissionDenied`).
+        """
+        if not super().has_delete_permission(request, obj):
+            return False
+        # Com ou sem impedimento a confirmação aparece: `delete_view`/`delete_model`
+        # é que recusam (com mensagem), em vez de derrubar a tela.
+        return True
+
+    def delete_view(self, request, object_id, extra_context=None):
+        """Tela de confirmação/exclusão da baixa, com a regra do registro.
+
+        Implementada aqui (em vez de delegar ao `super()`) porque o wrapper
+        da classe pode ficar no caminho: resolve a baixa pela pk da BAIXA ou
+        da FATURA (linha da listagem de contas a receber) e, no POST, exclui
+        devolvendo o valor ao saldo da fatura.
+        """
+        from urllib.parse import unquote
+        from django.http import HttpResponseRedirect
+        from django.template.response import TemplateResponse
+
+        obj = self.get_object(request, unquote(str(object_id)))
+        motivo = obj.motivo_recusa_exclusao()
+        if motivo:
+            messages.error(request, motivo)
+            return redirect(
+                reverse('admin:admin_faturas_baixafatura_changelist'))
+
+        if request.method == 'POST':
+            # A pk é anulada pelo `delete()`: guarde o número ANTES.
+            baixa_pk = obj.pk
+            self.delete_model(request, obj)
+            if not BaixaFatura.objects.filter(pk=baixa_pk).exists():
+                messages.success(
+                    request,
+                    f'Baixa {baixa_pk} excluída e o valor devolvido ao saldo '
+                    'da fatura.')
+            opts = self.model._meta
+            return HttpResponseRedirect(reverse(
+                f'admin:{opts.app_label}_{opts.model_name}_changelist'))
+
+        # GET: confirmação (sem objetos protegidos — a regra já foi checada).
+        contexto = dict(self.admin_site.each_context(request))
+        contexto.update(extra_context or {})
+        contexto.update({
+            'title': 'Excluir baixa de fatura',
+            'object': obj,
+            'object_name': self.model._meta.verbose_name,
+            'opts': self.model._meta,
+            'app_label': self.model._meta.app_label,
+            'protected': [],
+            'deleted_objects': [],
+            'perms_lacking': [],
+            'model_admin': self,
+        })
+        return TemplateResponse(
+            request, 'admin/delete_confirmation.html', contexto,
+            status=200)
+
+    def _motivo_recusa_exclusao(self, obj):
+        """Regra da baixa: só a COMPETÊNCIA BANCÁRIA fecha a exclusão.
+
+        Movimento e baixa são concomitantes (o movimento sai junto), então
+        baixa com movimento é excluível — quem decide é a competência.
+        """
+        return obj.motivo_recusa_exclusao()
+
+    def get_object(self, request, object_id, from_field=None):
+        """Objeto da tela de exclusão.
+
+        Na listagem de contas a receber cada linha é uma FATURA: o link
+        "Excluir baixa" pode apontar para pks de FATURA, e aqui o objeto vira
+        a BAIXA registrada dela (a exclusão em si é da baixa).
+        """
+        from urllib.parse import unquote
+        from django.http import Http404
+
+        pk = self.model._meta.pk.to_python(unquote(str(object_id)))
+        baixa = BaixaFatura.objects.filter(pk=pk).first()
+        if baixa is None:
+            baixa = BaixaFatura.objects.filter(fatura_baixada__in=[pk]).first()
+        if baixa is None:
+            messages.error(
+                request,
+                'Este registro não tem baixa de fatura registrada; não há o '
+                'que excluir aqui.')
+            raise Http404
+        # `delete_view` busca SEMPRE a pk da baixa.
+        return baixa
+
+    def delete_model(self, request, obj):
+        """Exclui a baixa E os MOVIMENTOS dela (concomitantes), devolvendo o
+        valor ao saldo da fatura (sem a devolução a fatura ficaria “paga” sem
+        recebimento)."""
+        motivo = obj.motivo_recusa_exclusao()
+        if motivo:
+            messages.error(request, motivo)
+            return
+        pk = obj.pk
+        try:
+            motivo = obj.excluir_com_movimento()
+            if motivo:
+                messages.error(request, motivo)
+                return
+        except Exception as erro:
+            messages.error(
+                request, f'Não foi possível excluir a baixa: {erro}')
+            return
+        if '_save' in (request.POST or {}):
+            messages.success(
+                request,
+                f'Baixa {pk} excluída e o valor devolvido ao saldo da fatura.')
 
     def save_model(self, request, obj, form, change):
         """

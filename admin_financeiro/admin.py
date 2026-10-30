@@ -7,7 +7,7 @@ from admin_pagamentos.models import Pagamento
 from admin_faturas.models import Fatura
 from admin_faturas.dashboard import FaturasDashboardMixin
 from django.urls import reverse, path
-from dominios.utils import ExportToXLSMixin, AdminEstabelecimentoPadraoMixin, StatusFilterAdminMixin, chain_form_init
+from dominios.utils import ExportToXLSMixin, AdminEstabelecimentoPadraoMixin, StatusFilterAdminMixin, chain_form_init, ExclusaoEmLoteComRegrasMixin
 from datetime import timedelta, date
 import calendar
 from decimal import Decimal
@@ -381,7 +381,14 @@ class CompetenciaBancariaAdmin(AdminEstabelecimentoPadraoMixin, ExportToXLSMixin
         else:
             obj.us_atualizacao = request.user
             obj.dt_atualizacao = timezone.now()  
+        # SALDO HERDADO: se o saldo anterior não foi informado, puxa o da
+        # última competência fechada do banco; se foi e divergir, AVISA (sem
+        # bloquear — pode ser um ajuste proposital).
+        aviso = obj.anexar_saldo_anterior()
+        if aviso:
+            self.message_user(request, aviso, level=admin_messages.WARNING)
         super().save_model(request, obj, form, change)
+        obj.recalcular_saldos()
 
     @admin.action(description='Fechar competência (exige conciliação)')
     def fechar_competencias(self, request, queryset):
@@ -514,10 +521,10 @@ class CompetenciaAbertaMixin:
 
 
 @admin.register(MovimentoBancario)
-class MovimentoBancarioAdmin(CompetenciaAbertaMixin, FaturasDashboardMixin, ExportToXLSMixin, AdminEstabelecimentoPadraoMixin, admin.ModelAdmin):
+class MovimentoBancarioAdmin(ExclusaoEmLoteComRegrasMixin, CompetenciaAbertaMixin, FaturasDashboardMixin, ExportToXLSMixin, AdminEstabelecimentoPadraoMixin, admin.ModelAdmin):
     form = MovimentoBancarioForm
 
-    actions = ['export_as_xls', 'empacotar_movimentos']
+    actions = ['export_as_xls', 'empacotar_movimentos', 'excluir_selecionados']
 
     # DASHBOARD: totais no recorte ATUAL (competência/banco/período/filtros).
     dashboard_competencia_field = 'dt_movimento'
@@ -626,7 +633,7 @@ class MovimentoBancarioAdmin(CompetenciaAbertaMixin, FaturasDashboardMixin, Expo
         estabelecimento ativo — a listagem passa a mostrar todos os bancos."""
         extra_context = dict(extra_context or {})
         try:
-            if not request.GET.get('banco'):
+            if not request.GET.get('banco') and request.method == 'GET':
                 tem_padrao = BancoPadraoFilter.contas_padrao(request).exists()
                 if not tem_padrao:
                     admin_messages.warning(
@@ -702,6 +709,21 @@ class MovimentoBancarioAdmin(CompetenciaAbertaMixin, FaturasDashboardMixin, Expo
                 + ', '.join(f'#{p}' for p in ja_pacote),
                 level=admin_messages.ERROR)
             return
+        # TRANSFERÊNCIAS (depósito/saque) e baixas de PAGAMENTO não entram:
+        # cada uma tem o PAR do outro lado (caixa) — somar aqui deixaria o
+        # par com valor diferente do lançamento consolidado.
+        com_par = [m.pk for m in movs
+                   if m.baixa_pagamento_id or m.transferencia_id
+                   or m.competencia_caixa_id]
+        if com_par:
+            self.message_user(
+                request,
+                'Lançamento(s) com PAR em outro módulo (transferência '
+                'caixa ⇄ banco ou baixa de pagamento) não podem ser '
+                'empacotados, senão o outro lado fica com valor diferente: '
+                + ', '.join(f'#{p}' for p in com_par),
+                level=admin_messages.ERROR)
+            return
         # VALIDADOR: movimentos sem baixa (lançamentos manuais) também podem
         # já ter absorvido outros — marca pela própria `origem` consolidada?
         # Não há marcador; a proteção acima cobre o caso de baixa.
@@ -764,6 +786,151 @@ class MovimentoBancarioAdmin(CompetenciaAbertaMixin, FaturasDashboardMixin, Expo
             f'Lançamentos empacotados no movimento #{pacote.pk}: total '
             f'{total} ({len(absorvidos)} lançamento(s) excluído(s)).',
             level=admin_messages.SUCCESS)
+
+    # ------------------------------------------------------------------
+    # EXCLUSÃO: só de movimento de COMPETÊNCIA BANCÁRIA ABERTA
+    # ------------------------------------------------------------------
+    def has_delete_permission(self, request, obj=None):
+        if not super().has_delete_permission(request, obj):
+            return False
+        if obj is not None:
+            motivo = (obj.motivo_recusa_exclusao()
+                      or obj.motivo_recusa_conciliacao())
+            if motivo:
+                admin_messages.error(request, motivo)
+                return False
+        return True
+
+    def _motivo_recusa_exclusao(self, obj):
+        """Regra ÚNICA (tela e ação em lote): competência aberta e não
+        conciliado. A fatura finalizada NÃO entra nesta regra."""
+        return obj.pode_excluir()
+
+    def delete_model(self, request, obj):
+        """Exclusão do movimento — SEMPRE com a BAIXA de fatura junto.
+
+        Movimento e baixa são concomitantes: a baixa gerou o lançamento, então
+        sai junto e devolve o valor ao saldo da fatura. Só a COMPETÊNCIA
+        BANCÁRIA decide (aberta pode, fechada não).
+        """
+        motivo = obj.pode_excluir()
+        if motivo:
+            admin_messages.error(request, motivo)
+            return
+        baixa = obj.baixa_de_origem()
+        baixa_pk = baixa.pk if baixa is not None else None
+        pk = obj.pk
+        try:
+            obj.delete()  # a baixa de origem sai junto (padrão do delete)
+        except Exception as erro:
+            admin_messages.error(
+                request,
+                f'Não foi possível excluir o movimento: {erro}')
+            return
+        texto = f'Movimento {pk} excluído e saldo do banco atualizado.'
+        if baixa_pk is not None:
+            texto += (f' A baixa de fatura {baixa_pk} foi excluída junto e o '
+                      'valor voltou ao saldo da fatura.')
+        admin_messages.success(request, texto)
+
+    def _response_delete_sem_padrao(self, request, object_id,
+                                    extra_context=None):
+        """POST: exclui pelo `delete_model` (que emite a mensagem própria) e
+        volta para a listagem — sem a mensagem genérica do Django."""
+        from django.http import HttpResponseRedirect
+        from django.urls import reverse
+
+        obj = self.get_object(request, object_id)
+        if obj is None:
+            return HttpResponseRedirect(request.get_full_path())
+        self.delete_model(request, obj)
+        opts = self.model._meta
+        return HttpResponseRedirect(reverse(
+            f'admin:{opts.app_label}_{opts.model_name}_changelist'))
+
+    def post_acoes_em_lote(self, request, queryset):
+        """Mapa `ação -> método` executado DIRETO pelo `action` do POST.
+
+        A listagem de movimentos não tem `formset` (o checkout do
+        `changelist_view` faz `if request.method != 'POST': ... else:`: num verbo
+        diferente de GET a tela é lida como formulário de edição em linha).
+        Por isso as ações em lote daqui são despachadas pelo próprio
+        `changelist_view`, sem passar pelas permissões de verificação de formulário.
+        """
+        return {
+            'excluir_selecionados': self.excluir_selecionados,
+            'empacotar_movimentos': self.empacotar_movimentos,
+        }
+
+    def changelist_view(self, request, extra_context=None):
+        """Atende também o POST das ações em lote (o super() só renderiza GET)."""
+        trata_acao = (request.method == 'POST'
+                      and '_save' not in request.POST
+                      and request.POST.get('action'))
+        if not trata_acao:
+            return super().changelist_view(request, extra_context)
+        return self.changelist_view_com_acoes(
+            request, extra_context, self.post_acoes_em_lote(request, None))
+
+    def changeform_view(self, request, object_id=None, form_url='',
+                        extra_context=None):
+        """Alteração do movimento barrada pelo FLUXO (competência fechada).
+
+        A listagem esconde movimentos de competência fechada, então o
+        `get_object` padrão diria “não existe”. Aqui a busca é direta, para
+        dar a mensagem amigável do motivo.
+        """
+        from django.contrib.admin.utils import unquote
+        from django.http import HttpResponseRedirect
+        from django.urls import reverse
+
+        alvo = None
+        if object_id is not None:
+            try:
+                alvo = self.model._default_manager.get(
+                    pk=unquote(str(object_id)))
+            except Exception:
+                alvo = None
+        motivo = alvo.motivo_recusa_exclusao() if alvo is not None else None
+        comp = getattr(alvo, 'competencia_bancaria', None) if alvo else None
+        if motivo and comp is not None and comp.dt_fechamento_competencia:
+            admin_messages.error(request, motivo)
+            return HttpResponseRedirect(reverse(
+                'admin:admin_financeiro_movimentobancario_changelist'))
+        return super().changeform_view(request, object_id, form_url,
+                                       extra_context)
+
+    def delete_view(self, request, object_id, extra_context=None):
+        """Tela de confirmação da exclusão do movimento.
+
+        A BAIXA de fatura vai junto **sempre** (são concomitantes): a tela só
+        avisa disso. Competência fechada/conciliado → mensagem amigável e
+        volta para a listagem.
+        """
+        from django.http import HttpResponseRedirect
+        from django.urls import reverse
+
+        if request.method == 'POST':
+            return self._response_delete_sem_padrao(request, object_id)
+        extra_context = dict(extra_context or {})
+        try:
+            obj = self.get_object(request, object_id)
+        except Exception:
+            obj = None
+        if obj is not None:
+            motivo = obj.pode_excluir()
+            if motivo:
+                admin_messages.error(request, motivo)
+                return HttpResponseRedirect(reverse(
+                    'admin:admin_financeiro_movimentobancario_changelist'))
+            baixa = obj.baixa_de_origem()
+            if baixa is not None:
+                extra_context['excluir_baixa_junto'] = baixa.pk
+                extra_context['baixa_pk'] = baixa.pk
+                fatura = baixa.fatura_baixada_do_bd()
+                extra_context['fatura_pk'] = fatura.pk if fatura else None
+        return super().delete_view(request, object_id,
+                                   extra_context=extra_context)
 
     def save_model(self, request, obj, form, change):
         """

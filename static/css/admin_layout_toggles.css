@@ -729,8 +729,15 @@ html.hide-top-filter div.xfull {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 10px;
     border-bottom: 1px solid var(--hairline-color, #edf2f7);
     padding-bottom: 8px;
+}
+
+/* O título cresce e empurra o botão de ocultar para a DIREITA (antes o
+   `margin-left:auto` do botão disputava espaço com o título). */
+.top-filter-header .top-filter-title {
+    flex: 1 1 auto;
 }
 
 .top-filter-title {
@@ -910,19 +917,117 @@ html.hide-top-filter div.xfull {
 }
 
 /* LISTAGEM (changelist) — tabela legível com todas as colunas.
-   Com 19 colunas (Faturas) a tabela mede ~2900px; em vez de espremer tudo na
+   Com 19 colunas (Faturas) a tabela mede ~3500px; em vez de espremer tudo na
    largura da tela (o que quebrava PERÍODO/CLIENTE em 5 linhas), a tabela
    mantém a largura natural e rola horizontalmente DENTRO do bloco .results.
-   Toda a `list_display` continua visível — nenhuma coluna é removida. */
+   Toda a `list_display` continua visível — nenhuma coluna é removida.
+
+   A rolagem horizontal é feita de DOIS jeitos:
+   - arrastar a tabela com o mouse (clique + arrastar); e
+   - as setas ◀ ▶ da barra de ações, ACIMA da tabela (AGENTS.md, item 10: a
+     barra do rodapé é longe demais para uso corrente). */
 #changelist .results {
+    /* O quadro acompanha o CONTEÚDO: cresce até o TOTAL de linhas da página,
+       com o fim flexível (sem altura fixa e sem `max-height`). A PÁGINA rola
+       na vertical; o que fica preso é só o `<thead>` (e a barra de ações).
+
+       A rolagem HORIZONTAL fica aqui (`overflow-x: auto`): é ela que dá
+       acesso às ~19 colunas (~3500px). O `overflow-y` continua `visible`, o
+       que mantém o `sticky` do `<thead>` valendo na JANELA. */
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+
+    /* O quadro NÃO rola na VERTICAL: quem rola é a PÁGINA, para que o
+       `<thead>` continue grudado na JANELA (logo abaixo da barra de ações) e a
+       PAGINAÇÃO apareça no fim da tabela.
+
+       A rolagem HORIZONTAL fica aqui — é ela que dá acesso às ~19 colunas
+       (~3500px). Como o `overflow-y` aqui é `visible`, o navegador o computa
+       como `auto`; por isso a regra final da seção 13 fixa
+       `overflow-y: visible` de novo, depois de todas as demais. */
     overflow-x: auto !important;
+    overflow-y: visible !important;
     max-width: 100% !important;
+    contain: none !important;
+}
+
+#changelist .results.js-arrastavel {
+    cursor: grab;
+}
+
+#changelist .results.js-arrastando {
+    cursor: grabbing;
+    user-select: none;
 }
 
 #changelist #result_list {
     table-layout: auto !important;
-    width: auto !important;
+    /* LARGURA NATURAL: a tabela é tão larga quanto o conteúdo das colunas
+       (nunca é espremida para caber). É isso que gera a rolagem lateral. */
+    width: max-content !important;
     min-width: 100% !important;
+    max-width: none !important;
+}
+
+
+
+/* TODAS as células em UMA linha, com largura de CONTEÚDO. Sem isto o
+   navegador espreme uma coluna e o texto dela quebra em 3-4 linhas — o que
+   também gerava as linhas “estouradas” ao paginar (colunas diferentes de uma
+   página para outra). `max-width` fixo NUNCA aqui: ele força a quebra. */
+#changelist #result_list tbody td,
+#changelist #result_list tbody th,
+#changelist #result_list thead th {
+    white-space: nowrap !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+}
+
+/* Textos longos (cliente/descrição) têm largura MÁXIMA: quebram dentro da
+   própria célula, então a altura da linha fica estável entre páginas. */
+#changelist #result_list tbody td.field-cliente,
+#changelist #result_list tbody td.field-display_clientes,
+#changelist #result_list tbody td.field-periodo_tratamento,
+#changelist #result_list tbody td.field-descricao {
+    white-space: normal !important;
+    width: 260px !important;
+    min-width: 200px !important;
+    max-width: 260px !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ALTURA PADRÃO da linha: independente do conteúdo e da página, toda linha
+   mede o mesmo. Isto é o que impede uma linha “estourar” ao paginar. */
+#changelist #result_list tbody tr {
+    height: 22px !important;
+    max-height: 22px;
+}
+
+#changelist #result_list tbody td,
+#changelist #result_list tbody th {
+    height: 22px !important;
+    max-height: 22px;
+    overflow: hidden;
+    line-height: 20px !important;
+    vertical-align: middle !important;
+}
+
+/* Todas as células em UMA linha: a tabela cresce para os lados e a rolagem
+   horizontal (setas ◀ ▶ / arrastar) dá acesso ao resto. Sem isto o navegador
+   espreme as colunas e o conteúdo quebra em 3-4 linhas por célula. */
+#changelist #result_list tbody td,
+#changelist #result_list tbody th {
+    white-space: nowrap;
+}
+
+/* Só os textos longos podem quebrar — e com largura mínima confortável. */
+#changelist #result_list tbody td.field-cliente,
+#changelist #result_list tbody td.field-display_clientes,
+#changelist #result_list tbody td.field-periodo_tratamento,
+#changelist #result_list tbody td.field-descricao {
+    white-space: normal;
 }
 
 #changelist #result_list thead th {
@@ -939,20 +1044,121 @@ html.hide-top-filter div.xfull {
     white-space: nowrap;
 }
 
-/* Cabeçalho fixo: ao rolar a tabela a coluna continua identificada. */
-#changelist #result_list thead th {
-    position: sticky;
-    top: 0;
-    z-index: 2;
+
+
+/* CABEÇALHO FIXO: as linhas rolam por baixo dele.
+
+   O `<thead>` é `sticky` em `top: var(--admin-thead-top)`.
+
+   POR QUE NÃO `top: 0`: o quadro (`.results`) é o scroller, mas quando a
+   PÁGINA é rolada a barra de ações (`position: sticky`, `top: 0`) fica
+   presa na janela e o cabeçalho, grudado em `top: 0` do quadro, subia junto
+   e desaparecia ATRÁS da barra. O JS mede a altura da barra e publica em
+   `--admin-thead-top`, de modo que o `<thead>` pára logo ABAIXO dela e
+   permanece sempre visível. */
+/* CABEÇALHO FIXO logo abaixo da barra de ações.
+
+   `position: fixed` posicionado pelo JS (`iniciarCabecalhoFixo`): o `<thead>`
+   vira uma faixa presa na janela, com a mesma largura/posição da tabela e
+   deslocada no eixo X conforme a rolagem horizontal do quadro.
+
+   Por que `fixed` e não `sticky`: o quadro rola na horizontal, e qualquer
+   `overflow` nele cria um contexto que prende o `sticky` — o cabeçalho subia
+   junto com a página e entrava atrás da barra. Com `fixed` ele é independente
+   do fluxo e fica SEMPRE visível, enquanto o resto sobe.
+
+   A classe `thead-fixo` é aplicada só quando a tabela está visível. */
+#changelist #result_list thead.thead-fixo {
+    position: fixed;
+    left: auto;
+    right: auto;
+    top: var(--admin-thead-top, 0px);
+    z-index: 6;
+    display: table-header-group;
+    /* Fundo SÓLIDO: as linhas passam por baixo dele. */
+    background: var(--darkened-bg, #f8f9fa);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+    /* SEM `overflow: hidden`: ele cortava a largura e desalinhava as colunas
+       da tabela quando o cabeçalho era deslocado na rolagem lateral. */
+    overflow: visible;
+    /* Larguras copiadas pelo JS (`iniciarCabecalhoFixo`). */
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+#changelist #result_list thead.thead-fixo th {
+    background: var(--darkened-bg, #f8f9fa);
+    box-sizing: border-box;
+}
+
+/* A tabela fica com as MESMAS larguras de coluna do cabeçalho fixo, para os
+   dois rolarem em perfeita sincronia. */
+#changelist #result_list thead.thead-fixo th,
+#changelist #result_list:has(thead.thead-fixo) tbody td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Célula de AÇÃO/SELEÇÃO da 1ª coluna: acompanha a rolagem lateral como as
+   demais (o cabeçalho fixo também é deslocado). Sem `sticky` aqui, o checkbox
+   e o título dele saem juntos da tela — é o que mantém o alinhamento. */
+#changelist #result_list tbody td.action-checkbox {
+    position: static;
+    background: var(--body-bg, #fff);
+}
+
+/* O cabeçalho é canto superior esquerdo: precisa vencer as duas camadas.
+   IMPORTANTE: `position: static` no `th` do checkbox QUANDO O CABEÇALHO ESTÁ
+   FIXO. Ele era `sticky; left: 0`, o que o deixava parado mesmo com o
+   `translateX` do `<thead>` — daí a coluna do checkbox desalinhar da tabela
+   na rolagem lateral. */
+#changelist #result_list thead.thead-fixo th.action-checkbox-column {
+    position: static !important;
+    left: auto !important;
+}
+
+#changelist #result_list thead th.action-checkbox-column {
+    z-index: 6;
     background: var(--darkened-bg, #f8f9fa);
 }
 
 #changelist #result_list tbody td,
 #changelist #result_list tbody th {
-    padding: 9px 10px !important;
-    vertical-align: top;
-    font-size: 0.82rem;
-    line-height: 1.4;
+    padding: 0 8px !important;
+    font-size: 0.7rem;
+}
+
+/* Célula de checkbox não gasta espaço vertical. */
+#changelist #result_list tbody td.action-checkbox {
+    padding: 0 4px !important;
+    line-height: 1 !important;
+}
+
+/* Os próprios `input`/`select` da listagem editável não podem inchar a linha. */
+#changelist #result_list tbody td input,
+#changelist #result_list tbody td select {
+    padding: 0 4px !important;
+    font-size: 0.7rem !important;
+    height: 16px !important;
+    min-height: 0 !important;
+    line-height: 1.2 !important;
+    margin: 0 !important;
+    vertical-align: middle !important;
+}
+
+#changelist #result_list tbody td.action-checkbox,
+#changelist #result_list tbody td.action-checkbox input {
+    min-height: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    margin: 0 !important;
+    vertical-align: middle;
+}
+
+#changelist #result_list thead th {
+    padding: 6px 10px !important;
+    height: auto !important;
 }
 
 /* Números e datas em uma linha. */
@@ -977,20 +1183,7 @@ html.hide-top-filter div.xfull {
     font-variant-numeric: tabular-nums;
 }
 
-/* Textos longos têm largura confortável (quebram dentro da própria célula). */
-#changelist #result_list tbody td.field-cliente,
-#changelist #result_list tbody td.field-display_clientes {
-    min-width: 220px;
-    max-width: 320px;
-    white-space: normal;
-}
 
-#changelist #result_list tbody td.field-periodo_tratamento,
-#changelist #result_list tbody td.field-descricao {
-    min-width: 160px;
-    max-width: 260px;
-    white-space: normal;
-}
 
 /* LISTAGEM EDITÁVEL (`list_editable`) — tabela montada pelo
    admin_changelist_actions.js a partir das linhas soltas do formset. */
@@ -1402,3 +1595,758 @@ html.hide-top-filter div.xfull {
         max-width: 46vw;
     }
 }
+
+/* --------------------------------------------------------------------------
+   7. MENSAGENS DO ADMIN (AGENTS.md item 6)
+   --------------------------------------------------------------------------
+   success → verde · warning/alert → amarelo · error/danger → vermelho
+   O Django imprime `<ul class="messagelist"><li class="success|warning|
+   error|info|debug">`. As cores são fixas (não dependem do tema escuro) para
+   que a leitura do nível seja imediata. */
+ul.messagelist {
+    list-style: none;
+    margin: 0 0 16px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+ul.messagelist li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 0;
+    padding: 11px 14px 11px 42px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    line-height: 1.45;
+    font-weight: 500;
+    background-repeat: no-repeat;
+    background-position: 14px 50%;
+    background-size: 16px 16px;
+    border-left-width: 4px;
+    border-left-style: solid;
+}
+
+/* SUCESSO — verde */
+ul.messagelist li.success {
+    background-color: #e7f6ec;
+    border-left-color: #198754;
+    color: #14532d;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23198754'%3E%3Cpath d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm-1.2 14.6-4.2-4.2 1.4-1.4 2.8 2.8 6-6 1.4 1.4-7.4 7.4Z'/%3E%3C/svg%3E");
+}
+
+/* ALERTA — amarelo */
+ul.messagelist li.warning,
+ul.messagelist li.alert {
+    background-color: #fff8e1;
+    border-left-color: #e0a800;
+    color: #7c5a00;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23e0a800'%3E%3Cpath d='M12 2 1 21h22L12 2Zm-1 6h2v7h-2V8Zm0 9h2v2h-2v-2Z'/%3E%3C/svg%3E");
+}
+
+/* PERIGO — vermelho */
+ul.messagelist li.error,
+ul.messagelist li.danger {
+    background-color: #fdecec;
+    border-left-color: #dc3545;
+    color: #842029;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23dc3545'%3E%3Cpath d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 15h-2v-2h2v2Zm0-4h-2V7h2v6Z'/%3E%3C/svg%3E");
+}
+
+/* INFORMAÇÃO — azul (não é alerta, mas precisa ser distinguido) */
+ul.messagelist li.info,
+ul.messagelist li.debug {
+    background-color: #e8f1fd;
+    border-left-color: #0d6efd;
+    color: #084298;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%230d6efd'%3E%3Cpath d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 15h-2v-6h2v6Zm0-8h-2V7h2v2Z'/%3E%3C/svg%3E");
+}
+
+ul.messagelist li.success a,
+ul.messagelist li.warning a,
+ul.messagelist li.error a,
+ul.messagelist li.info a {
+    color: inherit;
+    text-decoration: underline;
+    font-weight: 600;
+}
+
+/* --------------------------------------------------------------------------
+   8. PAINÉIS OCULTÁVEIS: DASHBOARD (KPIs) E BARRA DE AÇÕES
+   --------------------------------------------------------------------------
+   Breadcrumb, filtros e busca já têm botão de ocultar/exibir (seção 1-4).
+   Aqui entram os DOIS painéis que faltavam. A tabela e os botões de ação
+   continuam SEMPRE visíveis (AGENTS.md, item 10). */
+/**
+ * O botão que OCULTA fica dentro do painel e o que EXIBE, na barra de
+ * ferramentas do admin (lado dos botões Adicionar/Salvar) — os dois são
+ * controlados pelo JS e pelo estado salvo no navegador.
+ *
+ * Os seletores são mantidos por PAINEL: esconder o dashboard não pode
+ * esconder os filtros (e vice-versa).
+ */
+.hide-dashboard .admin-kpi-panel {
+    display: none !important;
+}
+
+.hide-filters .admin-top-filter-bar {
+    display: none !important;
+}
+
+/* O painel é só um ENVOLTÓRIO: os cards continuam no GRID do
+   `.admin-dashboard-kpis`, em linha. Antes o envoltório virou flex em coluna
+   e empilhou os KPIs à direita — o botão de ocultar não pode ditar o layout
+   dos cards. Ele fica fora do fluxo (posicionado no canto), e o padding-top
+   só abre o espaço dele. */
+.admin-kpi-panel {
+    position: relative;
+    margin-bottom: 4px;
+    padding-top: 26px;
+}
+
+.admin-kpi-panel > .panel-collapse-btn {
+    position: absolute;
+    top: 0;
+    right: 0;
+    margin: 0;
+}
+
+/* Botão de ocultar/exibir dentro do cabeçalho de cada painel */
+.panel-collapse-btn {
+    margin-left: auto;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    background: rgba(255, 255, 255, 0.75);
+    color: #495057;
+    border-radius: 5px;
+    padding: 2px 8px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    line-height: 1.6;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.panel-collapse-btn:hover {
+    background: #fff;
+    color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+/* Os botões de reexibir ficam na barra de exibição (#admin-view-controls-bar,
+   `btn-toggle-dashboard`) e no painel — nunca escondidos junto com o painel. */
+.hide-dashboard .btn-show-dashboard {
+    display: inline-flex !important;
+}
+
+.btn-show-dashboard {
+    display: none !important;
+}
+
+/* --------------------------------------------------------------------------
+   9. SESSÕES FIXAS NA ROLAGEM (AGENTS.md, item 10)
+   --------------------------------------------------------------------------
+   breadcrumb → dashboards → filtros → ações (ações/Add/Salvar) → tabela.
+   Breadcrumb e filtros já são ocultáveis (seção 1-4 e 7-8); a BARRA DE AÇÕES
+   fica sempre visível e agora acompanha a rolagem junto com o cabeçalho da
+   tabela. A tabela (com o <thead>) nunca é ocultada. */
+
+/* Barra de ações (topo da tabela) grudada abaixo do cabeçalho fixo. */
+#changelist-form > .actions.actions-top,
+#changelist .results .actions,
+#changelist #changelist-form > .actions:first-of-type {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: var(--body-bg, #fff);
+    border: 1px solid var(--border-color, #e0e6ed);
+    border-radius: 6px 6px 0 0;
+    padding: 8px 10px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+}
+
+/* Faixa de rolagem horizontal ACIMA da tabela (além da do rodapé). */
+#changelist .js-scroll-topo {
+    overflow-x: auto;
+    overflow-y: hidden;
+    height: 14px;
+    margin: 0 0 4px;
+    border: 1px solid var(--border-color, #e0e6ed);
+    border-radius: 4px;
+    background: var(--darkened-bg, #f8f9fa);
+}
+
+#changelist .js-scroll-topo-espelho {
+    height: 1px;
+}
+
+/* O cabeçalho da tabela fica ACIMA do conteúdo rolado, mas abaixo da barra
+   de ações (z-index menor que o da barra). */
+#changelist #result_list thead th {
+    z-index: 2;
+}
+
+/* --------------------------------------------------------------------------
+   10. MENSAGENS (`includes/messagelist.html`) — cores fixas
+   -------------------------------------------------------------------------- */
+.admin-messages {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0 0 16px;
+}
+
+.admin-message {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 11px 14px;
+    border-radius: 6px;
+    border-left: 4px solid transparent;
+    font-size: 0.85rem;
+    line-height: 1.45;
+    font-weight: 500;
+}
+
+.admin-message-icon {
+    flex: 0 0 auto;
+    font-weight: 700;
+    line-height: 1.45;
+}
+
+.admin-message-text {
+    flex: 1 1 auto;
+}
+
+.admin-message.msg-success {
+    background: #e7f6ec;
+    border-left-color: #198754;
+    color: #14532d;
+}
+
+.admin-message.msg-warning {
+    background: #fff8e1;
+    border-left-color: #e0a800;
+    color: #7c5a00;
+}
+
+.admin-message.msg-error {
+    background: #fdecec;
+    border-left-color: #dc3545;
+    color: #842029;
+}
+
+.admin-message.msg-info {
+    background: #e8f1fd;
+    border-left-color: #0d6efd;
+    color: #084298;
+}
+
+/* Mesmas cores nos alertas de página pública (`parciais/_messages.html`). */
+.alert.msg-success { background-color: #e7f6ec; color: #14532d; border-color: #198754; }
+.alert.msg-warning { background-color: #fff8e1; color: #7c5a00; border-color: #e0a800; }
+.alert.msg-error   { background-color: #fdecec; color: #842029; border-color: #dc3545; }
+.alert.msg-info    { background-color: #e8f1fd; color: #084298; border-color: #0d6efd; }
+
+/* --------------------------------------------------------------------------
+   11. BARRA DE AÇÕES ÚNICA (AGENTS.md, item 10)
+   --------------------------------------------------------------------------
+   [◀ ▶ rolar]  [ação em lote ▾ Executar]        [Adicionar] [Salvar]
+
+   Antes: "Adicionar/Salvar" ficavam numa lista à direita do topo e a barra de
+   ações num outro bloco (embaixo da tabela). Agora é UMA barra, grudada no
+   topo, com os botões de adicionar/salvar AO LADO da ação em lote. */
+.admin-action-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: nowrap;
+    position: sticky;
+    top: 0;
+    /* Acima do cabeçalho da tabela (que é `sticky` e tem z-index 5): a
+       tabela rola POR BAIXO da barra, nunca por cima nem dentro dela. */
+    z-index: 10;
+    background: var(--body-bg, #fff);
+    border: 1px solid var(--border-color, #e0e6ed);
+    border-radius: 6px 6px 0 0;
+    padding: 8px 10px;
+    margin: 0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+.admin-action-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* Add/Salvar NÃO quebram para outra linha: ficam sempre à direita, ao lado
+   da ação em lote (era isso que deixava o vazio embaixo da barra). */
+.admin-action-bar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+    margin-left: auto;
+}
+
+/* A lista de "object-tools" do Django (Adicionar + Salvar) mora dentro desta
+   barra: sem `float`, tudo em UMA linha alinhada à direita. O `float: left`
+   padrão do Django era o motivo de o Salvar “pular” para baixo e esquerda. */
+/* O CSS de base do Django declara `.object-tools { float: right; margin-top:
+   -48px }` e `.object-tools li { height: 1rem; float: left; margin-left:
+   5px }` — o `margin-top` negativo e o `height` fixo eram o motivo de o
+   Salvar escapar da linha e de os botões ficarem desalinhados. Aqui tudo é
+   neutralizado e a lista vira um flex em linha, alinhado à direita. */
+.admin-action-bar-right ul.object-tools {
+    float: none !important;
+    margin: 0 !important;
+    margin-top: 0 !important;
+    padding: 0 !important;
+    position: static !important;
+    display: flex !important;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    width: auto;
+    font-size: inherit;
+    font-weight: normal;
+}
+
+.admin-action-bar-right ul.object-tools li {
+    float: none !important;
+    margin: 0 !important;
+    margin-left: 0 !important;
+    padding: 0 !important;
+    list-style: none;
+    display: inline-flex;
+    align-items: center;
+    height: auto !important;
+    min-height: 0;
+}
+
+.admin-action-bar-right ul.object-tools li a,
+.admin-action-bar-right ul.object-tools li a:link,
+.admin-action-bar-right ul.object-tools li a:visited,
+.admin-action-bar-right ul.object-tools li input[type="submit"] {
+    display: inline-flex !important;
+    float: none !important;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    height: 30px;
+    min-width: 0;
+    padding: 0 14px !important;
+    margin: 0 !important;
+    border-radius: 4px;
+    font-size: 0.8125rem !important;
+    font-weight: 600;
+    line-height: 1;
+    text-transform: none;
+    letter-spacing: 0;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+/* O botão "Adicionar" mantém a cor de destaque do Django, sem o ícone
+   sobreposto (o padding-right extra era para o imagem de fundo). */
+.admin-action-bar-right ul.object-tools li a.addlink {
+    padding-right: 14px !important;
+    background-image: none !important;
+}
+
+/* O “Salvar” é um <input> (não um <a>): precisa do mesmo tamanho do Adicionar. */
+.admin-action-bar-right ul.object-tools li input.btn-salvar-listagem {
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.admin-action-bar-right ul.object-tools li.li-salvar-listagem {
+    display: inline-flex;
+    align-items: center;
+}
+
+/* O form de ações do Django perde a margem: é só um grupo dentro da barra. */
+.admin-action-bar .actions {
+    float: none;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    position: static;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: auto;
+    flex-wrap: wrap;
+}
+
+/* O Django envolve tudo num <div>: ele também precisa ser flex e não pode
+   levar 100% da largura (era isso que esticava a barra e jogava o
+   Adicionar/Salvar para uma segunda linha). */
+.admin-action-bar .actions > div,
+.admin-action-bar .actions label,
+.admin-action-bar .actions .select-across-form {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    width: auto;
+    flex: 0 0 auto;
+}
+
+.admin-action-bar .actions select[name="action"] {
+    min-width: 220px;
+    max-width: 320px;
+}
+
+.admin-action-bar .actions .action-counter {
+    margin: 0;
+    font-size: 0.75rem;
+    color: var(--body-quiet-color, #6c757d);
+    white-space: nowrap;
+    flex: 0 0 auto;
+}
+
+/* Nenhum rótulo “Ação” em bloco por cima do select: o Django emite
+   `<label>Ação: <select>…` e o label é DISPLAY BLOCK, o que ocupava a linha
+   inteira e mandava o Adicionar/Salvar para baixo. */
+.admin-action-bar .actions label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    font-size: 0.78rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.admin-action-bar .actions > div > div {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+/* O contador “0 de 99” não empurra os botões da direita. */
+.admin-action-bar .actions .action-counter {
+    flex: 0 1 auto;
+}
+
+/* Salvar da listagem editável (submete o #changelist-form pelo atributo `form`). */
+.btn-salvar-listagem {
+    background: #198754;
+    color: #fff;
+    cursor: pointer;
+    border: none;
+    border-radius: 4px;
+    font-weight: 600;
+    white-space: nowrap;
+    width: auto;
+    float: none;
+    position: static;
+}
+
+.btn-salvar-listagem:hover {
+    background: #157347;
+}
+
+/* SETAS DE ROLAGEM HORIZONTAL — acima da tabela, sempre à mão. */
+.admin-scroll-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.admin-scroll-btn {
+    border: 1px solid var(--border-color, #ced4da);
+    background: var(--darkened-bg, #f8f9fa);
+    color: var(--body-fg, #495057);
+    border-radius: 5px;
+    padding: 3px 9px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    line-height: 1.4;
+    cursor: pointer;
+}
+
+.admin-scroll-btn:hover:not(:disabled) {
+    background: rgba(13, 110, 253, 0.1);
+    border-color: #0d6efd;
+    color: #0d6efd;
+}
+
+.admin-scroll-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+/* --------------------------------------------------------------------------
+   12. TEXTOS LONGOS NA LISTAGEM — linha fixa + MODAL de leitura/cópia
+   --------------------------------------------------------------------------
+   Campo de texto (descricao, observacao, ...) NUNCA define a altura da linha:
+   aparece resumido em uma linha e o botão “↗” abre o texto completo no modal
+   (com botão Copiar e Ctrl+C / Cmd+C). */
+#changelist #result_list td .texto-resumo {
+    display: inline-block;
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+#changelist #result_list td:has(.btn-ver-texto),
+#changelist #result_list td:has(textarea) {
+    white-space: nowrap !important;
+    max-width: 280px !important;
+    height: 22px !important;
+    max-height: 22px !important;
+    overflow: hidden;
+}
+
+/* O textarea da listagem editável fica do tamanho da LINHA (o texto completo
+   é lido/copiado no modal). */
+#changelist #result_list td textarea {
+    height: 18px !important;
+    min-height: 18px !important;
+    max-height: 18px !important;
+    width: 220px !important;
+    max-width: 220px !important;
+    padding: 0 4px !important;
+    font-size: 0.7rem !important;
+    line-height: 18px !important;
+    resize: none !important;
+    overflow: hidden;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+#changelist #result_list .btn-ver-texto {
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    background: #f1f5f9;
+    color: #0d6efd;
+    border-radius: 4px;
+    padding: 0 6px;
+    margin-left: 4px;
+    font-size: 0.7rem;
+    line-height: 16px;
+    cursor: pointer;
+    vertical-align: middle;
+}
+
+#changelist #result_list .btn-ver-texto:hover {
+    background: #e2e8f0;
+    border-color: #0d6efd;
+}
+
+/* MODAL de texto longo */
+.modal-texto-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10050;
+    background: rgba(15, 23, 42, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.modal-texto-overlay[hidden] {
+    display: none !important;
+}
+
+.modal-texto {
+    background: #fff;
+    border-radius: 10px;
+    width: min(860px, 92vw);
+    max-height: 86vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+}
+
+.modal-texto-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid #e2e8f0;
+    background: #f8fafc;
+}
+
+.modal-texto-header h3 {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.modal-texto-fechar {
+    border: none;
+    background: transparent;
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    color: #64748b;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.modal-texto-fechar:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+
+.modal-texto-conteudo {
+    flex: 1 1 auto;
+    min-height: 220px;
+    max-height: 62vh;
+    width: 100%;
+    box-sizing: border-box;
+    border: none;
+    outline: none;
+    padding: 14px 16px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    color: #0f172a;
+    background: #fff;
+    resize: none;
+    white-space: pre-wrap;
+    overflow: auto;
+}
+
+.modal-texto-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 10px 16px;
+    border-top: 1px solid #e2e8f0;
+    background: #f8fafc;
+}
+
+.modal-texto-status {
+    margin-right: auto;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #15803d;
+}
+
+.modal-texto-actions .button {
+    cursor: pointer;
+}
+
+/* --------------------------------------------------------------------------
+   13. ROLAGEM NATURAL DA PÁGINA — só AÇÕES e THEAD ficam fixos
+   --------------------------------------------------------------------------
+   Comportamento desejado na listagem:
+
+     • ao rolar, breadcrumb, indicadores, filtros e a TABELA SAEM da tela;
+     • a BARRA DE AÇÕES fica presa no topo da janela;
+     • o CABEÇALHO da tabela fica preso logo ABAIXO da barra;
+     • a tabela (corpo) rola junto com a página, então a PAGINAÇÃO aparece
+       no fim.
+
+   Para o `sticky` da barra e do `<thead>` funcionar em relação à JANELA, a
+   cadeia até o `<body>` NÃO pode ter altura limitada nem `overflow`
+   (qualquer um dos dois cria um scroller que prende o `sticky`). */
+/* A PÁGINA ROLA normalmente na listagem: breadcrumb, indicadores, filtros e a
+   tabela sobem e saem da tela — até a PAGINAÇÃO aparecer. Só a BARRA DE AÇÕES
+   e o `<thead>` ficam presos (CSS + `iniciarCabecalhoFixo` no JS). */
+html,
+body.change-list {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+}
+
+body.change-list #container,
+body.change-list #content,
+body.change-list #content-main,
+body.change-list #changelist,
+body.change-list .changelist-form-container {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+}
+
+#container {
+    min-height: 100vh;
+    align-self: stretch;
+}
+
+/* `#content` como bloco comum: no flex do Django, um filho `sticky` só
+   desliza DENTRO do container — e a barra/o cabeçalho subiam junto. */
+#container > #content,
+#container #content.colM,
+#container #content.colMS {
+    align-self: stretch;
+    display: block !important;
+    flex: 0 0 auto;
+    min-height: 0;
+}
+
+/* O `#changelist` PRECISA continuar FLEX: é ele que põe a tabela e os FILTROS
+   LATERAIS lado a lado (`#changelist-filter { flex: 0 0 240px; order: 1 }` no
+   CSS do Django). Forçar `display: block` aqui jogava os filtros para BAIXO
+   da tabela. */
+#changelist {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    flex-wrap: nowrap;
+}
+
+/* A coluna da esquerda (formulário + barra + tabela) cresce e pode encolher
+   sem empurrar os filtros para fora da tela. */
+#changelist .changelist-form-container {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: visible;
+}
+
+/* A coluna de filtros mantém a largura fixa do Django e não desce. */
+#changelist #changelist-filter {
+    flex: 0 0 240px;
+    order: 1;
+    align-self: flex-start;
+    margin-left: 30px;
+}
+
+/* ROLAGEM HORIZONTAL das ~19 colunas (~3500px) — SEM altura fixa.
+
+   O quadro rola SÓ na horizontal. Não há `height`/`max-height`: ele cresce
+   com as linhas e a página rola normalmente, levando breadcrumb, indicadores,
+   filtros e a tabela para fora da tela — até chegar na PAGINAÇÃO.
+
+   O `<thead>` é mantido preso à janela pelo JS (`iniciarCabecalhoFixo`), que
+   o posiciona com `position: fixed` logo abaixo da barra de ações e aplica o
+   `translateX` da rolagem horizontal — nada de prender o quadro. */
+#changelist .results {
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    max-width: 100% !important;
+}
+
+/* A tabela cresce com as linhas (a rolagem é do quadro). */
+#changelist #result_list {
+    height: auto !important;
+    max-height: none !important;
+}
+
+

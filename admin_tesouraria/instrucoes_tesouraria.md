@@ -30,13 +30,17 @@ No cadastro de `TransacaoFinanceira` o campo `movimento` tem, além de
 
 | Movimento | Tipo OBRIGATÓRIO | Onde se LANÇA | O sistema gera |
 |---|---|---|---|
-| `deposito` — Depósito (Caixa → Banco) | **`saida`** | **no CAIXA** (saída) | **entrada** no banco |
-| `saque` — Saque (Banco → Caixa) | **`saida`** | **no BANCO** (saída) | **entrada** no caixa |
+| `deposito` — **Depósito Bancário (Caixa → Banco)** | **`deposito_bancario`** | **no CAIXA** (saída) | **entrada** no banco |
+| `saque` — **Saque Bancário (Banco → Caixa)** | **`saque_bancario`** | **no BANCO** (saída) | **entrada** no caixa |
 
-**Regra do sentido**: a transferência é SEMPRE lançada no lado de onde o
-dinheiro SAI — e por isso o `tipo` é `saida` nos dois casos. O lado que RECEBE
-(a entrada) é criado automaticamente pelo sistema no outro módulo, com o mesmo
-`transferencia_id`; excluir um lado apaga o par.
+**Regra do sentido**: o `tipo` próprio da transferência (`Depósito Bancário` /
+`Saque Bancário`) define os dois lançamentos. A transferência é SEMPRE lançada
+no lado de onde o dinheiro SAI; o lado que RECEBE (a entrada) é criado
+automaticamente no outro módulo, com o mesmo `transferencia_id` — excluir um
+lado apaga o par.
+
+Os tipos `entrada`, `saida` e `nenhum` ficam para os movimentos simples de
+caixa/banco; **nunca** para transferências.
 
 Consequências práticas:
 - **depósito**: lançado no Caixa; `CompetenciaBancaria` é o banco de destino.
@@ -74,12 +78,17 @@ Consequências práticas:
 
 ## Movimentos de caixa — origens
 
+**Tipos do movimento de caixa**: `E` Entrada · `S` Saída · **`D` Depósito em
+Banco** (sai do caixa e entra no banco — é uma saída com tipo próprio, para o
+operador identificar a transferência). Depósito aceita `S` ou `D`; saque (par
+automático) é sempre `E`; o tipo `D` exige `origem='deposito_banco'`.
+
 | Origem | Efeito no caixa | Exige banco |
 |---|---|---|
 | `pagamento` | saída | não |
 | `recebimento` | entrada | não |
-| `deposito_banco` | saída | sim (competência bancária aberta) + transação `deposito` |
-| `saque_banco` | entrada | sim (competência bancária aberta) + transação `saque` |
+| `deposito_banco` | saída (tipo `S` ou `D`) | sim (competência bancária aberta) + transação **Depósito Bancário** |
+| `saque_banco` | entrada | **par automático** do Saque Bancário lançado no banco |
 | `troco` | entrada | não |
 | `ajuste` | entrada ou saída | não |
 

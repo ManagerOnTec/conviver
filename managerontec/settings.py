@@ -427,12 +427,20 @@ JAZZMIN_DASHBOARDS = {
 }
 
 
+# Cores das mensagens (AGENTS.md, item 6): o `messagelist` do Django usa
+# `message.tags` como classe do <li>. Sucesso → verde, alerta → amarelo,
+# perigo → vermelho. As duas classes (bootstrap e django) são emitidas juntas
+# para o CSS do admin (admin_layout_toggles.css, seção 7) e o de páginas
+# públicas pintarem igual.
+#
+# `alert-danger` vai JUNTO de `error`: sem a classe do Django, o
+# `ul.messagelist li` ficava sem a cor vermelha no admin.
 MESSAGE_TAGS = {
-    constants.ERROR: 'alert-danger',
-    constants.WARNING: 'alert-warning',
-    constants.DEBUG: 'alert-info',
-    constants.SUCCESS: 'alert-success',
-    constants.INFO: 'alert-info',
+    constants.ERROR: 'error alert-danger',
+    constants.WARNING: 'warning alert-warning',
+    constants.DEBUG: 'debug alert-info',
+    constants.SUCCESS: 'success alert-success',
+    constants.INFO: 'info alert-info',
 }
 
 MSG_ADD = 'Adicionado com sucesso!'

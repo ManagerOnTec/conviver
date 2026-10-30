@@ -74,6 +74,9 @@ class TransacaoFinanceira(models.Model):
     TIPO_CHOICES = [
         ('entrada', 'Entrada'),
         ('saida', 'Saída'),
+        # TRANSFERÊNCIAS: o tipo diz o SENTIDO do dinheiro entre caixa e banco.
+        ('deposito_bancario', 'Depósito Bancário'),
+        ('saque_bancario', 'Saque Bancário'),
         ('nenhum', 'Não Movimenta'),
     ]
 
@@ -83,13 +86,13 @@ class TransacaoFinanceira(models.Model):
         # TRANSFERÊNCIAS entre caixa e banco: geram DOIS lançamentos.
         # O nome do movimento é o SENTIDO do dinheiro: depósito sai do CAIXA e
         # entra no BANCO; saque sai do BANCO e entra no CAIXA.
-        ('deposito', 'Depósito (Caixa → Banco)'),
-        ('saque', 'Saque (Banco → Caixa)'),
+        ('deposito', 'Depósito Bancário (Caixa → Banco)'),
+        ('saque', 'Saque Bancário (Banco → Caixa)'),
         ('nenhum', 'Não Movimenta'),
     ]
 
     transacao_financeira = models.CharField(max_length=80)
-    tipo = models.CharField(max_length=7, choices=TIPO_CHOICES)
+    tipo = models.CharField(max_length=17, choices=TIPO_CHOICES)
     movimento = models.CharField(max_length=9, choices=MOVIMENTO_CHOICES)
     estabelecimento = models.ForeignKey(
         Estabelecimento, on_delete=models.PROTECT,
@@ -103,11 +106,6 @@ class TransacaoFinanceira(models.Model):
         return f"{self.transacao_financeira} / {self.tipo} / {self.movimento}"
 
     # ------------------------------------------------------------------
-    @property
-    def e_transferencia(self):
-        """Depósito/saque: movimenta CAIXA **e** BANCO ao mesmo tempo."""
-        return self.movimento in ('deposito', 'saque')
-
     # ------------------------------------------------------------------
     # TRANSFERÊNCIAS: o sistema gera AUTOMATICAMENTE o lançamento do outro
     # lado. O `tipo` digitado vale para o lado do MOVIMENTO escolhido.
@@ -128,37 +126,56 @@ class TransacaoFinanceira(models.Model):
     }
 
     # Os DOIS sentidos em que a transferência pode ser registrada: começando
-    # pelo caixa (depósito) ou pelo banco (saque). Ambos os `tipo` são
-    # 'saida', porque nos dois casos o dinheiro está SAINDO do lugar onde foi
-    # digitado e ENTRANDO no outro.
+    # pelo caixa (depósito) ou pelo banco (saque). O `tipo` próprio da
+    # transferência diz o sentido — e é ele que define os dois lançamentos.
     TIPO_ESPERADO = {
-        'deposito': 'saida',
-        'saque': 'saida',
+        'deposito': 'deposito_bancario',
+        'saque': 'saque_bancario',
     }
 
     @property
     def tipo_esperado(self):
         """Tipo que a transação DEVE ter conforme o movimento.
 
-        **Depósito** (caixa → banco): sai do caixa, entra no banco.
-        **Saque** (banco → caixa): sai do banco, entra no caixa.
-        Como o lançamento digitado é sempre a SAÍDA do lado de origem, o tipo
-        é `saida` nos dois casos — igual a uma transferência bancária. O lado
-        de destino (a ENTRADA) é criado automaticamente no outro módulo.
+        **Depósito Bancário** (caixa → banco): sai do caixa, entra no banco.
+        **Saque Bancário** (banco → caixa): sai do banco, entra no caixa.
+        O lançamento digitado é a SAÍDA do lado de origem; a ENTRADA no outro
+        lado é criada automaticamente.
         """
         return self.TIPO_ESPERADO.get(self.movimento)
+
+    @property
+    def tipo_lancamento(self):
+        """'entrada' / 'saida' do lado onde o lançamento é DIGITADO.
+
+        - `saque_bancario`  → lança no BANCO como **saída** (sai do banco e
+          entra no caixa);
+        - `deposito_bancario` → lança no CAIXA como **saída** (sai do caixa e
+          entra no banco).
+
+        Como o lançamento digitado é SEMPRE a saída do lado de origem, o valor
+        é `saida` nos dois casos. Os demais tipos devolvem o próprio `tipo`.
+        """
+        if self.tipo in ('deposito_bancario', 'saque_bancario'):
+            return 'saida'
+        return self.tipo
+
+    @property
+    def e_transferencia(self):
+        return self.tipo in ('deposito_bancario', 'saque_bancario')
 
     def clean(self):
         from django.core.exceptions import ValidationError
         esperado = self.tipo_esperado
         if esperado and self.tipo != esperado:
-            lado = self.LADO_TIPADO.get(self.movimento, '')
+            sentido = ('o dinheiro sai do CAIXA e entra no BANCO'
+                       if self.movimento == 'deposito'
+                       else 'o dinheiro sai do BANCO e entra no CAIXA')
             raise ValidationError({
                 'tipo':
                     f'Para “{self.get_movimento_display()}” o tipo deve ser '
-                    f'“{dict(self.TIPO_CHOICES)[esperado]}”: o dinheiro SAI do '
-                    f'{lado} e ENTRA no outro lado — esse lançamento de '
-                    'entrada é gerado automaticamente.'})
+                    f'“{dict(self.TIPO_CHOICES)[esperado]}” — {sentido}. '
+                    'O lançamento do outro lado é gerado automaticamente.'})
         if self.movimento == 'nenhum' and self.tipo != 'nenhum':
             raise ValidationError({
                 'tipo': 'Transação que não movimenta deve ter tipo '

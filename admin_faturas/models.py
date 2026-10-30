@@ -107,6 +107,21 @@ class Convenio(models.Model):
     def __str__(self):
         return self.convenio
 
+    def motivo_recusa_edicao(self):
+        """Por que este CONVÊNIO não pode ser ALTERADO (ou None = pode).
+
+        REGRA: só se altera o convênio quando ele NÃO tem pré-fatura ligada a
+        ele. As etapas seguintes (fatura, baixa, movimento) são tratadas nas
+        próprias telas — aqui o convênio olha só um passo à frente.
+        """
+        if self.pk is None:
+            return None
+        if self.prefaturas.exists():
+            return (f'O convênio “{self}” já tem pré-fatura gerada e não pode '
+                    'ser alterado. Exclua primeiro a PRÉ-FATURA '
+                    '(“2. Pré-Faturas”) para liberar a edição.')
+        return None
+
 
 class PreFatura(models.Model):
     estabelecimento = models.ForeignKey(
@@ -152,10 +167,51 @@ class PreFatura(models.Model):
     def __str__(self):
         return f"{self.convenio}"
 
+    def fatura_gerada(self):
+        """A FATURA gerada por esta pré-fatura (ou None)."""
+        if self.pk is None:
+            return None
+        return Fatura.objects.filter(prefatura_ptr_id=self.pk).first()
+
+    def motivo_recusa_edicao(self):
+        """Por que esta PRÉ-FATURA não pode ser ALTERADA (ou None = pode).
+
+        REGRA: só se altera a pré-fatura quando ela NÃO tem FATURA ligada a
+        ela. Como `Fatura` herda de `PreFatura`, a versão de baixo (fatura)
+        sobrescreve a desta classe.
+        """
+        if self.pk is None:
+            return None
+        fatura = Fatura.objects.filter(prefatura_ptr_id=self.pk).first()
+        if fatura is not None:
+            return (f'A pré-fatura {self.pk} já gerou a fatura {fatura.pk} e '
+                    'não pode ser alterada. Exclua primeiro a FATURA, em '
+                    '“3. Faturas”, para liberar a edição.')
+        return None
+
+    def motivo_recusa_exclusao(self):
+        """Por que esta pré-fatura NÃO pode ser excluída (ou None = pode).
+
+        REGRA: só se exclui a pré-fatura quando ela NÃO tem FATURA ligada a
+        ela. (A versão de baixo, da fatura, sobrescreve esta.)
+        """
+        if self.pk is None:
+            return None
+        fatura = Fatura.objects.filter(prefatura_ptr_id=self.pk).first()
+        if fatura is not None:
+            return (f'A pré-fatura {self.pk} já gerou a fatura {fatura.pk} e '
+                    'não pode ser excluída. Exclua primeiro a FATURA, em '
+                    '“3. Faturas”.')
+        return None
+
     def save(self, *args, **kwargs):
+        # Sem vencimento informado, o padrão é a COMPETÊNCIA + dia de envio +
+        # dias de pagamento (antes somava o dia de envio a um `timedelta`, o
+        # que levantava `TypeError` e derrubava a edição em linha).
         if not self.dt_vencimento:
-            self.dt_vencimento = self.dia_envio + \
-                timedelta(days=self.dias_pagamento)
+            base_venc = self.competencia or timezone.localdate()
+            self.dt_vencimento = base_venc + timedelta(
+                days=(self.dia_envio or 0) + (self.dias_pagamento or 0))
         super().save(*args, **kwargs)
 
     def create_fatura(self):
@@ -299,6 +355,52 @@ class Fatura(PreFatura):
                 f"Competência: {competencia_formatada} / "
                 f"Valor: {self.valor_fatura} / Saldo: {self.valor_saldo} / "
                 f"Local: {self.estabelecimento}")
+
+    def baixas_registradas(self):
+        """Baixas registradas para esta fatura (tabela da BAIXA)."""
+        if self.pk is None:
+            return BaixaFatura.objects.none()
+        return BaixaFatura.objects.filter(fatura_baixada__in=[self.pk])
+
+    def movimento_vinculado(self):
+        """Movimento bancário de uma baixa desta fatura (o primeiro)."""
+        if self.pk is None:
+            return None
+        try:
+            return MovimentoBancario.objects.filter(
+                baixa_fatura__in=self.baixas_registradas()).first()
+        except Exception:
+            return None
+
+    def motivo_recusa_edicao(self):
+        """Por que esta FATURA não pode ser ALTERADA (ou None = pode).
+
+        REGRA: só se altera a fatura quando ela NÃO tem BAIXA ligada a ela.
+        (A baixa, por sua vez, depende da competência bancária aberta.)
+        """
+        if self.pk is None:
+            return None
+        if self.baixas_registradas().exists():
+            return (f'A fatura {self.pk} tem baixa registrada e não pode ser '
+                    'alterada. Exclua primeiro a BAIXA, em “4. Baixa de '
+                    'Faturas”, para liberar a edição.')
+        return None
+
+    def motivo_recusa_exclusao(self):
+        """Por que esta FATURA não pode ser excluída (ou None = pode).
+
+        REGRA: só se exclui a fatura quando ela NÃO tem BAIXA ligada a ela.
+        """
+        if self.pk is None:
+            return None
+        if self.baixas_registradas().exists():
+            return ('A fatura %s já tem baixa (recebimento) registrada e não '
+                    'pode ser excluída. Exclua primeiro a BAIXA, em “4. Baixa '
+                    'de Faturas”.' % self.pk)
+        if BaixaFatura.objects.filter(fatura_ptr_id=self.pk).exists():
+            return ('O registro %s é uma baixa de fatura e não pode ser '
+                    'excluído por aqui.' % self.pk)
+        return None
 
     def pk_fatura_baixada(self):
         """Na FATURA, a própria pk (o `__str__` da baixa usa este nome)."""
@@ -513,8 +615,17 @@ class BaixaFatura(Fatura):
         # o `__str__` roda até em instância nova, em mensagem de erro.
         id_fatura = self.__dict__.get('fatura_baixada_ids') or None
         id_fatura = id_fatura[0] if id_fatura else self.__dict__.get('fatura')
-        return (f"{id_fatura} / Valor: {self.valor_baixa} / "
-                f"Recebimento: {self.dt_recebimento}")
+        if id_fatura is None and self.pk is not None:
+            # Carregada do banco: o vínculo está no M2M (sem tabela
+            # intermediária) — consulta em UMA query, sem quebrar o `__str__`.
+            try:
+                id_fatura = self.fatura_baixada.values_list(
+                    'pk', flat=True).first()
+            except Exception:
+                id_fatura = None
+        fatura = id_fatura if id_fatura is not None else '?'
+        return (f"Baixa {self.pk} (fatura {fatura}) / Valor: "
+                f"{self.valor_baixa} / Recebimento: {self.dt_recebimento}")
 
     def __init__(self, *args, **kwargs):
         # Aceita tanto o nome público (`fatura=`, `estabelecimento=`, ...)
@@ -574,6 +685,117 @@ class BaixaFatura(Fatura):
         return Fatura.objects.filter(
             models.Q(pk__in=queryset.values('pk'))
             | models.Q(baixas__in=baixadas)).distinct()
+
+    def movimentos_gerados(self):
+        """Movimentos bancários gerados por esta baixa (saem junto com ela)."""
+        if self.pk is None:
+            return []
+        try:
+            return list(self.movimentos_bancarios.all())
+        except Exception:
+            return []
+
+    def competencia_bancaria_fechada(self):
+        """A competência que trava esta baixa (fechada) — ou None.
+
+        Olha a competência do próprio cadastro e as dos movimentos gerados.
+        A FATURA (faturada ou não) NÃO entra nesta regra: baixa e movimento
+        são do lado BANCÁRIO e só a competência bancária os trava.
+        """
+        comps = list(self.movimentos_gerados())
+        candidatas = [m.competencia_bancaria for m in comps
+                      if m.competencia_bancaria_id]
+        if self.competencia_bancaria_id:
+            candidatas.append(self.competencia_bancaria)
+        return next((c for c in candidatas if c.dt_fechamento_competencia),
+                    None)
+
+    def motivo_recusa_exclusao(self):
+        """Por que esta BAIXA não pode ser excluída (ou None = pode).
+
+        Movimento e baixa são CONCOMITANTES (um exclui o outro) e só a
+        COMPETÊNCIA BANCÁRIA decide: aberta → pode; fechada → não. A fatura
+        estar finalizada NÃO impede (senão não haveria como desfazer a
+        baixa).
+        """
+        if self.pk is None:
+            return None
+        comp = self.competencia_bancaria_fechada()
+        if comp is not None:
+            return (f'A competência bancária “{comp.descricao}” está FECHADA '
+                    f'em {comp.dt_fechamento_competencia:%d/%m/%Y}: não é '
+                    'possível excluir a baixa (nem o movimento dela). Reabra '
+                    'a competência para corrigir.')
+        return None
+
+    def motivo_recusa_edicao(self):
+        """Por que esta BAIXA não pode ser ALTERADA (ou None = pode).
+
+        REGRA: baixa só se altera (ou exclui) com a COMPETÊNCIA BANCÁRIA
+        ABERTA — mesma regra do movimento. A fatura não entra aqui.
+        """
+        if self.pk is None:
+            return None
+        comp = self.competencia_bancaria_fechada()
+        if comp is not None:
+            return (f'A competência bancária “{comp.descricao}” está FECHADA '
+                    f'em {comp.dt_fechamento_competencia:%d/%m/%Y}: não é '
+                    'possível alterar a baixa. Reabra a competência para '
+                    'corrigir.')
+        return None
+
+    def excluir_devolvendo_saldo(self):
+        """Exclui a baixa e DEVOLVE o valor ao saldo da fatura.
+
+        Uma baixa abate `valor_saldo` da fatura quando é registrada; apagar a
+        linha sem devolver deixaria a fatura “paga” sem recebimento. A data de
+        liquidação é desfeita quando a fatura volta a ter saldo.
+        """
+        # A fatura é identificada ANTES: depois do delete o vínculo M2M sai.
+        fatura = self.fatura_baixada_do_bd()
+        fatura_pk = fatura.pk if fatura else self.pk_fatura_baixada()
+        valor = self.valor_baixa or 0
+        pk = self.pk
+        models.Model.delete(self)
+        if not fatura_pk:
+            return pk
+        fatura = Fatura.objects.filter(pk=fatura_pk).first()
+        if fatura is None:
+            return pk
+        fatura.refresh_from_db(fields=['valor_saldo', 'valor_fatura'])
+        saldo = (fatura.valor_saldo or 0) + valor
+        if fatura.valor_fatura is not None and saldo > fatura.valor_fatura:
+            saldo = fatura.valor_fatura
+        fatura.valor_saldo = saldo
+        if saldo > 0 and fatura.dt_liquidacao:
+            fatura.dt_liquidacao = None
+        fatura.save(update_fields=['valor_saldo', 'dt_liquidacao'])
+        return pk
+
+    def excluir_com_movimento(self):
+        """Exclui a baixa E os movimentos dela (concomitantes).
+
+        É a forma usada pela tela: excluir a baixa e o movimento andam juntos.
+        Se algum movimento estiver barrado (competência fechada ou
+        conciliado), NADA é excluído e o motivo volta ao chamador.
+        """
+        movimentos = self.movimentos_gerados()
+        for movimento in movimentos:
+            motivo = (movimento.motivo_recusa_exclusao()
+                      or movimento.motivo_recusa_conciliacao())
+            if motivo:
+                return motivo
+        motivo = self.competencia_bancaria_fechada()
+        if motivo is not None and not movimentos:
+            return (f'A competência bancária “{motivo.descricao}” está FECHADA '
+                    f'em {motivo.dt_fechamento_competencia:%d/%m/%Y}: não é '
+                    'possível excluir a baixa.')
+        for movimento in movimentos:
+            # Sem `excluir_baixa`: o movimento sai e a baixa é apagada logo
+            # abaixo, devolvendo o valor ao saldo da fatura.
+            movimento.delete()
+        self.excluir_devolvendo_saldo()
+        return None
 
     def pk_fatura_baixada(self):
         """PK da SUA fatura, lendo o aliases do ORM (sem SQL extra).

@@ -68,23 +68,56 @@ class MovimentoBancarioForm(forms.ModelForm):
         if not competencia_bancaria:          
             raise forms.ValidationError('Competência bancária é obrigatória.')
 
-        # Verifica o tipo da transação financeira
-        if transacao_financeira:
-            if transacao_financeira.tipo == 'entrada':
-                # Obriga o valor de entrada e valida valor de saída como 0
-                if not valor_entrada or valor_entrada <= 0:
-                    raise forms.ValidationError('Para transações de entrada, o valor de entrada deve ser maior que 0.')
-                if valor_saida and valor_saida > 0:
-                    raise forms.ValidationError('Para transações de entrada, o valor de saída deve ser 0.')
-            elif transacao_financeira.tipo == 'saida':
-                # Obriga o valor de saída e valida valor de entrada como 0
-                if not valor_saida or valor_saida <= 0:
-                    raise forms.ValidationError('Para transações de saída, o valor de saída deve ser maior que 0.')
-                if valor_entrada and valor_entrada > 0:
-                    raise forms.ValidationError('Para transações de saída, o valor de entrada deve ser 0.')
-            else:
-                raise forms.ValidationError('Tipo de transação financeira inválido.')
-        else:
+        # Competência FECHADA não aceita lançamento nem alteração.
+        if competencia_bancaria.dt_fechamento_competencia:
+            raise forms.ValidationError(
+                f'A competência “{competencia_bancaria.descricao}” está '
+                f'FECHADA em '
+                f'{competencia_bancaria.dt_fechamento_competencia:%d/%m/%Y}: '
+                'não é possível lançar nem alterar movimentos dela. Abra uma '
+                'nova competência para o banco.')
+
+        # Verifica o tipo da transação financeira.
+        #
+        # `tipo_lancamento` traduz os TIPOS DE TRANSFERÊNCIA para o lado que se
+        # digita no banco:
+        #   • Saque Bancário  → SAÍDA no banco (o caixa recebe a entrada);
+        #   • Depósito Bancário lançado no banco → ENTRADA no banco.
+        # Sem isso, as transferências caíam em “tipo inválido”.
+        if not transacao_financeira:
             raise forms.ValidationError('Transação financeira é obrigatória.')
+
+        # O DEPÓSITO BANCÁRIO lançado no BANCO é ENTRADA (o dinheiro sai do
+        # caixa). O SAQUE BANCÁRIO é SAÍDA. Os tipos simples seguem o próprio
+        # `tipo`.
+        tipo_lancamento = transacao_financeira.tipo
+        if (tipo_lancamento == 'deposito_bancario'
+                and getattr(transacao_financeira, 'movimento', '') == 'deposito'):
+            tipo_lancamento = 'entrada'
+        elif tipo_lancamento == 'saque_bancario':
+            tipo_lancamento = 'saida'
+        if tipo_lancamento == 'entrada':
+            if not valor_entrada or valor_entrada <= 0:
+                raise forms.ValidationError(
+                    'Para esta transação (entrada), o valor de entrada deve ser '
+                    'maior que 0.')
+            if valor_saida and valor_saida > 0:
+                raise forms.ValidationError(
+                    'Para esta transação (entrada), o valor de saída deve '
+                    'ficar vazio.')
+        elif tipo_lancamento == 'saida':
+            if not valor_saida or valor_saida <= 0:
+                raise forms.ValidationError(
+                    'Para esta transação (saída), o valor de saída deve ser '
+                    'maior que 0.')
+            if valor_entrada and valor_entrada > 0:
+                raise forms.ValidationError(
+                    'Para esta transação (saída), o valor de entrada deve '
+                    'ficar vazio.')
+        else:
+            raise forms.ValidationError(
+                f'A transação “{transacao_financeira}” não movimenta valor '
+                '(tipo “Não Movimenta”): escolha uma transação de entrada, '
+                'saída, depósito ou saque.')
 
         return cleaned_data

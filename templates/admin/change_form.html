@@ -17,10 +17,12 @@
 {% block coltype %}colM{% endblock %}
 {% block bodyclass %}{{ block.super }} app-{{ opts.app_label }} model-{{ opts.model_name }} change-form admin-custom-change-form{% endblock %}
 
-{# O base.html do Django imprime título e subtítulo acima do formulário — e o
-   subtítulo É o __str__ do objeto (ex.: o HTML inteiro da evolução). Na tela de
-   change-form a orientação já vem do breadcrumb + card, então nada disso é
-   duplicado aqui. #}
+{% comment %}
+  O base.html do Django imprime título e subtítulo acima do formulário — e o
+  subtítulo É o __str__ do objeto (ex.: o HTML inteiro da evolução). Na tela
+  de change-form a orientação já vem do breadcrumb + card, então nada disso é
+  duplicado aqui.
+{% endcomment %}
 {% block content_title %}{% endblock %}
 {% block content_subtitle %}{% endblock %}
 

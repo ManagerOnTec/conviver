@@ -26,9 +26,15 @@
 <tbody>
 {% for form, celulas, pk in cl.linhas_renderizadas %}
 <tr class="form-row">
-  <td class="action-checkbox"><input type="checkbox" class="action-select" name="_selected_action" value="{{ pk }}"{% if cl.model_admin.selecao_desabilitada %} disabled{% endif %}></td>
+  <td class="action-checkbox"><input type="checkbox" class="action-select" name="_selected_action" value="{{ pk }}"{% if cl.model_admin.selecao_desabilitada %} disabled title="A seleção enviaria o formulário de edição em linha (campos ocultos duplicados)"{% endif %}></td>
   {% for celula in celulas %}
-      <td>{{ celula.contents }}</td>
+      {% if celula.exclusao %}
+        <td title="{{ celula.exclusao }}" style="color:#9ca3af;">{{ celula.contents }}</td>
+      {% elif celula.title %}
+        <td title="{{ celula.title }}">{{ celula.contents }}</td>
+      {% else %}
+        <td>{{ celula.contents }}</td>
+      {% endif %}
     {% endfor %}
   </tr>
 {% empty %}
@@ -36,6 +42,28 @@
 {% endfor %}
 </tbody>
 </table>
+{% comment %}
+  MODAL de texto longo (AGENTS.md, item 10): o campo de texto da listagem
+  (`descricao`, `observacao`, …) aparece RESUMIDO em uma linha — o botão “↗”
+  abre este modal com o texto completo, selecionável e com “Copiar”
+  (Ctrl+C / Cmd+C também funcionam).
+{% endcomment %}
+<div class="modal-texto-overlay" id="modal-texto-overlay" hidden>
+  <div class="modal-texto" role="dialog" aria-modal="true" aria-labelledby="modal-texto-titulo">
+    <div class="modal-texto-header">
+      <h3 id="modal-texto-titulo">Texto completo</h3>
+      <button type="button" class="modal-texto-fechar" id="modal-texto-fechar"
+              title="Fechar (Esc)" aria-label="Fechar">✕</button>
+    </div>
+    <textarea class="modal-texto-conteudo" id="modal-texto-conteudo"
+              readonly spellcheck="false"></textarea>
+    <div class="modal-texto-actions">
+      <span class="modal-texto-status" id="modal-texto-status" role="status"></span>
+      <button type="button" class="button" id="modal-texto-copiar">Copiar</button>
+      <button type="button" class="button" id="modal-texto-fechar2">Fechar</button>
+    </div>
+  </div>
+</div>
 <script>
 (function () {
   document.addEventListener('click', function (event) {
@@ -64,6 +92,67 @@
     form.appendChild(csrf);
     document.body.appendChild(form);
     form.submit();
+  });
+})();
+
+/*
+ * MODAL de TEXTO LONGO — abre o texto completo da célula (`descricao`,
+ * `observacao`, …) e permite COPIAR para a área de transferência.
+ */
+(function () {
+  const overlay = document.getElementById('modal-texto-overlay');
+  if (!overlay) return;
+  const area = document.getElementById('modal-texto-conteudo');
+  const titulo = document.getElementById('modal-texto-titulo');
+  const status = document.getElementById('modal-texto-status');
+
+  function abrir(texto, rotulo) {
+    area.value = texto || '';
+    if (rotulo) titulo.textContent = rotulo;
+    overlay.hidden = false;
+    status.textContent = '';
+    area.focus();
+    area.select();
+  }
+  function fechar() {
+    overlay.hidden = true;
+    area.value = '';
+  }
+
+  document.addEventListener('click', function (event) {
+    const btn = event.target.closest('.btn-ver-texto');
+    if (!btn) return;
+    event.preventDefault();
+    event.stopPropagation();
+    abrir(btn.dataset.texto, btn.dataset.titulo);
+  });
+
+  document.getElementById('modal-texto-fechar').addEventListener('click', fechar);
+  document.getElementById('modal-texto-fechar2').addEventListener('click', fechar);
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) fechar(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !overlay.hidden) fechar();
+  });
+
+  document.getElementById('modal-texto-copiar').addEventListener('click', function () {
+    // Ctrl+C / Cmd+C também funcionam: o texto está selecionado na textarea.
+    const copiar = function () {
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          return navigator.clipboard.writeText(area.value);
+        }
+      } catch (e) { /* cai no execCommand */ }
+      area.focus();
+      area.select();
+      try { document.execCommand('copy'); } catch (e) { /* ignora */ }
+      return Promise.resolve();
+    };
+    copiar().then(function () {
+      status.textContent = 'Texto copiado.';
+      setTimeout(function () { status.textContent = ''; }, 2000);
+    }, function () {
+      status.textContent = 'Selecione o texto e use Ctrl+C / Cmd+C.';
+    });
   });
 })();
 </script>

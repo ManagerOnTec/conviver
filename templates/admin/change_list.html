@@ -44,31 +44,6 @@
 
 {% block content %}
   <div id="content-main">
-    {% block object-tools %}
-        <ul class="object-tools">
-          {% block object-tools-items %}
-            {% change_list_object_tools %}
-          {% endblock %}
-          {% comment %}
-            Botão "Salvar" da listagem editável (`list_editable`) no CANTO
-            SUPERIOR DIREITO da tela, junto aos botões "Adicionar". O POST
-            com `_save` é tratado pelo próprio Django (formset do changelist)
-            ou pelo handler custom (ex.: `salvar_baixas_da_listagem`). Sem
-            `formset` (listagem não editável) o botão não aparece. O botão
-            fica FORA do `#changelist-form` — o `submit` com
-            `form="changelist-form"` o associa ao form da listagem.
-          {% endcomment %}
-          {% if cl.formset %}
-            <li>
-              <input type="submit" name="_save" value="Salvar"
-                     class="default btn-salvar-listagem"
-                     form="changelist-form"
-                     style="cursor: pointer; border: none; padding: 5px 14px;
-                            border-radius: 4px; font-weight: 600;">
-            </li>
-          {% endif %}
-        </ul>
-    {% endblock %}
     {% if cl.formset and cl.formset.errors %}
         <p class="errornote">
         {% blocktranslate count counter=cl.formset.total_error_count %}Please correct the error below.{% plural %}Please correct the errors below.{% endblocktranslate %}
@@ -78,17 +53,71 @@
     <div class="module{% if cl.has_filters %} filtered{% endif %}" id="changelist">
       <div class="changelist-form-container">
         {% include "admin/includes/top_filter_and_kpis.html" %}
-        {% block search %}{% search_form cl %}{% endblock %}
+        {% comment %}
+          A BUSCA da listagem é a do painel de filtros
+          (`top_filter_and_kpis.html` → `topPatientSearchForm`, campo `q`).
+          O `{% search_form cl %}` do Django duplicava o campo (duas caixas de
+          busca na mesma tela) — ele fica DESLIGADO aqui. O bloco continua
+          definido para que alguma tela possa reinjetá-lo se precisar.
+        {% endcomment %}
+        {% block search %}{% endblock %}
         {% block date_hierarchy %}{% if cl.date_hierarchy %}{% date_hierarchy cl %}{% endif %}{% endblock %}
         <form id="changelist-form" method="post"{% if cl.formset and cl.formset.is_multipart %} enctype="multipart/form-data"{% endif %} novalidate>{% csrf_token %}
         {% block result_list %}
           {% comment %}
-            Barra de ações ACIMA da tabela e NOVAMENTE logo abaixo dela, antes
-            da paginação. O Django só cria `cl.formset` quando o ModelAdmin
-            tem `list_editable`; sem ela usamos `result_list` (como o
-            template padrão do Django faz).
+            Uma única barra de ações ACIMA da tabela (o `<form>` vem do Django:
+            `cl.formset` só existe quando o ModelAdmin tem `list_editable`;
+            sem ela usamos `result_list`, como o template padrão).
           {% endcomment %}
-          {% if action_form and cl.show_admin_actions %}{% admin_actions %}{% endif %}
+          {% comment %}
+            BARRA DE AÇÕES ÚNICA (AGENTS.md, item 10): à esquerda o seletor da
+            ação em lote + o botão "Executar"; à direita o "Adicionar" e o
+            "Salvar" da listagem editável. Fica grudada no topo na rolagem e
+            é a ÚNICA barra — a barra repetida no rodapé existia só para
+            repetir os mesmos botões, que agora estão sempre à vista.
+          {% endcomment %}
+          <div class="admin-action-bar" id="admin-action-bar">
+            <div class="admin-action-bar-left">
+              {% comment %}
+                Setas de ROLAGEM HORIZONTAL acima da tabela: com ~19 colunas
+                (~3500px) a barra de rolagem do rodapé fica longe demais.
+                Também dá para arrastar a tabela com o mouse.
+              {% endcomment %}
+              <span class="admin-scroll-nav" title="Rolar a tabela para os lados">
+                <button type="button" class="admin-scroll-btn" id="admin-scroll-left"
+                        aria-label="Rolar a tabela para a esquerda">◀</button>
+                <button type="button" class="admin-scroll-btn" id="admin-scroll-right"
+                        aria-label="Rolar a tabela para a direita">▶</button>
+              </span>
+              {% comment %}
+                `admin_actions` já emite os ocultos `select_across`/`index`.
+                Não repetir aqui (dois campos com o mesmo nome confundem o
+                agrupamento de checkboxes).
+              {% endcomment %}
+              {% if action_form and cl.show_admin_actions %}{% admin_actions %}{% endif %}
+            </div>
+            <div class="admin-action-bar-right">
+              {% comment %}
+                "Adicionar" e "Salvar" no MESMO <ul class="object-tools">: o
+                Django dá `float: left` aos <li> dessa lista, então o Salvar
+                solto (fora do <ul>) escapava para baixo e para a esquerda.
+                O Salvar fica como <li> ao lado do Adicionar, à direita.
+              {% endcomment %}
+              <ul class="object-tools">
+                {% block object-tools-items %}
+                  {% change_list_object_tools %}
+                  {% if cl.formset %}
+                    <li class="li-salvar-listagem">
+                      <input type="submit" name="_save" value="Salvar"
+                             class="default btn-salvar-listagem"
+                             form="changelist-form"
+                             title="Salvar as alterações feitas nas linhas da listagem">
+                    </li>
+                  {% endif %}
+                {% endblock %}
+              </ul>
+            </div>
+          </div>
           {% if cl.formset %}
             <div>{{ cl.formset.management_form }}</div>
           {% endif %}
@@ -106,7 +135,6 @@
           {% else %}
             {% result_list cl %}
           {% endif %}
-          {% if action_form and cl.show_admin_actions %}{% admin_actions %}{% endif %}
         {% endblock %}
         {% block pagination %}{% pagination cl %}{% endblock %}
         </form>

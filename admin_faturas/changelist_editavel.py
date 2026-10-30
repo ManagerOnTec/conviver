@@ -50,6 +50,8 @@ from django.core.exceptions import (
 )
 from django.db import models
 from django.urls import NoReverseMatch
+from django import forms
+from django.forms import Textarea
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
@@ -57,12 +59,23 @@ from django.utils.safestring import mark_safe
 class _Celula:
     """Uma célula já renderizada (texto/HTML) de uma coluna da listagem."""
 
-    __slots__ = ("contents", "is_link", "field")
+    # `title`: dica de tela livre. `exclusao`: motivo pelo qual o registro NÃO
+    # pode ser excluído — o template mostra a célula do pk em cinza com o motivo
+    # na dica de tela (antes mesmo da seleção para a ação em lote).
+    # `texto_completo`: conteúdo ORIGINAL do campo de texto. Quando presente, a
+    # célula mostra um resumo em uma linha e o template põe um botão “ver” que
+    # abre o MODAL de leitura/cópia (ver `admin_changelist_actions.js`).
+    __slots__ = ("contents", "is_link", "field", "title", "exclusao",
+                 "texto_completo")
 
-    def __init__(self, contents, is_link=False, field=None):
+    def __init__(self, contents, is_link=False, field=None, title="",
+                 exclusao="", texto_completo=""):
         self.contents = contents
         self.is_link = is_link
         self.field = field
+        self.title = title
+        self.exclusao = exclusao
+        self.texto_completo = texto_completo
 
 
 class ChangeListEditavel(ChangeList):
@@ -73,6 +86,68 @@ class ChangeListEditavel(ChangeList):
     os títulos seguintes — é o que acontece quando `result_headers` gera um
     header a mais (ver `colunas_efetivas`).
     """
+
+    #: Campos de TEXTO LONGO: na listagem entram RESUMIDOS em uma linha e, com
+    #: clique, abrem o modal de leitura/cópia (senão estouram a altura da linha).
+    campos_texto_longo = ('descricao', 'observacao', 'cliente', 'empenho',
+                          'empenho_global', 'periodo_tratamento',
+                          'display_clientes')
+
+    #: Caracteres mostrados na célula antes do botão “ver”.
+    limite_texto_celula = 60
+
+    def ids_da_listagem(self):
+        """PKs da PÁGINA atual — o que os checkboxes da tabela enviam."""
+        return [obj.pk for obj in self.result_list]
+
+    def motivo_exclusao(self, obj):
+        """Motivo pelo qual `obj` NÃO pode ser excluído (None = pode).
+
+        É a MESMA regra da ação em lote e do botão Excluir do registro:
+        `motivo_recusa_exclusao()` do modelo. Nunca derruba a listagem.
+        """
+        metodo = getattr(obj, 'motivo_recusa_exclusao', None)
+        if metodo is None:
+            return None
+        try:
+            return metodo()
+        except Exception:
+            return None
+
+    def _linhas_nao_editaveis(self):
+        """Pks (string) que não podem ser editadas em linha nesta tela.
+
+        Vem do ModelAdmin (`get_linhas_nao_editaveis`) — um recorte EM LOTE,
+        calculado UMA vez por requisição (sem consulta por linha).
+        """
+        if not hasattr(self, '_cache_linhas_travadas'):
+            metodo = getattr(self.model_admin, 'get_linhas_nao_editaveis', None)
+            try:
+                self._cache_linhas_travadas = (
+                    {str(pk) for pk in metodo(self.request)}
+                    if metodo is not None else set())
+            except Exception:
+                self._cache_linhas_travadas = set()
+        return self._cache_linhas_travadas
+
+    def motivo_edicao(self, obj):
+        """Motivo pelo qual `obj` NÃO pode ser alterado (None = pode).
+
+        MESMA regra da tela de alteração (`motivo_recusa_edicao()`). Com
+        motivo, as colunas de `list_editable` viram TEXTO (somente leitura) e
+        a linha não entra no POST — listagem editável é edição, e a regra vale
+        igual.
+        """
+        if str(getattr(obj, 'pk', '')) in self._linhas_nao_editaveis():
+            return ('já está em andamento no fluxo — altere/responda pela etapa '
+                    'de origem. As colunas editáveis aparecem somente leitura.')
+        metodo = getattr(obj, 'motivo_recusa_edicao', None)
+        if metodo is None:
+            return None
+        try:
+            return metodo()
+        except Exception:
+            return None
 
     def colunas_efetivas(self):
         """Colunas do `list_display` que o Django consegue renderizar.
@@ -106,6 +181,10 @@ class ChangeListEditavel(ChangeList):
                 continue
             colunas.append(field_name)
         return colunas
+
+    def _eh_coluna_pk(self, field_name):
+        """Coluna da chave (pk/id): onde a dica da linha é fixada."""
+        return field_name in (self.model._meta.pk.name, 'pk', 'id')
 
     def _eh_link(self, indice, field_name):
         """Mesma regra de `link_in_col` do Django (que é função aninhada)."""
@@ -142,12 +221,28 @@ class ChangeListEditavel(ChangeList):
         celulas = []
 
         colunas = self.colunas_efetivas()
+        aviso = self.motivo_exclusao(obj) or ''
+        # Linha TRAVADA pelo fluxo: as colunas editáveis ficam somente leitura
+        # (mesma regra da tela de alteração).
+        travada = self.motivo_edicao(obj) or ''
         for indice, field_name in enumerate(colunas):
             eh_link = self._eh_link(indice, field_name)
             conteudo = self._valor_da_coluna(obj, field_name)
+            dica = aviso if self._eh_coluna_pk(field_name) else ''
+            if travada and self._eh_coluna_pk(field_name):
+                dica = travada
 
-            # Coluna editável: usa o widget do formset (mantém o POST).
-            if (not eh_link and form is not None
+            # Texto de campo em list_editable (ex.: `descricao`): fica RESUMIDO
+            # em uma linha, com o texto completo no MODAL (leitura + cópia).
+            # Sem isto, o valor longo estourava a altura da linha.
+            if self._eh_texto_longo(field_name, form):
+                celulas.append(self._celula_texto_longo(
+                    obj, field_name, conteudo, form, travada))
+                continue
+
+            # Coluna editável: usa o widget do formset (mantém o POST) —
+            # exceto na linha travada, que sai como texto somente leitura.
+            if (not eh_link and form is not None and not travada
                     and field_name in getattr(form, "fields", {})
                     and not (field_name == self.model._meta.pk.name
                              and form[self.model._meta.pk.name].is_hidden)):
@@ -160,7 +255,7 @@ class ChangeListEditavel(ChangeList):
                 try:
                     url = self.url_for_result(obj)
                 except NoReverseMatch:
-                    celulas.append(_Celula(conteudo))
+                    celulas.append(_Celula(conteudo, exclusao=dica))
                     continue
                 url = add_preserved_filters(
                     {"preserved_filters": self.preserved_filters,
@@ -170,11 +265,60 @@ class ChangeListEditavel(ChangeList):
                 conteudo = format_html(
                     '<a href="{}">{}</a>', url, conteudo,
                 )
-                celulas.append(_Celula(conteudo, True))
+                celulas.append(_Celula(conteudo, True, exclusao=dica))
             else:
-                celulas.append(_Celula(conteudo))
+                celulas.append(_Celula(conteudo, exclusao=dica))
 
         return celulas
+
+    def _eh_texto_longo(self, field_name, form):
+        """A coluna é um campo de TEXTO (de `list_editable` ou do modelo)?"""
+        if field_name not in self.campos_texto_longo:
+            return False
+        if form is not None and field_name in getattr(form, 'fields', {}):
+            return isinstance(form.fields[field_name].widget, Textarea)
+        try:
+            campo = self.model._meta.get_field(field_name)
+        except Exception:
+            return field_name in self.campos_texto_longo
+        return isinstance(campo, (models.TextField, models.CharField))
+
+    def _celula_texto_longo(self, obj, field_name, conteudo, form, travada):
+        """Célula de texto longo: resumo em UMA linha + botão “ver”.
+
+        O texto integral vai para o botão (`data-texto`); o template o coloca
+        no MODAL com botão de copiar. Quando o campo é editável (list_editable)
+        e a linha não está travada, o `<textarea>` continua na célula — só que
+        LIMITADO à altura da linha; o modal é o jeito confortável de ler e
+        copiar.
+        """
+        valor = ''
+        try:
+            valor = getattr(obj, field_name, '') or ''
+        except Exception:
+            valor = ''
+        texto = str(valor).strip()
+        resumo = texto if len(texto) <= self.limite_texto_celula else \
+            texto[:self.limite_texto_celula].rstrip() + '…'
+        editavel = (form is not None and not travada
+                    and field_name in getattr(form, 'fields', {}))
+
+        partes = []
+        if editavel:
+            bf = form[field_name]
+            partes.append(str(bf.errors))
+            partes.append(str(bf))
+        else:
+            partes.append(format_html('<span class="texto-resumo">{}</span>',
+                                      resumo))
+        if texto:
+            partes.append(format_html(
+                '<button type="button" class="btn-ver-texto"'
+                ' data-texto="{}" data-titulo="{}"'
+                ' title="Ver o texto completo (e copiar)">↗</button>',
+                texto, field_name.replace('_', ' ').title()))
+        return _Celula(mark_safe(''.join(str(p) for p in partes)),
+                       texto_completo=texto)
 
     def linhas_renderizadas(self):
         """(form, [celulas], pk) por registro — usado pelo template.
@@ -529,12 +673,20 @@ class ChangeListBaixaFatura(ChangeListEditavel):
     def linha_fatura(self, fatura, form=None):
         """Células da linha: widget da baixa ou dado da própria fatura."""
         celulas = []
-        editaveis = set(self.model_admin.list_editable)
+        admin = self.model_admin
+        editaveis = set(admin.list_editable)
+        aviso = fatura.motivo_recusa_exclusao() or ''
+        # Linha travada pelo FLUXO (fatura finalizada / com baixa): nenhum
+        # widget — a linha inteira é somente leitura.
+        travada = self.motivo_edicao(fatura) or ''
         for indice, field_name in enumerate(self.colunas_efetivas()):
             eh_link = self._eh_link(indice, field_name)
+            dica = aviso if self._eh_coluna_pk(field_name) else ''
+            if travada and self._eh_coluna_pk(field_name):
+                dica = travada
 
             # Só os campos exclusivos da baixa entram como widget.
-            if (not eh_link and form is not None
+            if (not eh_link and form is not None and not travada
                     and field_name in editaveis
                     and field_name in getattr(form, 'fields', {})):
                 bf = form[field_name]
@@ -542,17 +694,33 @@ class ChangeListBaixaFatura(ChangeListEditavel):
                     mark_safe(str(bf.errors) + str(bf)), False, bf))
                 continue
 
+            # Coluna de AÇÃO (ex.: `excluir_button`): o método do ModelAdmin
+            # devolve HTML e NÃO recebe a fatura do lugar do modelo listado.
+            if callable(getattr(admin, field_name, None)):
+                try:
+                    conteudo_acao = getattr(admin, field_name)(fatura)
+                except Exception:
+                    conteudo_acao = '-'
+                celulas.append(_Celula(conteudo_acao))
+                continue
+
             celulas.append(_Celula(
                 self._valor_da_fatura(fatura, field_name,
-                                      link=eh_link and fatura.pk is not None)))
+                                      link=eh_link and fatura.pk is not None),
+                exclusao=dica))
         return celulas
 
     def _valor_da_fatura(self, fatura, field_name, link=False):
         admin = self.model_admin
         empty = admin.get_empty_value_display()
+        # Coluna EXCLUSIVA da baixa (ex.: `valor_baixa`) numa linha de FATURA
+        # travada: não há o que mostrar — sai o vazio (antes levantava
+        # AttributeError e derrubava a listagem).
+        if not hasattr(fatura, field_name) and not hasattr(admin, field_name):
+            return empty
         try:
             f, attr, value = lookup_field(field_name, fatura, admin)
-        except (ObjectDoesNotExist, FieldDoesNotExist):
+        except (ObjectDoesNotExist, FieldDoesNotExist, AttributeError):
             return empty
 
         if f is None or f.auto_created:
@@ -574,6 +742,19 @@ class ChangeListBaixaFatura(ChangeListEditavel):
                 return conteudo
             return format_html('<a href="{}">{}</a>', url, conteudo)
         return conteudo
+
+    def ids_da_listagem(self):
+        """PKs da PÁGINA atual — o que os checkboxes da tabela enviam.
+
+        A tabela é montada no servidor (`linhas_renderizadas`) e o Django só
+        gera o checkbox quando o `result_list` do ChangeList tem os objetos.
+        Aqui as linhas são FATURAS (no admin de Baixa de Faturas), então os
+        checkboxes levam o pk da FATURA e este método precisa devolver os
+        mesmos pks.
+        """
+        return [fatura.pk for fatura in self.faturas_pendentes()]
+
+
 
     def _url_da_fatura(self, fatura):
         """URL do admin da FATURA (a linha listada é uma fatura)."""

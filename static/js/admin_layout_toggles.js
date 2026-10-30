@@ -7,14 +7,47 @@
  * 2. Menu lateral direito de filtros (#changelist-filter)
  * 3. Menu superior de busca e filtros (#toolbar, #changelist-search)
  * 4. Breadcrumbs (migalhas de navegação)
- * 5. Modo Foco / Zen
- * 
+ * 5. Painel de Indicadores (KPIs) e barra de filtros analítica
+ *
  * Persiste preferências do usuário em localStorage e sincroniza com o Django.
- * Suporta atalhos de teclado (Alt+M, Alt+F, Alt+T, Alt+B, Alt+Z, Alt+R).
+ * Atalhos: Alt+M (menu) · Alt+B (breadcrumbs) · Alt+F (filtros da direita)
+ * · Alt+T (filtros do topo) · Alt+K (indicadores) · Alt+R (restaurar).
  */
 
 (function () {
     'use strict';
+
+    /**
+     * ACESSO SEGURO AO localStorage.
+     *
+     * Ler `localStorage.getItem(...)` direto pode LANÇAR exceção (modo
+     * privado, cookies de terceiros bloqueados, iframe, política de
+     * armazenamento do navegador). Como isso acontecia na criação do `state`,
+     * o arquivo inteiro morria na primeira linha e NENHUM botão funcionava
+     * (indicadores, filtros, setas). Aqui a falha vira “sem preferência”.
+     */
+    function lerStorage(chave, padrao) {
+        try {
+            const valor = window.localStorage.getItem(chave);
+            return valor === null ? padrao : valor;
+        } catch (e) {
+            return padrao;
+        }
+    }
+
+    function gravarStorage(chave, valor) {
+        try {
+            window.localStorage.setItem(chave, valor);
+        } catch (e) {
+            /* sem armazenamento disponível: o estado vale só nesta página */
+        }
+    }
+
+    function removerStorage(chave) {
+        try {
+            window.localStorage.removeItem(chave);
+        } catch (e) { /* idem */ }
+    }
 
     // Chaves de armazenamento
     const STORAGE_KEYS = {
@@ -22,17 +55,22 @@
         RIGHT_FILTER: 'conviver_hide_right_filter',
         TOP_FILTER: 'conviver_hide_top_filter',
         BREADCRUMBS: 'conviver_hide_breadcrumbs',
-        ZEN_MODE: 'conviver_zen_mode',
-        ZEN_BACKUP: 'conviver_zen_backup_state'
+        DASHBOARD: 'conviver_hide_dashboard',
+        FILTERS_PANEL: 'conviver_hide_filters_panel'
     };
 
     // Estado local
     const state = {
-        hideLeftSidebar: localStorage.getItem(STORAGE_KEYS.LEFT_SIDEBAR) === 'true',
-        hideRightFilter: localStorage.getItem(STORAGE_KEYS.RIGHT_FILTER) === 'true',
-        hideTopFilter: localStorage.getItem(STORAGE_KEYS.TOP_FILTER) === 'true',
-        hideBreadcrumbs: localStorage.getItem(STORAGE_KEYS.BREADCRUMBS) === 'true',
-        zenMode: localStorage.getItem(STORAGE_KEYS.ZEN_MODE) === 'true'
+        hideLeftSidebar: lerStorage(STORAGE_KEYS.LEFT_SIDEBAR, 'false') === 'true',
+        hideRightFilter: lerStorage(STORAGE_KEYS.RIGHT_FILTER, 'false') === 'true',
+        hideTopFilter: lerStorage(STORAGE_KEYS.TOP_FILTER, 'false') === 'true',
+        hideBreadcrumbs: lerStorage(STORAGE_KEYS.BREADCRUMBS, 'false') === 'true',
+        // PAINÉIS DE TOPO (indicadores e filtros analíticos): a preferência
+        // gravada manda; SEM preferência, começam RECOLHIDOS — eles ocupavam
+        // ~900px e empurravam a tabela para fora da tela (AGENTS.md, item 10:
+        // a tabela é a estrela; dashboard e filtros são painéis à mão).
+        hideDashboard: lerStorage(STORAGE_KEYS.DASHBOARD, 'true') === 'true',
+        hideFiltersPanel: lerStorage(STORAGE_KEYS.FILTERS_PANEL, 'true') === 'true'
     };
 
     /**
@@ -51,6 +89,9 @@
         toggleClass('hide-right-filter', state.hideRightFilter);
         toggleClass('hide-top-filter', state.hideTopFilter);
         toggleClass('hide-breadcrumbs', state.hideBreadcrumbs);
+        toggleClass('hide-dashboard', state.hideDashboard);
+        toggleClass('hide-filters', state.hideFiltersPanel);
+        updatePanelButtons();
 
         // Sincroniza com navSidebar nativo do Django se presente
         const main = document.getElementById('main');
@@ -59,11 +100,11 @@
             if (state.hideLeftSidebar) {
                 main.classList.remove('shifted');
                 navSidebar.setAttribute('aria-expanded', 'false');
-                localStorage.setItem('django.admin.navSidebarIsOpen', 'false');
+                gravarStorage('django.admin.navSidebarIsOpen', 'false');
             } else {
                 main.classList.add('shifted');
                 navSidebar.setAttribute('aria-expanded', 'true');
-                localStorage.setItem('django.admin.navSidebarIsOpen', 'true');
+                gravarStorage('django.admin.navSidebarIsOpen', 'true');
             }
         }
     }
@@ -78,9 +119,17 @@
         // 2. Breadcrumbs
         updateButtonState('btn-toggle-breadcrumbs', 'dock-item-breadcrumbs', state.hideBreadcrumbs, 'Breadcrumbs');
 
-        // 3. Filtro Superior
-        const hasTopFilter = !!(document.getElementById('toolbar') || document.getElementById('changelist-search'));
-        updateButtonState('btn-toggle-top-filter', 'dock-item-top-filter', state.hideTopFilter, 'Filtro Topo', hasTopFilter);
+        // 3. Filtro Superior (busca do Django + barra analítica)
+        const hasTopFilter = !!(document.getElementById('toolbar')
+            || document.getElementById('changelist-search')
+            || document.getElementById('admin-top-filter-bar'));
+        updateButtonState('btn-toggle-top-filter', 'dock-item-top-filter',
+            state.hideTopFilter || state.hideFiltersPanel, 'Filtro Topo', hasTopFilter);
+
+        // 3b. Painel de Indicadores (KPIs)
+        const hasDashboard = !!document.getElementById('admin-kpi-panel');
+        updateButtonState('btn-toggle-dashboard', null, state.hideDashboard,
+            'Indicadores', hasDashboard);
 
         // 4. Filtros Direita
         const hasRightFilter = !!document.getElementById('changelist-filter');
@@ -89,17 +138,9 @@
         // Atualiza contagem de filtros ativos
         updateFilterBadge();
 
-        // 5. Botão Modo Foco / Zen
-        const btnFocus = document.getElementById('btn-toggle-focus-mode');
-        const dockFocus = document.getElementById('dock-item-focus-mode');
-        if (btnFocus) {
-            btnFocus.classList.toggle('active-zen', state.zenMode);
-            btnFocus.title = state.zenMode ? 'Sair do Modo Foco (Alt+Z)' : 'Ativar Modo Foco / Maximizar Tabela (Alt+Z)';
-        }
-        if (dockFocus) {
-            const icon = dockFocus.querySelector('.dock-status-icon');
-            if (icon) icon.textContent = state.zenMode ? '★' : '☆';
-        }
+        // (O antigo "Modo Foco / Zen" foi removido: ele fazia exatamente o
+        // que o botão Breadcrumbs já fazia.)
+        updatePanelButtons();
     }
 
     /**
@@ -118,6 +159,11 @@
                 btn.classList.toggle('is-hidden', isHidden);
                 btn.title = isHidden ? `Exibir ${labelText}` : `Ocultar ${labelText}`;
             }
+        }
+        // O botão de INDICADORES só aparece onde existe o painel de KPIs.
+        if (btnId === 'btn-toggle-dashboard') {
+            const temPainel = !!document.getElementById('admin-kpi-panel');
+            btn.style.display = temPainel ? '' : 'none';
         }
 
         const dockItem = document.getElementById(dockId);
@@ -187,84 +233,72 @@
     }
 
     /**
+     * O painel está VISÍVEL na tela agora? (fonte da verdade dos toggles)
+     */
+    function painelVisivel(id) {
+        const el = document.getElementById(id);
+        if (!el) return false;
+        return getComputedStyle(el).display !== 'none';
+    }
+
+    /**
      * Funções de Toggle Individuais
      */
     function toggleLeftSidebar(forceState) {
         state.hideLeftSidebar = (forceState !== undefined) ? forceState : !state.hideLeftSidebar;
-        localStorage.setItem(STORAGE_KEYS.LEFT_SIDEBAR, state.hideLeftSidebar);
+        gravarStorage(STORAGE_KEYS.LEFT_SIDEBAR, state.hideLeftSidebar);
         applyClasses();
         updateUIElements();
     }
 
     function toggleRightFilter(forceState) {
         state.hideRightFilter = (forceState !== undefined) ? forceState : !state.hideRightFilter;
-        localStorage.setItem(STORAGE_KEYS.RIGHT_FILTER, state.hideRightFilter);
+        gravarStorage(STORAGE_KEYS.RIGHT_FILTER, state.hideRightFilter);
         applyClasses();
         updateUIElements();
     }
 
     function toggleTopFilter(forceState) {
         state.hideTopFilter = (forceState !== undefined) ? forceState : !state.hideTopFilter;
-        localStorage.setItem(STORAGE_KEYS.TOP_FILTER, state.hideTopFilter);
+        gravarStorage(STORAGE_KEYS.TOP_FILTER, state.hideTopFilter);
         applyClasses();
         updateUIElements();
     }
 
     function toggleBreadcrumbs(forceState) {
         state.hideBreadcrumbs = (forceState !== undefined) ? forceState : !state.hideBreadcrumbs;
-        localStorage.setItem(STORAGE_KEYS.BREADCRUMBS, state.hideBreadcrumbs);
+        gravarStorage(STORAGE_KEYS.BREADCRUMBS, state.hideBreadcrumbs);
         applyClasses();
         updateUIElements();
+    }
+
+    /** Dashboard (KPIs) — ocultar/exibir sem esconder a tabela. */
+    function toggleDashboard(forceState) {
+        state.hideDashboard = (forceState !== undefined) ? forceState : !state.hideDashboard;
+        gravarStorage(STORAGE_KEYS.DASHBOARD, state.hideDashboard);
+        applyClasses();
+    }
+
+    /** Painel de filtros (barra superior) — ocultar/exibir. */
+    function toggleFiltersPanel(forceState) {
+        state.hideFiltersPanel = (forceState !== undefined) ? forceState : !state.hideFiltersPanel;
+        gravarStorage(STORAGE_KEYS.FILTERS_PANEL, state.hideFiltersPanel);
+        applyClasses();
     }
 
     /**
-     * Modo Foco (Zen Mode):
-     * Oculta tudo de uma vez para foco total na grade de dados.
-     * Ao clicar de novo, restaura o estado anterior.
+     * Atualiza o rótulo dos botões de ocultar/exibir dos painéis.
      */
-    function toggleZenMode() {
-        if (!state.zenMode) {
-            // Salva estado atual antes de ativar o foco
-            const backup = {
-                hideLeftSidebar: state.hideLeftSidebar,
-                hideRightFilter: state.hideRightFilter,
-                hideTopFilter: state.hideTopFilter,
-                hideBreadcrumbs: state.hideBreadcrumbs
-            };
-            localStorage.setItem(STORAGE_KEYS.ZEN_BACKUP, JSON.stringify(backup));
-
-            // Oculta tudo
-            state.hideLeftSidebar = true;
-            state.hideRightFilter = true;
-            state.hideTopFilter = true;
-            state.hideBreadcrumbs = true;
-            state.zenMode = true;
-        } else {
-            // Restaura do backup
-            try {
-                const saved = JSON.parse(localStorage.getItem(STORAGE_KEYS.ZEN_BACKUP) || '{}');
-                state.hideLeftSidebar = !!saved.hideLeftSidebar;
-                state.hideRightFilter = !!saved.hideRightFilter;
-                state.hideTopFilter = !!saved.hideTopFilter;
-                state.hideBreadcrumbs = !!saved.hideBreadcrumbs;
-            } catch (e) {
-                state.hideLeftSidebar = false;
-                state.hideRightFilter = false;
-                state.hideTopFilter = false;
-                state.hideBreadcrumbs = false;
-            }
-            state.zenMode = false;
-        }
-
-        localStorage.setItem(STORAGE_KEYS.LEFT_SIDEBAR, state.hideLeftSidebar);
-        localStorage.setItem(STORAGE_KEYS.RIGHT_FILTER, state.hideRightFilter);
-        localStorage.setItem(STORAGE_KEYS.TOP_FILTER, state.hideTopFilter);
-        localStorage.setItem(STORAGE_KEYS.BREADCRUMBS, state.hideBreadcrumbs);
-        localStorage.setItem(STORAGE_KEYS.ZEN_MODE, state.zenMode);
-
-        applyClasses();
-        updateUIElements();
+    function updatePanelButtons() {
+        document.querySelectorAll('[data-panel-toggle]').forEach((btn) => {
+            const alvo = btn.dataset.panelToggle;
+            const oculto = alvo === 'dashboard' ? state.hideDashboard : state.hideFiltersPanel;
+            btn.classList.toggle('is-hidden', oculto);
+            btn.title = oculto ? 'Exibir o painel' : 'Ocultar o painel';
+        });
     }
+
+
 
     /**
      * Restaura visualização padrão (tudo visível)
@@ -274,14 +308,15 @@
         state.hideRightFilter = false;
         state.hideTopFilter = false;
         state.hideBreadcrumbs = false;
-        state.zenMode = false;
+        state.hideDashboard = false;
+        state.hideFiltersPanel = false;
 
-        localStorage.removeItem(STORAGE_KEYS.LEFT_SIDEBAR);
-        localStorage.removeItem(STORAGE_KEYS.RIGHT_FILTER);
-        localStorage.removeItem(STORAGE_KEYS.TOP_FILTER);
-        localStorage.removeItem(STORAGE_KEYS.BREADCRUMBS);
-        localStorage.removeItem(STORAGE_KEYS.ZEN_MODE);
-        localStorage.removeItem(STORAGE_KEYS.ZEN_BACKUP);
+        removerStorage(STORAGE_KEYS.LEFT_SIDEBAR);
+        removerStorage(STORAGE_KEYS.RIGHT_FILTER);
+        removerStorage(STORAGE_KEYS.TOP_FILTER);
+        removerStorage(STORAGE_KEYS.BREADCRUMBS);
+        removerStorage(STORAGE_KEYS.DASHBOARD);
+        removerStorage(STORAGE_KEYS.FILTERS_PANEL);
 
         applyClasses();
         updateUIElements();
@@ -340,17 +375,25 @@
         if (btnBreadcrumbs) btnBreadcrumbs.addEventListener('click', () => toggleBreadcrumbs());
 
         const btnTopFilter = document.getElementById('btn-toggle-top-filter');
-        if (btnTopFilter) btnTopFilter.addEventListener('click', () => toggleTopFilter());
+        if (btnTopFilter) {
+            btnTopFilter.addEventListener('click', () =>
+                toggleFiltersPanel(painelVisivel('admin-top-filter-bar')));
+        }
 
         const btnRightFilter = document.getElementById('btn-toggle-right-filter');
         if (btnRightFilter) btnRightFilter.addEventListener('click', () => toggleRightFilter());
+
+        const btnDashboard = document.getElementById('btn-toggle-dashboard');
+        if (btnDashboard) {
+            btnDashboard.addEventListener('click', () =>
+                toggleDashboard(painelVisivel('admin-kpi-panel')));
+        }
 
         // Botão de fechar painel de filtros (caso presente no template estático)
         const btnCloseFilter = document.querySelector('.btn-close-filter-pane');
         if (btnCloseFilter) btnCloseFilter.addEventListener('click', () => toggleRightFilter(true));
 
-        const btnFocus = document.getElementById('btn-toggle-focus-mode');
-        if (btnFocus) btnFocus.addEventListener('click', () => toggleZenMode());
+
 
         const btnReset = document.getElementById('btn-reset-view-layout');
         if (btnReset) btnReset.addEventListener('click', () => resetLayout());
@@ -379,16 +422,37 @@
         if (dockBreadcrumbs) dockBreadcrumbs.addEventListener('click', () => toggleBreadcrumbs());
 
         const dockTop = document.getElementById('dock-item-top-filter');
-        if (dockTop) dockTop.addEventListener('click', () => toggleTopFilter());
+        if (dockTop) dockTop.addEventListener('click', () => toggleFiltersPanel());
 
         const dockRight = document.getElementById('dock-item-right-filter');
         if (dockRight) dockRight.addEventListener('click', () => toggleRightFilter());
 
-        const dockFocus = document.getElementById('dock-item-focus-mode');
-        if (dockFocus) dockFocus.addEventListener('click', () => toggleZenMode());
+
 
         const dockReset = document.getElementById('dock-item-reset-layout');
         if (dockReset) dockReset.addEventListener('click', () => resetLayout());
+
+        // Botões de ocultar/exibir dos PAINÉIS (indicadores e filtros).
+        document.querySelectorAll('[data-panel-toggle]').forEach((btn) => {
+            btn.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                // Decide pela VISIBILIDADE REAL do painel, não pelo estado em
+                // memória: se o HTML já veio recolhido (ou o estado ficou
+                // dessincronizado), o clique sempre faz o que o usuário vê.
+                const idPainel = btn.dataset.panelToggle === 'dashboard'
+                    ? 'admin-kpi-panel' : 'admin-top-filter-bar';
+                const painel = document.getElementById(idPainel);
+                const visivel = painel
+                    ? getComputedStyle(painel).display !== 'none'
+                    : false;
+                if (btn.dataset.panelToggle === 'dashboard') {
+                    toggleDashboard(visivel);   // visível → esconde
+                } else {
+                    toggleFiltersPanel(visivel); // visível → esconde
+                }
+            });
+        });
 
         // Atalhos de teclado (Alt + tecla)
         document.addEventListener('keydown', (e) => {
@@ -403,18 +467,18 @@
                 if (key === 'm') {
                     e.preventDefault();
                     toggleLeftSidebar();
+                } else if (key === 'k') {
+                    e.preventDefault();
+                    toggleDashboard(painelVisivel('admin-kpi-panel'));
                 } else if (key === 'f') {
                     e.preventDefault();
                     toggleRightFilter();
                 } else if (key === 't') {
                     e.preventDefault();
-                    toggleTopFilter();
+                    toggleFiltersPanel(painelVisivel('admin-top-filter-bar'));
                 } else if (key === 'b') {
                     e.preventDefault();
                     toggleBreadcrumbs();
-                } else if (key === 'z') {
-                    e.preventDefault();
-                    toggleZenMode();
                 } else if (key === 'r' || key === '0') {
                     e.preventDefault();
                     resetLayout();
@@ -446,7 +510,8 @@
         toggleRightFilter,
         toggleTopFilter,
         toggleBreadcrumbs,
-        toggleZenMode,
+        toggleDashboard,
+        toggleFiltersPanel,
         resetLayout
     };
 })();

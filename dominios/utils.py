@@ -1128,3 +1128,561 @@ class ExportToXLSMixin:
 
     export_as_csv.short_description = "📄 Exportar Selecionados para CSV (UTF-8)"
 
+
+
+class ListEditableComRegras:
+    """`list_editable` que RESPONDE ÀS REGRAS do fluxo.
+
+    O Django lê `list_editable` em tempo de REGISTRO/instanciação; como a
+    lista depende do usuário (e a regra depende de cada linha), ela é
+    recalculada em `changelist_view`: saem as colunas cujo campo não pode ser
+    alterado no recorte atual — por exemplo, com o filtro de “Pré-Faturados”
+    o checkbox `pre_faturado` não aparece editável, e linhas travadas ficam
+    somente leitura.
+
+    Para declarar, use a LISTA completa em `list_editable` e a lista base em
+    `list_editable_sempre`.
+    """
+
+    def list_editable_permitido(self, request):
+        """Colunas editáveis para este recorte (sobrescreva se precisar)."""
+        return list(self.list_editable_sempre)
+
+    def get_linhas_nao_editaveis(self, request):
+        """Pks (string) cujas colunas editáveis saem como TEXTO na tela.
+
+        Descrição em português e consultável em SQL:
+
+        .. code-block:: sql
+
+            -- pré-fatura que já gerou fatura
+            SELECT prefatura_ptr_id FROM admin_faturas_fatura;
+            -- convênio com pré-fatura gerada
+            SELECT DISTINCT convenio_id FROM admin_faturas_prefatura;
+            -- fatura com baixa, com movimento, finalizada ou de competência fechada
+            SELECT f.prefatura_ptr_id
+              FROM admin_faturas_fatura f
+             WHERE f.faturado
+                OR EXISTS (SELECT 1 FROM admin_faturas_baixafatura b
+                            WHERE b.fatura_ptr_id IN (
+                                  SELECT pk FROM admin_faturas_fatura));
+            -- baixa com movimento
+            SELECT baixa_fatura_id FROM admin_financeiro_movimentobancario
+             WHERE baixa_fatura_id IS NOT NULL;
+            -- movimento de competência fechada
+            SELECT m.pk FROM admin_financeiro_movimentobancario m
+              JOIN admin_financeiro_competenciabancaria c
+                ON c.id = m.competencia_bancaria_id
+             WHERE c.dt_fechamento_competencia IS NOT NULL;
+
+        Sobrescreva no ModelAdmin com o recorte que fizer sentido.
+        """
+        return set()
+
+    def _aplicar_list_editable(self, request):
+        # `list_editable` na INSTÂNCIA (o template e o formset leem
+        # `hasattr(cl.model_admin, "list_editable")` e depois a lista). Sempre
+        # grava: o recorte é calculado por REQUISIÇÃO.
+        self.list_editable = list(self.list_editable_permitido(request))
+
+    def changelist_view(self, request, *args, **kwargs):
+        self._aplicar_list_editable(request)
+        return super().changelist_view(request, *args, **kwargs)
+
+
+class EdicaoComRegrasMixin(ListEditableComRegras):
+    """Edição só enquanto o FLUXO da etapa permitir (`motivo_recusa_edicao`).
+
+    Cada modelo do fluxo (Convênio → Pré-Fatura → Fatura → Baixa) define
+    `motivo_recusa_edicao()`: devolve o texto amigável do impedimento ou None.
+    Com impedimento a tela de alteração NÃO abre: uma mensagem explica o que
+    fazer e o usuário volta para a listagem (nunca 403/o debugger).
+
+    Para liberar a edição o usuário corrige a etapa que está travando (ex.:
+    exclui o movimento e a baixa, ou marca a fatura como aberta).
+
+    Use como primeiro mixin, antes do `admin.ModelAdmin`.
+
+    A EDIÇÃO EM LINHA segue a mesma regra: `ListEditableComRegras` recorta as
+    colunas e o ChangeList editável transforma as linhas travadas em texto.
+    """
+
+    mensagem_recusa_edicao = ('Não é possível alterar {registro}: {motivo}')
+
+    def _motivo_recusa_edicao(self, obj):
+        metodo = getattr(obj, 'motivo_recusa_edicao', None)
+        return metodo() if metodo is not None else None
+
+    def get_object(self, request, object_id, from_field=None):
+        """Objeto da tela de alteração (a REGRA é aplicada no `changeform_view`).
+
+        O motivo NÃO é levantado aqui: o `get_object` também é usado na
+        confirmação de exclusão, que tem regra própria.
+        """
+        try:
+            return super().get_object(request, object_id, from_field=from_field)
+        except PermissionDenied:
+            # Registro inacessível: o `changeform_view` transforma em mensagem
+            # amigável (nunca a tela de permissão negada).
+            return None
+
+    def changeform_view(self, request, object_id=None, form_url='',
+                        extra_context=None):
+        from django.http import HttpResponseRedirect
+        from django.urls import reverse
+
+        alvo = None
+        if object_id is not None:
+            try:
+                from django.contrib.admin.utils import unquote
+                alvo = self.model._default_manager.get(
+                    pk=unquote(str(object_id)))
+            except Exception:
+                alvo = None
+        motivo = self._motivo_recusa_edicao(alvo) if alvo is not None else None
+        if motivo:
+            messages.error(
+                request,
+                self.mensagem_recusa_edicao.format(
+                    registro=str(alvo), motivo=motivo))
+            opts = self.model._meta
+            return HttpResponseRedirect(reverse(
+                f'admin:{opts.app_label}_{opts.model_name}_changelist'))
+        try:
+            return super().changeform_view(
+                request, object_id, form_url, extra_context)
+        except PermissionDenied:
+            opts = self.model._meta
+            return HttpResponseRedirect(reverse(
+                f'admin:{opts.app_label}_{opts.model_name}_changelist'))
+
+    # ------------------------------------------------------------------
+    # MIXIN COMBINADO: exclusão em lote + regras de edição
+    # ------------------------------------------------------------------
+    def _changelist_view_despacha_acoes(self, original):
+        """`changelist_view` + despacho das ações e das EDIÇÕES EM LINHA.
+
+        O POST de edição em linha (listagem editável) NÃO passa pela tela de
+        alteração: as linhas travadas são recusadas aqui, com mensagem, e o
+        restante é salvo normalmente.
+        """
+        from functools import wraps
+
+        @wraps(original)
+        def changelist_view(this, request, *args, **kwargs):
+            acao = (request.POST.get('action')
+                    if request.method == 'POST' else None)
+            salvar = request.method == 'POST' and '_save' in request.POST
+            if acao and not salvar:
+                return this.changelist_view_com_acoes(
+                    request, kwargs.get('extra_context'),
+                    this.post_acoes_em_lote(request))
+            if salvar and hasattr(this, '_recusar_edicoes_em_linha'):
+                this._recusar_edicoes_em_linha(request)
+            return original(this, request, *args, **kwargs)
+
+        return changelist_view
+
+    def _recusar_edicoes_em_linha(self, request):
+        """Tira do POST as linhas que NÃO podem ser alteradas.
+
+        O widget da linha travada continua na tela (somente leitura); o resto
+        do formulário é salvo normalmente. Listagens SEM `list_editable`
+        (sem formset, ex.: contas a receber) não têm edição em linha: nada a
+        recusar.
+        """
+        if not getattr(self, 'list_editable', None):
+            return
+        try:
+            cl = self.get_changelist_instance(request)
+        except Exception:
+            return
+        if not getattr(cl, 'formset', None):
+            return  # listagem sem formset: não há edição em linha a recusar
+        # O QueryDict do POST é imutável: trabalha numa cópia e devolve.
+        dados = request.POST.copy()
+        linhas = self._linhas_do_post(request, cl)
+        if not linhas:
+            return
+        # Recorte EM LOTE de linhas travadas (a tela já as deixou como texto).
+        try:
+            travadas = {str(pk) for pk in self.get_linhas_nao_editaveis(request)}
+        except Exception:
+            travadas = set()
+        for indice, pk in linhas:
+            try:
+                obj = self.model._default_manager.get(pk=pk)
+            except Exception:
+                continue
+            # Só linhas EFETIVAMENTE alteradas no POST (a tela manda a linha
+            # inteira, com os valores atuais).
+            try:
+                if not self._linha_alterada_no_post(request, indice, obj):
+                    continue
+            except Exception:
+                pass
+            motivo = (('já está em andamento no fluxo — altere pela etapa de '
+                       'origem.' if str(pk) in travadas else '')
+                      or self._motivo_recusa_edicao(obj))
+            if not motivo:
+                continue
+            if not motivo:
+                continue
+            if not motivo:
+                continue
+            messages.error(
+                request,
+                f'{self.model._meta.verbose_name.capitalize()} {pk} não foi '
+                f'alterado(a): {motivo}')
+            prefixo = f'form-{indice}-'
+            for chave in list(dados.keys()):
+                if chave.startswith(prefixo):
+                    dados.pop(chave, None)
+            dados[f'form-{indice}-id'] = str(pk)
+        request.POST = dados
+
+    def _linhas_do_post(self, request, cl):
+        """[(índice, pk)] das linhas que vieram no POST da listagem.
+
+        A pk normalmente vem no hidden `prefatura_ptr`; sem ele, a posição é
+        resolvida pela `ids_da_listagem()` do ChangeList.
+        """
+        try:
+            total = int(request.POST.get('form-TOTAL_FORMS') or 0)
+        except (TypeError, ValueError):
+            return []
+        linhas = []
+        sem_pk = []
+        for indice in range(total):
+            prefixo = f'form-{indice}-'
+            pk = request.POST.get(f'{prefixo}prefatura_ptr')
+            if not pk:
+                pk = request.POST.get(f'{prefixo}fatura_baixada')
+            if pk:
+                linhas.append((indice, pk))
+            else:
+                sem_pk.append(indice)
+        if sem_pk:
+            try:
+                pks = cl.ids_da_listagem()
+            except Exception:
+                pks = []
+            for indice in sem_pk:
+                if indice < len(pks):
+                    linhas.append((indice, pks[indice]))
+        return linhas
+
+    @staticmethod
+    def _linha_alterada_no_post(request, indice, obj):
+        """A linha `indice` do POST difere dos valores atuais do objeto?"""
+        prefixo = f'form-{indice}-'
+        for campo in ('descricao', 'nr_nota_fiscal', 'valor_fatura',
+                      'valor', 'status', 'empenho', 'valor_mensal',
+                      'valor_diaria', 'dia_envio', 'dias_pagamento'):
+            chave = prefixo + campo
+            if chave not in request.POST:
+                continue
+            enviado = str(request.POST.get(chave) or '').strip()
+            atual = getattr(obj, campo, None)
+            atual = '' if atual is None else str(atual).strip()
+            if enviado != atual:
+                if campo in ('valor', 'valor_fatura', 'valor_mensal',
+                             'valor_diaria', 'valor_saldo'):
+                    # Decimal formatado/“.” × “,” no POST: compara numericamente.
+                    try:
+                        from decimal import Decimal
+                        if Decimal(enviado or '0') == Decimal(atual or '0'):
+                            continue
+                    except Exception:
+                        pass
+                return True
+        return False
+
+    def __init_subclass__(cls, **kwargs):
+        """Em classes SEM a ação em lote, o despacho já é injetado aqui.
+
+        Quando a classe também usa `ExclusaoEmLoteComRegrasMixin`, é ele quem
+        injeta (o despacho dele cobre as duas coisas).
+        """
+        super().__init_subclass__(**kwargs)
+        if any('post_acoes_em_lote' in base.__dict__ for base in cls.__mro__[1:]):
+            return  # o outro mixin cuida do `changelist_view`
+        if 'changelist_view' in cls.__dict__:
+            return
+        original = next(
+            (base.changelist_view for base in cls.__mro__[1:]
+             if hasattr(base, 'changelist_view')), None)
+        if original is not None:
+            cls.changelist_view = cls._changelist_view_despacha_acoes(
+                cls, original)
+
+
+class ExclusaoEmLoteComRegrasMixin:
+    """Ação em lote "Excluir selecionados" que respeita as REGRAS do delete.
+
+    O `delete_selected` padrão do Django apaga tudo o que foi selecionado
+    (ou abre a tela de confirmação e derruba a tela inteira com
+    `ProtectedError`). aqui cada registro passa pelo MESMO teste da exclusão
+    individual — o método `motivo_recusa_exclusao()` do modelo (ou o
+    `_motivo_recusa_exclusao(obj)` do próprio ModelAdmin, quando existir):
+
+    - sem motivo → excluído;
+    - com motivo → NÃO é excluído e o motivo vira mensagem amigável.
+
+    No `list_display` que tenha a coluna `pk`/`id`, as linhas bloqueadas saem
+    com "title" (dica de tela) explicando o motivo, antes mesmo da seleção.
+
+    Use como primeiro mixin da classe, antes do `admin.ModelAdmin`.
+
+    Listagens que NÃO usam o `get_actions` padrão (admin com
+    `changelist_view` próprio, que trata qualquer POST como formulário) também
+    funcionam: o mixin acrescenta o despacho da ação ao `changelist_view`
+    (ver `_changelist_view_despacha_acoes`).
+    """
+
+    mensagem_sucesso = '{n} registro(s) excluído(s) com sucesso.'
+    mensagem_recusa = '{identificacao}: {motivo}'
+    max_mensagens_recusa = 10
+
+    def _motivo_recusa_exclusao(self, obj):
+        """Motivo para NÃO excluir `obj` (None = pode).
+
+        Le a REGRA do modelo (`motivo_recusa_exclusao()`) e, depois, o
+        impedimento adicional do ModelAdmin.
+        """
+        metodo = getattr(obj, 'motivo_recusa_exclusao', None)
+        motivo = metodo() if metodo is not None else None
+        if motivo:
+            return motivo
+        return self._impedimento_extra_exclusao(obj)
+
+    def _impedimento_extra_exclusao(self, obj):
+        """Regra adicional do ModelAdmin (None = sem impedimento).
+
+        Sobrescreva quando a regra não estiver no modelo (ex.: o convênio, cuja
+        regra depende das pré-faturas geradas).
+        """
+        return None
+
+
+
+    @admin.action(description='Excluir selecionados (respeitando as regras)',
+                  permissions=['delete'])
+    def excluir_selecionados(self, request, queryset):
+        # Seleção feita em OUTRA página ("selecionar todos"): a ação recebe o
+        # queryset inteiro do filtro — aqui também vale (cada linha passa pela
+        # regra), então basta percorrer o que chegou.
+        registros = list(queryset)
+        if not registros:
+            messages.warning(
+                request, 'Selecione pelo menos um registro para excluir.')
+            return
+
+        excluidos = 0
+        recusas = []
+        # Pks confirmadas como excluídas: o `delete()` do Django deixa o objeto
+        # em memória sem pk (e `pk is None` NÃO é recusa).
+        removidos = set()
+        for obj in registros:
+            try:
+                motivo = self._motivo_recusa_exclusao(obj)
+            except Exception as erro:  # nunca derruba a ação
+                motivo = f'não foi possível verificar a exclusão ({erro}).'
+            if motivo:
+                recusas.append((obj, motivo))
+                continue
+            try:
+                self.delete_model(request, obj)
+            except Exception as erro:
+                recusas.append(
+                    (obj, f'a exclusão não pôde ser concluída ({erro}).'))
+                continue
+            if obj.pk is None or obj.pk in removidos:
+                excluidos += 1
+            else:
+                # A exclusão só é dada como concluída se o registro saiu.
+                recusas.append(
+                    (obj, 'a exclusão não pôde ser concluída; o registro '
+                          'continua no sistema (verifique se ele é usado em '
+                          'outro cadastro).'))
+
+        if excluidos:
+            messages.success(
+                request, self.mensagem_sucesso.format(n=excluidos))
+        for obj, motivo in recusas[:self.max_mensagens_recusa]:
+            identificacao = str(obj)
+            messages.error(
+                request,
+                self.mensagem_recusa.format(identificacao=identificacao,
+                                            motivo=motivo))
+        restantes = len(recusas) - self.max_mensagens_recusa
+        if restantes > 0:
+            messages.warning(
+                request,
+                f'Mais {restantes} registro(s) selecionado(s) não puderam ser '
+                'excluídos pelo mesmo motivo acima. Ajuste-os e tente de novo.')
+
+    def _queryset_das_acoes(self, request, queryset=None):
+        """Registros escolhidos no `action` do POST (respeitando o filtro).
+
+        `select_across=0` → as pks do próprio POST (o que ESTÁ na tela);
+        `select_across=1` → o queryset inteiro da listagem (o `get_queryset`
+        pode recortar por permissão/estabelecimento).
+        """
+        from django.http import QueryDict
+        from django.utils.http import urlencode
+
+        if queryset is None:
+            queryset = self.get_queryset(request)
+        selecionadas = request.POST.getlist('_selected_action')
+        if request.POST.get('select_across') != '1' and selecionadas:
+            queryset = queryset.filter(pk__in=selecionadas)
+        return queryset
+
+    def post_acoes_em_lote(self, request, queryset=None):
+        """Mapa `ação -> método` usado quando a listagem não usa o
+        `get_actions` padrão (ex.: `changelist_view` próprio)."""
+        queryset = self._queryset_das_acoes(request, queryset)
+        return {
+            'excluir_selecionados': (
+                lambda req, qs=queryset: self.excluir_selecionados(req, qs)),
+        }
+
+    def changelist_view_com_acoes(self, request, extra_context=None,
+                                  acoes=None):
+        """Executa a AÇÃO em lote do POST e devolve o GET da listagem.
+
+        Depois de rodar, a mensagem fica na sessão e a tela volta pelo GET
+        (mesma URL, mesmos filtros) — a listagem já mostra o resultado.
+        """
+        nome = request.POST.get('action') or ''
+        metodo = (acoes or {}).get(nome)
+        if metodo is not None and self.has_delete_permission(request):
+            try:
+                metodo(request, self._queryset_das_acoes(request))
+            except Exception as erro:  # nunca derruba a tela
+                messages.error(
+                    request,
+                    f'Não foi possível concluir a ação “{nome}”: {erro}')
+        else:
+            messages.error(
+                request, 'Ação em lote não reconhecida. Nada foi alterado.')
+        from django.http import HttpResponseRedirect
+        return HttpResponseRedirect(request.get_full_path())
+
+    def _changelist_view_despacha_acoes(self, original):
+        """`changelist_view` do Django + o despacho das ações em lote.
+
+        Substitui o método original na classe em que o mixin for usado (só
+        quando ela NÃO define o próprio `changelist_view`): assim o
+        `super().changelist_view` continua chamando o próximo da MRO, sem
+        quebrar a colaboração entre os mixins.
+        """
+        from functools import wraps
+
+        @wraps(original)
+        def changelist_view(this, request, extra_context=None):
+            if (request.method == 'POST' and '_save' not in request.POST
+                    and request.POST.get('action')):
+                return this.changelist_view_com_acoes(
+                    request, extra_context, this.post_acoes_em_lote(request))
+            return original(this, request, extra_context)
+
+        return changelist_view
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        # Toda classe com a ação em lote tem o despacho no `changelist_view`
+        # (ações + edições em linha). O método só é instalado aqui quando a
+        # própria classe não o define; `get_actions` refaz a instalação.
+        if cls.__dict__.get('post_acoes_em_lote') is None:
+            return  # classe sem a ação em lote: não toca no `changelist_view`
+        if 'changelist_view' in cls.__dict__:
+            return  # a própria classe chama o despacho
+        import functools
+        metodo = next(
+            base.__dict__['_changelist_view_despacha_acoes']
+            for base in cls.__mro__
+            if '_changelist_view_despacha_acoes' in base.__dict__)
+        original = next(
+            (base.changelist_view for base in cls.__mro__[1:]
+             if hasattr(base, 'changelist_view')), None)
+        if original is not None:
+            cls.changelist_view = functools.partial(metodo, cls, original)
+            cls.changelist_view._despacha_acoes = True
+
+    def _delete_view_com_regras(self, original, request, object_id,
+                                extra_context=None):
+        """Confirmação de exclusão com as REGRAS do registro.
+
+        O `has_delete_permission(obj=...)` devolve False com o motivo já
+        registrado em mensagem (a linha continua na tela, sem a tela de
+        erro de permissão). Aqui a recusa vira VOLTA para a listagem com a
+        mensagem, em vez de `PermissionDenied` (403).
+        """
+        import re
+        from urllib.parse import unquote
+        from django.http import HttpResponseRedirect
+        from django.urls import reverse
+        from django.contrib.admin.utils import unquote as _unquote_admin
+
+        # O objeto é buscado pela pk CRUA: o `get_object` do Django faria
+        # `unquote` de novo (pk "12" → "2") e diria que o registro não existe.
+        try:
+            obj = self.model._default_manager.get(
+                pk=_unquote_admin(unquote(str(object_id))))
+        except Exception:
+            obj = None
+        if obj is not None and not self.has_delete_permission(
+                request, obj=obj):
+            # "/admin/app/modelo/<pk>/delete/" → listagem do modelo.
+            caminho = re.sub(r'/[^/]+/delete/?$', '/', request.path)
+            if not caminho.endswith('/'):
+                caminho += '/'
+            return HttpResponseRedirect(caminho)
+        try:
+            return original(self, request, object_id,
+                            extra_context=extra_context)
+        except PermissionDenied:
+            # Qualquer outra recusa vira mensagem amigável (nunca 403).
+            messages.error(
+                request,
+                'Não é possível excluir este registro. Verifique se ele é '
+                'usado em outro cadastro e volte para a listagem.')
+            opts = self.model._meta
+            return HttpResponseRedirect(reverse(
+                f'admin:{opts.app_label}_{opts.model_name}_changelist'))
+
+    def delete_view(self, request, object_id, extra_context=None):
+        # Resolve o PRÓXIMO `delete_view` da MRO EM TEMPO DE CHAMADA: o
+        # `dominios.breadcrumbs` envolve as classes registradas, e o wrapper
+        # dele pode estar antes deste mixin na cadeia.
+        mod = __name__
+        original = next(
+            base.__dict__['delete_view'] for base in type(self).__mro__[1:]
+            if 'delete_view' in base.__dict__
+            and base.__dict__['delete_view'].__module__ != mod)
+        return self._delete_view_com_regras(
+            original, request, object_id, extra_context=extra_context)
+
+    def get_actions(self, request):
+        """Troca o `delete_selected` padrão pela ação que respeita as regras."""
+        # Garante o despacho das AÇÕES e das EDIÇÕES EM LINHA no
+        # `changelist_view` (o `get_actions` roda quando o admin é
+        # registrado, antes da primeira listagem).
+        cls = type(self)
+        original = cls.changelist_view
+        import functools
+        metodo = next(
+            base.__dict__['_changelist_view_despacha_acoes']
+            for base in cls.__mro__
+            if '_changelist_view_despacha_acoes' in base.__dict__)
+        if getattr(original, '_despacha_acoes', False) is not True:
+            cls.changelist_view = functools.partial(metodo, cls, original)
+            cls.changelist_view._despacha_acoes = True
+        actions = super().get_actions(request)
+        actions.pop('delete_selected', None)
+        if 'delete' not in self.get_model_perms(request) or \
+                not self.has_delete_permission(request):
+            actions.pop('excluir_selecionados', None)
+        return actions

@@ -281,10 +281,47 @@ class MovimentoBancario(models.Model):
     def conciliado(self):
         return self.situacao_conciliacao() == 'Conciliado'
 
+    def _fk_segura(self, nome):
+        """Objeto da FK ou None (no `full_clean` do ModelForm a instância
+        ainda pode estar incompleta: o acesso direto à FK levanta
+        `RelatedObjectDoesNotExist`)."""
+        from django.core.exceptions import ObjectDoesNotExist
+        try:
+            return getattr(self, nome)
+        except ObjectDoesNotExist:
+            return None
+
+    def clean(self):
+        """Preenche o que depende da competência antes do `full_clean`.
+
+        O `estabelecimento` vem da competência bancária (nunca do usuário).
+        Sem isto, o `full_clean` acusaria "obrigatório" nele.
+        """
+        comp = self._fk_segura('competencia_bancaria')
+        if comp is not None:
+            self.estabelecimento_id = comp.estabelecimento_id
+        if self.dt_movimento is None:
+            self.dt_movimento = timezone.localdate()
+        super().clean()
+
+    def _e_ajuste(self):
+        """O lançamento é de AJUSTE/estorno?
+
+        O movimento bancário não tem campo `origem` de escolha: o ajuste é
+        identificado pela OBSERVAÇÃO (“ajuste”/“estorno”) ou pelo nome da
+        TRANSAÇÃO Financeira.
+        """
+        partes = [self.observacao or '']
+        transacao = self._fk_segura('transacao_financeira')
+        if transacao is not None:
+            partes.append(getattr(transacao, 'transacao_financeira', '') or '')
+        texto = ' '.join(partes).lower()
+        return 'ajuste' in texto or 'estorno' in texto
+
     def _validar_competencia(self):
         """Competência obrigatória, ABERTA e com a data DENTRO do período."""
         from django.core.exceptions import ValidationError
-        comp = self.competencia_bancaria
+        comp = self._fk_segura('competencia_bancaria')
         if comp is None:
             raise ValidationError(
                 {'competencia_bancaria':
@@ -303,23 +340,41 @@ class MovimentoBancario(models.Model):
                  f'da competência "{comp.descricao}" (aberta em '
                  f'{comp.dt_abertura_competencia:%d/%m/%Y}).'})
 
+        # VALOR NEGATIVO só em AJUSTE/estorno — e sempre justificado.
+        negativos = [c for c, v in (('valor_entrada', self.valor_entrada),
+                                    ('valor_saida', self.valor_saida))
+                     if v is not None and v < 0]
+        if negativos:
+            if not self._e_ajuste():
+                raise ValidationError({
+                    negativos[0]:
+                        'Valor negativo só é permitido em AJUSTE/estorno. '
+                        'Para uma saída normal, informe o valor em '
+                        '"Valor Saída" (positivo).'})
+            if not (self.observacao or '').strip():
+                raise ValidationError({
+                    'observacao':
+                        'Ajuste com valor negativo exige a OBSERVAÇÃO '
+                        'explicando o motivo do estorno.'})
+
         # TRANSFERÊNCIA pelo lado do BANCO:
         #  - saque: exige o CAIXA de destino (entrada gerada nele);
         #  - depósito lançado no banco (entrada): não usa o campo de caixa.
-        transacao = self.transacao_financeira
+        transacao = self._fk_segura('transacao_financeira')
         movimento_transacao = (getattr(transacao, 'movimento', '') or '').lower()
         if self.competencia_caixa_id:
-            caixa = self.competencia_caixa
-            if caixa.dt_fechamento:
-                raise ValidationError(
-                    {'competencia_caixa':
-                     f'O caixa "{caixa}" está FECHADO: a entrada do saque '
-                     'não pode ser lançada nele.'})
-            if not caixa.validar_periodo(self.dt_movimento):
-                raise ValidationError(
-                    {'competencia_caixa':
-                     'A data do saque está fora do período da competência de '
-                     'caixa escolhida.'})
+            caixa = self._fk_segura('competencia_caixa')
+            if caixa is not None:
+                if caixa.dt_fechamento:
+                    raise ValidationError(
+                        {'competencia_caixa':
+                         f'O caixa "{caixa}" está FECHADO: a entrada do saque '
+                         'não pode ser lançada nele.'})
+                if not caixa.validar_periodo(self.dt_movimento):
+                    raise ValidationError(
+                        {'competencia_caixa':
+                         'A data do saque está fora do período da competência '
+                         'de caixa escolhida.'})
         if movimento_transacao == 'saque' and not self.competencia_caixa_id:
             raise ValidationError(
                 {'competencia_caixa':
@@ -351,8 +406,69 @@ class MovimentoBancario(models.Model):
         if self.competencia_caixa_id and not automatico:
             _sincronizar_caixa_do_saque(self)
 
+    def motivo_recusa_exclusao(self):
+        """Por que este movimento NÃO pode ser excluído (ou None = pode).
+
+        Regra: só se exclui movimento de COMPETÊNCIA BANCÁRIA ABERTA. Fechada,
+        o saldo dela já foi conferido no extrato e fechado.
+        """
+        comp = self._fk_segura('competencia_bancaria')
+        if comp is None:
+            return 'O movimento não tem competência bancária: não é possível excluí-lo.'
+        if comp.dt_fechamento_competencia:
+            return (f'A competência “{comp.descricao}” está FECHADA em '
+                    f'{comp.dt_fechamento_competencia:%d/%m/%Y}: não é '
+                    'possível lançar, alterar nem excluir movimentos dela. '
+                    '(Para corrigir, é preciso reabrir a competência.)')
+        return None
+
+    def motivo_recusa_edicao(self):
+        """Por que este movimento NÃO pode ser ALTERADO (ou None = pode).
+
+        Mesma régua da exclusão: só se altera movimento de COMPETÊNCIA
+        BANCÁRIA ABERTA.
+        """
+        return self.motivo_recusa_exclusao()
+
+    def motivo_recusa_conciliacao(self):
+        """Motivo para NÃO excluir por estar conciliado (ou None = pode)."""
+        if self.situacao_conciliacao() in ('Conciliado', 'Ignorado'):
+            return (f'O movimento {self.pk} está conciliado com o extrato '
+                    'bancário: desfaça antes a conciliação (aba Conciliação '
+                    'Bancária) e depois exclua o lançamento.')
+        return None
+
+    def baixa_de_origem(self):
+        """Baixa de fatura que gerou este movimento (ou None).
+
+        Ao excluir o movimento a tela PERGUNTA se a baixa sai junto — com
+        "sim", a baixa é apagada e o valor volta ao saldo da fatura.
+        """
+        if not self.baixa_fatura_id:
+            return None
+        try:
+            return self.baixa_fatura
+        except Exception:
+            return None
+
     def delete(self, *args, **kwargs):
+        """Exclusão do movimento — SEMPRE levando a BAIXA de origem junto.
+
+        Movimento e baixa de fatura são CONCOMITANTES: a baixa gerou o
+        lançamento, então apagar um sem o outro deixaria a fatura “paga” sem
+        recebimento (ou o oposto). A baixa devolve o valor ao saldo da fatura.
+        Use `excluir_baixa=False` só em manutenção que já cuidou da baixa.
+        """
+        excluir_baixa = kwargs.pop('excluir_baixa', True)
+        baixa = self.baixa_de_origem() if excluir_baixa else None
         competencia = self.competencia_bancaria
+        # Competência FECHADA não aceita exclusão de movimento — nem um
+        # lançamento já conciliado pode sair.
+        from django.core.exceptions import ValidationError
+        motivo = self.motivo_recusa_exclusao() or \
+            self.motivo_recusa_conciliacao()
+        if motivo:
+            raise ValidationError(motivo)
         # Apaga o par CAIXA do saque (se houver) e recompõe o saldo dele.
         if self.transferencia_id:
             try:
@@ -367,8 +483,18 @@ class MovimentoBancario(models.Model):
                     comp_caixa.recalcular_saldos()
             except Exception:
                 pass
-        super().delete(*args, **kwargs)
+        resultado = super().delete(*args, **kwargs)
         competencia.recalcular_saldos()
+        # A baixa sai DEPOIS do movimento (ela é referenciada por ele) e
+        # devolve o valor ao saldo da fatura.
+        if baixa is not None:
+            baixa.excluir_devolvendo_saldo()
+        return resultado
+
+    def pode_excluir(self):
+        """Motivo para NÃO excluir (None = pode): competência aberta e não
+        conciliado. A fatura estar finalizada NÃO impede."""
+        return self.motivo_recusa_exclusao() or self.motivo_recusa_conciliacao()
 
     def __str__(self):
         return f"{self.transacao_financeira} Entrada: {self.valor_entrada} Saída: {self.valor_saida}"
@@ -392,7 +518,8 @@ def _sincronizar_caixa_do_saque(movimento_banco):
         MovimentoBancario.objects.filter(pk=movimento_banco.pk).update(
             transferencia_id=movimento_banco.transferencia_id)
     valor = (movimento_banco.valor_saida or movimento_banco.valor_entrada or 0)
-    descricao = (f'Saque do banco ({movimento_banco.competencia_bancaria.descricao})')
+    descricao = ('Saque Bancário (banco → caixa) '
+                 f'({movimento_banco.competencia_bancaria.descricao})')
     existente = MovimentoCaixa.objects.filter(
         transferencia_id=movimento_banco.transferencia_id).first()
     dados = dict(

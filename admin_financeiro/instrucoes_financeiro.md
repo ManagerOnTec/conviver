@@ -45,6 +45,14 @@ Ordem do menu (por `verbose_name_plural`):
   `|divergência| >= 0,01`. Mensagem diz o que falta.
 - **Divergência é dinheiro** — nunca “arredondar” ou esconder; a tela mostra
   sistema × extrato × diferença.
+- **Regra maior do fluxo** — **competência FECHADA trava tudo**: não se
+  lança, altera nem exclui movimento; e, por tabela, trava baixa, fatura,
+  pré-fatura e convênio (`motivo_recusa_edicao()` de cada modelo).
+- **Exclusão de movimento** — só com a competência bancária **ABERTA**
+  (`MovimentoBancario.motivo_recusa_exclusao()`, checado também no
+  `delete()` do modelo e no admin). Mensagem: *"A competência “X” está
+  FECHADA em dd/mm/aaaa: não é possível excluir movimentos dela. (Para
+  corrigir, é preciso reabrir a competência.)"*
 - **Valor negativo** — permitido **só em movimento de AJUSTE/estorno**
   (`origem`/`observacao` explicando). No *saldo da fatura* e no `valor_baixa`
   nunca é negativo.
@@ -55,6 +63,12 @@ Ordem do menu (por `verbose_name_plural`):
   (`competencia_bancaria.recalcular_saldos()`).
 - **Baixa de fatura** gera entrada automaticamente (`BaixaFatura.save`), com
   `baixa_fatura` e `origem` preenchida.
+- **Exclusão do movimento** — exige competência ABERTA e o movimento NÃO
+  conciliado. O saldo do banco é recalculado. Se o movimento veio de uma
+  baixa de fatura, a **tela de confirmação pergunta** (radios
+  `excluir_baixa_junto`): *Sim* → a baixa é excluída junto e o valor volta ao
+  saldo da fatura; *Não* → só o movimento sai e a baixa permanece (pode ser
+  excluída depois, em “4. Baixa de Faturas”).
 - **Baixa de pagamento** gera saída (`BaixaPagamento.save`), com
   `baixa_pagamento`.
 - **Transferência caixa ⇄ banco** — o par é criado pelo `admin_tesouraria`

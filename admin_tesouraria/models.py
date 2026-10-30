@@ -245,7 +245,15 @@ class MovimentoCaixa(models.Model):
     TIPOS = [
         ('E', 'Entrada'),
         ('S', 'Saída'),
+        # TRANSFERÊNCIA para o banco: o dinheiro SAI do caixa (é uma saída) e
+        # o sistema lança a ENTRADA no banco. Fica como tipo próprio para o
+        # operador identificar a transferência na listagem.
+        ('D', 'Depósito em Banco'),
     ]
+    # Tipos que SAEM do caixa (S normal e D transferência).
+    TIPOS_SAIDA = ('S', 'D')
+    # Origem x tipo: depósito só com o tipo próprio; saque só entra (par do
+    # saque lançado no banco); os demais aceitam E/S.
     ORIGENS = [
         ('pagamento', 'Baixa de pagamento'),
         ('recebimento', 'Recebimento avulso'),
@@ -260,7 +268,10 @@ class MovimentoCaixa(models.Model):
         related_name='movimentocaixa_set', verbose_name='Competência Caixa')
     dt_movimento = models.DateField(
         default=timezone.localdate, verbose_name='Dt. Movimento')
-    tipo = models.CharField(max_length=1, choices=TIPOS, verbose_name='Tipo')
+    tipo = models.CharField(max_length=1, choices=TIPOS, verbose_name='Tipo',
+                            help_text='Entrada = dinheiro que entra; Saída = '
+                                      'dinheiro que sai; Depósito em Banco = '
+                                      'sai do caixa e entra no banco.')
     origem = models.CharField(
         max_length=20, choices=ORIGENS, default='recebimento',
         verbose_name='Origem')
@@ -328,6 +339,19 @@ class MovimentoCaixa(models.Model):
     # não passa pelas regras de "onde deve ser digitado".
     _estado_automatico = False
 
+    def _fk_segura(self, nome):
+        """Objeto da FK ou None.
+
+        No `full_clean` do ModelForm (`_post_clean`) a instância é montada
+        parcialmente: uma FK não preenchida faz `self.<campo>` levantar
+        `RelatedObjectDoesNotExist` em vez de devolver None. Lê pelo id.
+        """
+        from django.core.exceptions import ObjectDoesNotExist
+        try:
+            return getattr(self, nome)
+        except ObjectDoesNotExist:
+            return None
+
     def clean(self):
         """Validação do lançamento (tipo, valores, período e banco)."""
         from django.core.exceptions import ValidationError as VE
@@ -340,13 +364,23 @@ class MovimentoCaixa(models.Model):
         if (ent > 0) == (sai > 0):
             erros['valor_entrada'] = (
                 'Informe APENAS um valor: entrada OU saída.')
-        # 2) o TIPO tem de casar com o valor
-        esperado = 'E' if ent > 0 else 'S'
-        if self.tipo and self.tipo != esperado:
-            erros['tipo'] = (f'O tipo "{self.get_tipo_display()}" não bate '
-                             'com o valor informado.')
+        # 2) o TIPO tem de casar com o valor. `D` (Depósito em Banco) é uma
+        #    SAÍDA do caixa; `E` exige valor de entrada.
+        if ent > 0:
+            if self.tipo not in ('E', 'D'):
+                erros['tipo'] = 'Valor de ENTRADA exige o tipo “Entrada”.'
+            elif self.tipo == 'D':
+                erros['tipo'] = ('Depósito em banco é SAÍDA do caixa: informe o '
+                                 'VALOR DE SAÍDA.')
+        else:
+            if self.tipo not in ('S', 'D'):
+                erros['tipo'] = 'Valor de SAÍDA exige o tipo “Saída”.'
+        # O tipo D só vale para a origem de transferência.
+        if self.tipo == 'D' and self.origem != 'deposito_banco':
+            erros['origem'] = ('O tipo “Depósito em Banco” exige a origem '
+                               '“Depósito em banco (caixa → banco)”.')
         # 3) competência aberta e data no período
-        comp = self.competencia_caixa
+        comp = self._fk_segura('competencia_caixa')
         if comp is None:
             erros['competencia_caixa'] = 'Competência de caixa obrigatória.'
         else:
@@ -358,11 +392,15 @@ class MovimentoCaixa(models.Model):
                     f'A data está fora do período da competência de caixa '
                     f'(aberta em {comp.dt_abertura:%d/%m/%Y}).')
         # 4) transação financeira precisa MOVIMENTAR CAIXA
-        transacao = self.transacao_financeira
+        transacao = self._fk_segura('transacao_financeira')
+        if transacao is None and self.transacao_financeira_id:
+            transacao = self._fk_segura('transacao_financeira')
+        if transacao is None:
+            erros['transacao_financeira'] = 'Transação financeira é obrigatória.'
         if transacao is not None and not _transacao_movimenta_caixa(transacao):
             erros['transacao_financeira'] = (
                 'Escolha uma transação que MOVIMENTE CAIXA (ou de '
-                'DEPÓSITO/SAQUE, que movimentam caixa e banco).')
+                'DEPÓSITO BANCÁRIO, que movimenta caixa e banco).')
         # 4b) a ORIGEM do movimento tem de casar com o MOVIMENTO da transação.
         #
         # REGRA DO SENTIDO: a transferência é lançada no lado de ORIGEM do
@@ -376,20 +414,22 @@ class MovimentoCaixa(models.Model):
             if mov == 'saque' and self.origem == 'saque_banco' and not \
                     self._estado_automatico:
                 erros['origem'] = (
-                    'Saque deve ser lançado no BANCO (é lá que o dinheiro sai). '
-                    'O sistema cria a entrada neste caixa automaticamente.')
+                    'SAQUE BANCÁRIO deve ser lançado no BANCO (é lá que o '
+                    'dinheiro sai). O sistema cria a entrada neste caixa auto'
+                    'maticamente.')
             elif mov == 'deposito' and self.origem != 'deposito_banco':
                 erros['origem'] = (
-                    'A transação é de DEPÓSITO (caixa → banco): selecione a '
-                    'origem “Depósito em banco”.')
+                    'A transação é de DEPÓSITO BANCÁRIO (caixa → banco): '
+                    'selecione a origem “Depósito em banco”.')
             elif self.origem in ('deposito_banco', 'saque_banco') and \
                     mov not in ('deposito', 'saque'):
                 erros['transacao_financeira'] = (
-                    'Para depósito/saque escolha uma transação cadastrada como '
-                    '“Depósito (Caixa → Banco)” ou “Saque (Banco → Caixa)”.')
+                    'Para transferência escolha uma transação cadastrada como '
+                    '“Depósito Bancário (Caixa → Banco)” ou '
+                    '“Saque Bancário (Banco → Caixa)”.')
         # 5) transferência com banco exige competência bancária ABERTA
         if self.origem in ('deposito_banco', 'saque_banco'):
-            banco = self.competencia_bancaria
+            banco = self._fk_segura('competencia_bancaria')
             if banco is None:
                 erros['competencia_bancaria'] = (
                     'Informe a COMPETÊNCIA BANCÁRIA de destino/origem.')
@@ -397,11 +437,17 @@ class MovimentoCaixa(models.Model):
                 erros['competencia_bancaria'] = (
                     f'A competência bancária "{banco.descricao}" está FECHADA; '
                     'escolha uma ABERTA.')
-            esperado_origem = ('S' if self.origem == 'deposito_banco' else 'E')
-            if self.tipo and self.tipo != esperado_origem:
+            # Depósito: tipo 'S' ou o próprio 'D' (Depósito em Banco).
+            # Saque: o caixa só recebe a entrada (par automático) → tipo 'E'.
+            if self.origem == 'deposito_banco':
+                permitidos = ('S', 'D')
+            else:
+                permitidos = ('E',)
+            if self.tipo and self.tipo not in permitidos:
+                rotulo = ' ou '.join(dict(self.TIPOS)[t] for t in permitidos)
                 erros['tipo'] = (
-                    'Depósito em banco é SAÍDA do caixa; saque do banco é '
-                    'ENTRADA no caixa.')
+                    'Depósito em banco sai do CAIXA; saque do banco entra no '
+                    f'CAIXA. Para esta origem use o tipo “{rotulo}”.')
         if erros:
             raise VE(erros)
 
@@ -475,7 +521,7 @@ def _sincronizar_banco(movimento_caixa):
     deposito = movimento_caixa.origem == 'deposito_banco'
     valor = movimento_caixa.valor_entrada or movimento_caixa.valor_saida
     descricao = (
-        f'{"Depósito" if deposito else "Saque"} em dinheiro '
+        f'{"Depósito Bancário" if deposito else "Saque Bancário"} '
         f'({movimento_caixa.competencia_caixa.controle_caixa.descricao})')
     # Já existe o par desta transferência?
     existente = MovimentoBancario.objects.filter(

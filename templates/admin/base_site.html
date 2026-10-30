@@ -19,6 +19,10 @@
         if (localStorage.getItem('conviver_hide_right_filter') === 'true') r.classList.add('hide-right-filter');
         if (localStorage.getItem('conviver_hide_top_filter') === 'true') r.classList.add('hide-top-filter');
         if (localStorage.getItem('conviver_hide_breadcrumbs') === 'true') r.classList.add('hide-breadcrumbs');
+        // Painéis de topo começam RECOLHIDOS quando não há preferência salva
+        // (sem isso a tabela ficava abaixo da dobra). Ver admin_layout_toggles.js.
+        if ((localStorage.getItem('conviver_hide_dashboard') ?? 'true') === 'true') r.classList.add('hide-dashboard');
+        if ((localStorage.getItem('conviver_hide_filters_panel') ?? 'true') === 'true') r.classList.add('hide-filters');
       } catch (e) {}
     })();
   </script>
@@ -66,15 +70,16 @@
       <span class="ctrl-icon">▲</span>
       <span class="ctrl-label">Filtro Topo</span>
     </button>
+    <button type="button" class="view-ctrl-btn" id="btn-toggle-dashboard" title="Ocultar/Exibir Painel de Indicadores">
+      <span class="ctrl-icon">▤</span>
+      <span class="ctrl-label">Indicadores</span>
+    </button>
     <button type="button" class="view-ctrl-btn" id="btn-toggle-right-filter" title="Ocultar/Exibir Filtros da Direita (Alt+F)">
       <span class="ctrl-icon">◧</span>
       <span class="ctrl-label">Filtros</span>
       <span class="ctrl-badge" id="active-filters-count" style="display:none;">0</span>
     </button>
-    <button type="button" class="view-ctrl-btn view-ctrl-btn-focus" id="btn-toggle-focus-mode" title="Modo Foco / Maximizar Tabela (Alt+Z)">
-      <span class="ctrl-icon">⛶</span>
-      <span class="ctrl-label">Foco</span>
-    </button>
+
     <button type="button" class="view-ctrl-btn view-ctrl-btn-reset" id="btn-reset-view-layout" title="Restaurar layout original (Alt+R)">
       <span class="ctrl-icon">↺</span>
       <span class="ctrl-label">Restaurar</span>
@@ -125,13 +130,6 @@
         <span class="dock-shortcut-badge">Alt+F</span>
       </button>
       <div class="floating-dock-divider"></div>
-      <button type="button" class="floating-dock-item" id="dock-item-focus-mode" role="menuitem">
-        <span class="floating-dock-item-label">
-          <span class="dock-status-icon">☆</span>
-          <span>Modo Foco (Zen)</span>
-        </span>
-        <span class="dock-shortcut-badge">Alt+Z</span>
-      </button>
       <button type="button" class="floating-dock-item" id="dock-item-reset-layout" role="menuitem">
         <span class="floating-dock-item-label">
           <span class="dock-status-icon">↺</span>

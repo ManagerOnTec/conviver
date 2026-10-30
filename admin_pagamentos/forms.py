@@ -97,6 +97,8 @@ class BaixaPagamentoForm(forms.ModelForm):
             try:
                 from admin_cadastros_financeiros.models import \
                     TransacaoFinanceira
+                # Pagamento é SAÍDA (banco/caixa). Transferências (Depósito/
+                # Saque Bancário) não são forma de pagamento — ficam fora.
                 campo_transacao.queryset = \
                     campo_transacao.queryset.filter(
                         tipo='saida', status='A',
