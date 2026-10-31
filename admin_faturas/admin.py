@@ -873,42 +873,29 @@ class ConvenioAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEst
     duplicate_button.allow_tags = True
 
     def has_delete_permission(self, request, obj=None):
-        """Além da permissão do usuário, o CONVÊNIO com pré-fatura gerada não
-        pode ser excluído: primeiro se excluem as faturas e as pré-faturas
-        (cada uma tem regra própria de quando pode ser excluída)."""
+        """REGRA: o convênio só se exclui SEM pré-fatura ligada a ele
+        (`Convenio.motivo_recusa_exclusao`). A recusa vira mensagem amigável."""
         if request.user.username != 'admin':
             return False
         if obj is not None:
-            motivo = self._motivo_recusa_exclusao_convenio(obj)
+            motivo = obj.motivo_recusa_exclusao()
             if motivo:
                 messages.error(request, motivo)
                 return False
         return True
 
     def _impedimento_extra_exclusao(self, obj):
-        """Regra da ação em lote (mesma do botão Excluir do convênio)."""
-        return self._motivo_recusa_exclusao_convenio(obj)
-
-    def _motivo_recusa_exclusao_convenio(self, obj):
-        """REGRA: só se exclui o convênio sem PRÉ-FATURA ligada a ele.
-
-        A fatura é tratada pela própria tela de fatura (que exige não ter
-        baixa), então aqui basta olhar um passo à frente.
-        """
-        if obj.pre_faturado or obj.prefaturas.exists():
-            return (f'O convênio “{obj}” já tem pré-fatura gerada e não pode '
-                    'ser excluído. Exclua primeiro a(s) PRÉ-FATURA(S) dele, em '
-                    '“2. Pré-Faturas”.')
-        return None
+        """REGRA da ação em lote: a mesma do botão Excluir (no modelo)."""
+        return obj.motivo_recusa_exclusao()
 
     def delete_queryset(self, request, queryset):
-        """Só exclui os convênios SEM pré-fatura/fatura gerada; os demais
-        ficam com mensagem amigável."""
+        """Só exclui os convênios SEM pré-fatura; os demais ficam com
+        mensagem amigável explicando o motivo."""
         if not self.has_delete_permission(request):
             return
         excluidos = 0
         for obj in list(queryset):
-            motivo = self._motivo_recusa_exclusao_convenio(obj)
+            motivo = obj.motivo_recusa_exclusao()
             if motivo:
                 messages.warning(request, motivo)
                 continue

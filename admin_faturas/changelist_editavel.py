@@ -215,9 +215,20 @@ class ChangeListEditavel(ChangeList):
 
         return display_for_field(value, f, empty)
 
+    def _celula_hidden_travada(self, form, field_name):
+        """`<input type=hidden>` com o valor ORIGINAL de um campo editável
+        numa linha travada (ver comentário em `linha_renderizada`)."""
+        bf = form[field_name]
+        if bf.value() is None or bf.value() == '':
+            html = '<input type="hidden" name="%s" value="">' % bf.html_name
+        else:
+            html = bf.as_hidden()
+        return _Celula(mark_safe(str(bf.errors) + html), False, bf)
+
     def linha_renderizada(self, obj, form=None):
         """Lista de _Celula, uma por item de `list_display`."""
         admin = self.model_admin
+        editaveis = set(getattr(admin, 'list_editable', []) or [])
         celulas = []
 
         colunas = self.colunas_efetivas()
@@ -242,6 +253,16 @@ class ChangeListEditavel(ChangeList):
 
             # Coluna editável: usa o widget do formset (mantém o POST) —
             # exceto na linha travada, que sai como texto somente leitura.
+            # Na travada entra um HIDDEN com o valor original: o POST do
+            # navegador sempre manda TODOS os campos do formset; sem o hidden
+            # o campo obrigatório chegaria vazio e invalidaria o formset TODO
+            # (blocking inclusive as linhas liberadas). Como o valor hidden
+            # é igual ao do banco, `has_changed()` é falso e nada é gravado
+            # na linha travada.
+            if (travada and form is not None and field_name in editaveis
+                    and field_name in getattr(form, "fields", {})):
+                celulas.append(self._celula_hidden_travada(form, field_name))
+                continue
             if (not eh_link and form is not None and not travada
                     and field_name in getattr(form, "fields", {})
                     and not (field_name == self.model._meta.pk.name

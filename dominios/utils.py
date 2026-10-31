@@ -1133,16 +1133,24 @@ class ExportToXLSMixin:
 class ListEditableComRegras:
     """`list_editable` que RESPONDE ÀS REGRAS do fluxo.
 
-    O Django lê `list_editable` em tempo de REGISTRO/instanciação; como a
-    lista depende do usuário (e a regra depende de cada linha), ela é
-    recalculada em `changelist_view`: saem as colunas cujo campo não pode ser
-    alterado no recorte atual — por exemplo, com o filtro de “Pré-Faturados”
-    o checkbox `pre_faturado` não aparece editável, e linhas travadas ficam
-    somente leitura.
+    Também garante `selecao_desabilitada` (lido pelo template
+    `change_list_results_editavel.html`): sem o atributo o template levanta
+    `AttributeError` NO MEIO DA RENDERIZAÇÃO — e o POST de edição em linha
+    voltava 200 sem salvar nada.
+
+    O Django lê `list_editable` em tempo de registro; como a lista depende do
+    usuário (e a regra depende de cada linha), ela é recalculada em
+    `changelist_view`: saem as colunas cujo campo não pode ser alterado no
+    recorte atual — por exemplo, com o filtro de “Pré-Faturados” o checkbox
+    `pre_faturado` não aparece editável, e linhas travadas ficam somente
+    leitura.
 
     Para declarar, use a LISTA completa em `list_editable` e a lista base em
     `list_editable_sempre`.
     """
+
+    #: O template da listagem lê este atributo em TODO ModelAdmin.
+    selecao_desabilitada = False
 
     def list_editable_permitido(self, request):
         """Colunas editáveis para este recorte (sobrescreva se precisar)."""
@@ -1185,9 +1193,74 @@ class ListEditableComRegras:
         # grava: o recorte é calculado por REQUISIÇÃO.
         self.list_editable = list(self.list_editable_permitido(request))
 
-    def changelist_view(self, request, *args, **kwargs):
+    def get_changelist_form(self, request, **kwargs):
+        """Form de cada linha da listagem: SÓ os campos de `list_editable`.
+
+        O padrão do Django é `fields = ALL_FIELDS`. Como a tabela só renderiza
+        as colunas editáveis, o formset chegava ao POST sem os demais campos e
+        todas as linhas ficavam inválidas ("Este campo é obrigatório") — o
+        Salvar da listagem não gravava nada.
+
+        Além disso, o formulário é `required=False`: linhas SEM valor no POST
+        (ex.: páginas de tabelas vazias no meio do formset) não podem bloquear
+        o salvamento das outras.
+        """
+        campos = list(self.list_editable_permitido(request) or [])
+        if campos:
+            kwargs.setdefault('fields', campos)
+            kwargs.setdefault('formfield_callback', _formfield_nao_obrigatorio)
+        return super().get_changelist_form(request, **kwargs)
+
+    def get_changelist_instance(self, request):
+        """ChangeList já com o `list_editable` da REQUISIÇÃO aplicado.
+
+        É o PONTO ÚNICO por onde a listagem passa — inclusive quando a classe
+        define o próprio `changelist_view` (Pré-Fatura, Fatura) e quando outro
+        mixin envolve o `changelist_view`. O Django só monta o FORMSET da
+        listagem editável quando `cl.list_editable` é verdadeiro no GET
+        (`admin/options.py`), então o recorte precisa estar na instância antes
+        disso.
+        """
         self._aplicar_list_editable(request)
-        return super().changelist_view(request, *args, **kwargs)
+        return super().get_changelist_instance(request)
+
+    def _nome_do_campo_pk_no_form(self):
+        """Nome do campo de PK que o FORMSET da listagem envia no POST.
+
+        O Django procura `form-N-<pk>` — literalmente o nome do campo pk do
+        modelo (`id`). Na herança multitable, porém, o campo que carrega a pk
+        na linha FILHA é o PARENT LINK (`prefatura_ptr` para `Fatura`,
+        `fatura_ptr` para `BaixaFatura`), e é ele que o formset renderiza.
+
+        Sem este ajuste o Django não achava nenhuma pk (`object_pks = []`),
+        montava o formset com um queryset VAZIO e o `is_valid()` voltava
+        falso — a tela recarregava sem erro e NADA era gravado.
+        """
+        pai = getattr(self.model, 'parent_link_field', None)
+        if pai is not None:
+            return pai.name
+        return self.model._meta.pk.name
+
+    def _get_edited_object_pks(self, request, prefix):
+        """PKs das linhas editadas, aceitando o parent link da herança."""
+        nome_pk = self._nome_do_campo_pk_no_form()
+        padrao = re.compile(
+            r'{}-\d+-{}$'.format(re.escape(prefix), re.escape(nome_pk)))
+        pks = [valor for chave, valor in request.POST.items()
+               if padrao.match(chave)]
+        if pks:
+            return pks
+        # Fallback: o Django padrão (`form-N-id`) e a pk oculta da linha.
+        return super()._get_edited_object_pks(request, prefix)
+
+
+# ---------------------------------------------------------------------------
+def _formfield_nao_obrigatorio(db_field, **kwargs):
+    """Campos de `list_editable` sem `blank=True` viram OPCIONAIS no form da
+    listagem: linhas SEM valor no POST (checkboxes de outra página, linhas
+    travadas pelo fluxo) não bloqueiam as demais."""
+    kwargs.setdefault('required', False)
+    return db_field.formfield(**kwargs)
 
 
 class EdicaoComRegrasMixin(ListEditableComRegras):
@@ -1582,6 +1655,14 @@ class ExclusaoEmLoteComRegrasMixin:
 
         @wraps(original)
         def changelist_view(this, request, extra_context=None):
+            # Este despacho pode ser o PRIMEIRO `changelist_view` da MRO e
+            # chamar direto o do Django — pulando o `ListEditableComRegras`,
+            # que é quem define `list_editable` NA INSTÂNCIA. Sem essa lista o
+            # Django NÃO cria o formset no GET (admin/options.py:
+            # `elif cl.list_editable and ...`) e a listagem editável não
+            # aparece. Por isso o recorte é aplicado aqui também.
+            if hasattr(this, '_aplicar_list_editable'):
+                this._aplicar_list_editable(request)
             if (request.method == 'POST' and '_save' not in request.POST
                     and request.POST.get('action')):
                 return this.changelist_view_com_acoes(

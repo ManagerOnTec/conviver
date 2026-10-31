@@ -108,18 +108,25 @@ class Convenio(models.Model):
         return self.convenio
 
     def motivo_recusa_edicao(self):
-        """Por que este CONVÊNIO não pode ser ALTERADO (ou None = pode).
-
-        REGRA: só se altera o convênio quando ele NÃO tem pré-fatura ligada a
-        ele. As etapas seguintes (fatura, baixa, movimento) são tratadas nas
-        próprias telas — aqui o convênio olha só um passo à frente.
-        """
+        """REGRA: só se altera o convênio quando ele NÃO tem pré-fatura
+        ligada a ele (as etapas seguintes são tratadas nas próprias telas)."""
         if self.pk is None:
             return None
         if self.prefaturas.exists():
             return (f'O convênio “{self}” já tem pré-fatura gerada e não pode '
                     'ser alterado. Exclua primeiro a PRÉ-FATURA '
                     '(“2. Pré-Faturas”) para liberar a edição.')
+        return None
+
+    def motivo_recusa_exclusao(self):
+        """REGRA: só se exclui o convênio quando ele NÃO tem pré-fatura
+        ligada a ele (mesma condição da edição)."""
+        if self.pk is None:
+            return None
+        if self.prefaturas.exists():
+            return (f'O convênio “{self}” já tem pré-fatura gerada e não pode '
+                    'ser excluído. Exclua primeiro a PRÉ-FATURA, em '
+                    '“2. Pré-Faturas”.')
         return None
 
 
