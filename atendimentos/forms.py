@@ -38,7 +38,7 @@ class AtendimentoCreateForm(FilterByStatusMixin, forms.ModelForm):
             'cidade_encaminhamento': Select2Widget(attrs={'data-width': '100%'}),
             'entidade_encaminhamento': Select2Widget(attrs={'data-width': '100%'}),
             'pessoa_docentrega': Select2Widget(attrs={'data-width': '100%'}),
-            'convenio': Select2Widget(attrs={'data-width': '100%'}),
+            'acordo_faturamento': Select2Widget(attrs={'data-width': '100%'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -106,7 +106,7 @@ class AtendimentoUpdateForm(FilterByStatusMixin, forms.ModelForm):
             'cidade_encaminhamento': Select2Widget(attrs={'data-width': '100%'}),
             'entidade_encaminhamento': Select2Widget(attrs={'data-width': '100%'}),
             'pessoa_docentrega': Select2Widget(attrs={'data-width': '100%'}),
-            'convenio': Select2Widget(attrs={'data-width': '100%'}),
+            'acordo_faturamento': Select2Widget(attrs={'data-width': '100%'}),
         }
 
     def __init__(self, *args, **kwargs):

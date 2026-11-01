@@ -2350,3 +2350,96 @@ body.change-list .changelist-form-container {
 }
 
 
+
+
+/* ==================================================================
+   13. MODAL DE BAIXAS DA FATURA (js/admin_baixas_modal.js)
+
+   O botão "Baixas (n)" abre a gestão das baixas numa janela sobre a
+   listagem: resumo (valor da fatura, soma das baixas, saldo) + tabela com
+   "Excluir" por linha + formulário de lançamento.
+   ================================================================== */
+.baixas-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: none;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 40px 16px;
+    background: rgba(17, 24, 39, .55);
+    overflow: auto;
+}
+
+.baixas-modal-box {
+    width: min(980px, 100%);
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, .35);
+    overflow: hidden;
+}
+
+.baixas-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: #417690;
+    color: #fff;
+}
+
+.baixas-modal-titulo {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.baixas-modal-fechar {
+    border: 0;
+    background: transparent;
+    color: #fff;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 6px;
+}
+
+.baixas-modal-fechar:hover {
+    background: rgba(255, 255, 255, .18);
+    border-radius: 4px;
+}
+
+.baixas-modal-corpo {
+    max-height: calc(100vh - 140px);
+    overflow: auto;
+}
+
+
+/* ==================================================================
+   14. CÉLULA DE LINHA TRAVADA (listagem editável)
+
+   A linha travada NÃO pode ser alterada — mas o VALOR continua visível:
+   a célula mostra o texto e apenas o widget de edição é suprimido.
+   Antes a célula saía vazia (só um `<input type=hidden>`), parecendo
+   que o campo não tinha conteúdo.
+   ================================================================== */
+.celula-travada {
+    display: inline-block;
+    max-width: 100%;
+    padding: 1px 4px;
+    color: #334155;
+    background: #f1f5f9;
+    border-radius: 3px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+    cursor: not-allowed;
+}
+
+.celula-travada::after {
+    content: "🔒";
+    font-size: 9px;
+    margin-left: 4px;
+    opacity: .55;
+}

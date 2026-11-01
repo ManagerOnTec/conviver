@@ -1165,8 +1165,8 @@ class ListEditableComRegras:
 
             -- pré-fatura que já gerou fatura
             SELECT prefatura_ptr_id FROM admin_faturas_fatura;
-            -- convênio com pré-fatura gerada
-            SELECT DISTINCT convenio_id FROM admin_faturas_prefatura;
+            -- acordo de faturamento com pré-fatura gerada
+            SELECT DISTINCT acordo_faturamento_id FROM admin_faturas_prefatura;
             -- fatura com baixa, com movimento, finalizada ou de competência fechada
             SELECT f.prefatura_ptr_id
               FROM admin_faturas_fatura f
@@ -1488,6 +1488,47 @@ class EdicaoComRegrasMixin(ListEditableComRegras):
         if original is not None:
             cls.changelist_view = cls._changelist_view_despacha_acoes(
                 cls, original)
+
+
+class BotaoExcluirLinhaMixin:
+    """Coluna "Excluir" por LINHA (link para a tela de confirmação).
+
+    Mesma regra da exclusão individual (`motivo_recusa_exclusao()`): com
+    impedimento o botão sai CINZA e o motivo vai no `title`; sem impedimento
+    o link aponta para o `delete_view` do próprio admin (que revalida a
+    regra).
+
+    Uso: herde no ModelAdmin e inclua `excluir_linha` no `list_display`.
+    """
+
+    def _motivo_exclusao_linha(self, obj):
+        metodo = getattr(obj, 'motivo_recusa_exclusao', None)
+        try:
+            return metodo() if metodo is not None else None
+        except Exception:
+            return None
+
+    def excluir_linha(self, obj):
+        from django.urls import NoReverseMatch, reverse
+        from django.utils.html import format_html
+
+        motivo = self._motivo_exclusao_linha(obj)
+        if motivo:
+            return format_html(
+                '<span title="{}" style="color:#9ca3af; '
+                'cursor:not-allowed;">Excluir</span>', motivo)
+        try:
+            url = reverse(
+                f'admin:{self.model._meta.app_label}_'
+                f'{self.model._meta.model_name}_delete', args=[obj.pk])
+        except NoReverseMatch:
+            return '-'
+        return format_html(
+            '<a class="button" style="padding:2px 8px; background:#b91c1c; '
+            'color:#fff;" href="{}" title="Excluir este registro">'
+            'Excluir</a>', url)
+    excluir_linha.short_description = 'Excluir'
+    excluir_linha.allow_tags = True
 
 
 class ExclusaoEmLoteComRegrasMixin:

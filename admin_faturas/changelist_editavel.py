@@ -54,6 +54,7 @@ from django import forms
 from django.forms import Textarea
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
+from django.utils.translation import gettext as _
 
 
 class _Celula:
@@ -215,15 +216,37 @@ class ChangeListEditavel(ChangeList):
 
         return display_for_field(value, f, empty)
 
-    def _celula_hidden_travada(self, form, field_name):
-        """`<input type=hidden>` com o valor ORIGINAL de um campo editável
-        numa linha travada (ver comentário em `linha_renderizada`)."""
+    def _celula_hidden_travada(self, form, field_name, conteudo=''):
+        """Célula de coluna editável numa linha TRAVADA.
+
+        A linha travada não pode ser ALTERADA — mas o VALOR continua visível:
+        a célula mostra o texto do campo (o mesmo `conteudo` que a listagem
+        usaria) e, junto, um `<input type=hidden>` com o valor ORIGINAL.
+
+        O hidden é necessário porque o POST do navegador manda TODAS as linhas
+        do formset: sem ele o campo obrigatório chegaria vazio e invalidaria o
+        formset TODO. Como o valor hidden é igual ao do banco, o
+        `has_changed()` é falso e nada é gravado nesta linha.
+        """
         bf = form[field_name]
         if bf.value() is None or bf.value() == '':
-            html = '<input type="hidden" name="%s" value="">' % bf.html_name
+            hidden = '<input type="hidden" name="%s" value="">' % bf.html_name
         else:
-            html = bf.as_hidden()
-        return _Celula(mark_safe(str(bf.errors) + html), False, bf)
+            hidden = bf.as_hidden()
+
+        # Texto da célula: o valor do campo, como TEXTO (sem widget).
+        texto = conteudo
+        if texto is None or texto == '':
+            texto = bf.value() if bf.value() not in (None, '') else '-'
+
+        # `format_html` ESCAPA os argumentos: o hidden é HTML e entra como
+        # string pronta (via `str`), não como argumento posicional.
+        html = format_html(
+            '<span class="celula-travada" title="{}">{}</span>',
+            _('Linha travada pelo fluxo: o valor não pode ser alterado aqui.'),
+            texto)
+        return _Celula(
+            mark_safe(str(bf.errors) + str(html) + hidden), False, bf)
 
     def linha_renderizada(self, obj, form=None):
         """Lista de _Celula, uma por item de `list_display`."""
@@ -252,16 +275,18 @@ class ChangeListEditavel(ChangeList):
                 continue
 
             # Coluna editável: usa o widget do formset (mantém o POST) —
-            # exceto na linha travada, que sai como texto somente leitura.
-            # Na travada entra um HIDDEN com o valor original: o POST do
-            # navegador sempre manda TODOS os campos do formset; sem o hidden
-            # o campo obrigatório chegaria vazio e invalidaria o formset TODO
-            # (blocking inclusive as linhas liberadas). Como o valor hidden
-            # é igual ao do banco, `has_changed()` é falso e nada é gravado
-            # na linha travada.
+            # exceto na linha travada, que sai como TEXTO somente leitura
+            # (o VALOR continua visível: só o update é que está bloqueado).
+            # Na travada entra também um HIDDEN com o valor original: o POST
+            # do navegador sempre manda TODOS os campos do formset; sem o
+            # hidden o campo obrigatório chegaria vazio e invalidaria o
+            # formset TODO (bloqueando inclusive as linhas liberadas). Como o
+            # valor hidden é igual ao do banco, `has_changed()` é falso e nada
+            # é gravado na linha travada.
             if (travada and form is not None and field_name in editaveis
                     and field_name in getattr(form, "fields", {})):
-                celulas.append(self._celula_hidden_travada(form, field_name))
+                celulas.append(self._celula_hidden_travada(
+                    form, field_name, conteudo))
                 continue
             if (not eh_link and form is not None and not travada
                     and field_name in getattr(form, "fields", {})
@@ -313,11 +338,17 @@ class ChangeListEditavel(ChangeList):
         LIMITADO à altura da linha; o modal é o jeito confortável de ler e
         copiar.
         """
-        valor = ''
-        try:
-            valor = getattr(obj, field_name, '') or ''
-        except Exception:
-            valor = ''
+        valor = conteudo if conteudo is not None else ''
+        if not valor:
+            try:
+                metodo_admin = getattr(self.model_admin, field_name, None)
+                if callable(metodo_admin):
+                    valor = metodo_admin(obj)
+                else:
+                    attr = getattr(obj, field_name, '')
+                    valor = attr() if callable(attr) else attr
+            except Exception:
+                valor = ''
         texto = str(valor).strip()
         resumo = texto if len(texto) <= self.limite_texto_celula else \
             texto[:self.limite_texto_celula].rstrip() + '…'
@@ -506,7 +537,7 @@ class ChangeListBaixaFatura(ChangeListEditavel):
         fatura em `_filtrar_por_parametros`. Sem isto o Django os descarta
         como "filtro de campo desconhecido" e a tela mostraria tudo.
         """
-        keep = {'status', 'competencia', 'convenio_pagador', 'estabelecimento',
+        keep = {'status', 'competencia', 'AcordoFaturamento_pagador', 'estabelecimento',
                 'pre_faturado', 'faturado',
                 # Filtros laterais da listagem de baixas (SimpleListFilter):
                 # o valor vem do GET e os `filter_specs` precisam recebê-lo
@@ -537,7 +568,7 @@ class ChangeListBaixaFatura(ChangeListEditavel):
     def _filtrar_por_parametros(self, request, faturas):
         """Aplica os `list_filter` do ModelAdmin diretamente na FATURA.
 
-        Os filtros (`StatusFilterAdminMixin`, `ConvenioPagadorFilter`,
+        Os filtros (`StatusFilterAdminMixin`, `AcordoFaturamentoPagadorFilter`,
         `CustomDateFilter`...) são `SimpleListFilter`; a listagem de baixas
         mostra faturas, então cada um recebe o queryset de FATURAS como base.
         O valor usado é o do próprio `request` (mesma leitura que o Django
@@ -547,14 +578,16 @@ class ChangeListBaixaFatura(ChangeListEditavel):
         # 1) Lookups de campo escritos na URL e aplicados na FATURA
         #    (ex.: `?dt_vencimento__lt=...`, `?competencia=...`).
         #    Os parâmetros que já são de um `SimpleListFilter`
-        #    (`status`, `competencia`, `convenio_pagador`, `estabelecimento`)
+        #    (`status`, `competencia`, `AcordoFaturamento_pagador`, `estabelecimento`)
         #    são lidos pelos próprios filtros no passo 2.
         from datetime import datetime
 
         admin = self.model_admin
         filtros_laterais = set()
         for espec in admin.get_list_filter(request):
-            if not isinstance(espec, (list, tuple)):
+            if isinstance(espec, str):
+                filtros_laterais.add(espec)
+            elif hasattr(espec, 'parameter_name'):
                 filtros_laterais.add(espec.parameter_name)
 
         def valor_para(campo, valor):
@@ -571,6 +604,13 @@ class ChangeListBaixaFatura(ChangeListEditavel):
             return valor
 
         campos_fatura = self._campos_da_fatura()
+        # Lookups ANINHADOS aceitos na URL (busca por pagador): o primeiro
+        # segmento já está em `campos_fatura`, mas a chave completa
+        # (`pagador_pj__empresa`) precisa passar como está.
+        lookups_aninhados = {
+            'pagador_pj__empresa', 'pagador_pf__nome',
+            'acordo_faturamento__acordo_faturamento',
+        }
         filtros = {}
         periodo = {}
         # A URL chega montada pelo Django com o nome do campo da BAIXA
@@ -590,7 +630,14 @@ class ChangeListBaixaFatura(ChangeListEditavel):
                     continue
                 chave = chave.replace(campo, equivalente, 1)
                 campo = equivalente
-                sufixo_chave = chave.split('__', 1)[1] if '__' in chave else ''
+            if '__' in chave:
+                if chave not in lookups_aninhados:
+                    # `campo__lookup` simples (ex.: `dt_vencimento__year`).
+                    sufixo_chave = chave.split('__', 1)[1]
+                else:
+                    # Lookup aninhado de FK: passa a chave completa.
+                    filtros[chave] = valores[0] if valores else ''
+                    continue
             for valor in valores:
                 if not valor:
                     continue
@@ -618,12 +665,17 @@ class ChangeListBaixaFatura(ChangeListEditavel):
         instancias = {type(f): f for f in getattr(self, 'filter_specs', [])
                       if not isinstance(f, (list, tuple))}
         for espec in admin.get_list_filter(request):
-            if isinstance(espec, (list, tuple)):
+            if isinstance(espec, (list, tuple, str)) or not callable(espec):
                 continue  # filtro de campo do modelo da BAIXA
             filtro = instancias.get(espec)
             if filtro is None:
-                filtro = espec(request, request.GET.copy(), admin,
-                               self.model, admin)
+                # `SimpleListFilter.__init__` recebe exatamente
+                # (request, params, model, model_admin).
+                try:
+                    filtro = espec(request, request.GET.copy(),
+                                   self.model, admin)
+                except Exception:
+                    continue  # filtro inválido não derruba a listagem
             else:
                 filtro.used_parameters = {
                     espec.parameter_name: request.GET.get(espec.parameter_name)

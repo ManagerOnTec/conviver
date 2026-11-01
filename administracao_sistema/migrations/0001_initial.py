@@ -106,7 +106,7 @@ class Migration(migrations.Migration):
     dependencies = [
         ('sessions', '0001_initial'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ('atendimentos', '0002_alter_atendimento_options'),
+        ('atendimentos', '0001_initial'),
     ]
 
     operations = [

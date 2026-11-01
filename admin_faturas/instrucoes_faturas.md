@@ -1,12 +1,12 @@
 # admin_faturas — instruções
 
-Fluxo: **Convênio → Pré-Fatura → Fatura → Baixa de Fatura**. Segue o
+Fluxo: **Acordo de Faturamento → Pré-Fatura → Fatura → Baixa de Fatura**. Segue o
 **Padrão obrigatório dos admins** do `AGENTS.md`.
 
 ## Fluxo de negócio
 
-1. **Convênio** (`Convenio`) — contrato; gera as pré-faturas por competência.
-2. **Pré-Fatura** (`PreFatura`) — lançamento do convênio (`create_fatura()`
+1. **Acordo de Faturamento** (`AcordoFaturamento` / `AcordoFaturamento`) — contrato; gera as pré-faturas por competência.
+2. **Pré-Fatura** (`PreFatura`) — lançamento do acordo (`create_fatura()`
    vira a fatura).
 3. **Fatura** (`Fatura`) — herda de `PreFatura` (multitable: a pk da fatura é o
    `prefatura_ptr`). Aberta (`faturado=False`) → finalizada (`faturado=True`).
@@ -19,14 +19,14 @@ Cada etapa olha **somente UM passo à frente**. Não há mais regra em cascata.
 
 | Etapa | Só pode ser alterada / excluída quando… | Mensagem |
 |---|---|---|
-| **Convênio** | **não** tem pré-fatura ligada a ele | *“O convênio “X” já tem pré-fatura gerada e não pode ser alterado/excluído. Exclua primeiro a PRÉ-FATURA (“2. Pré-Faturas”)…”* |
+| **Acordo de Faturamento** | **não** tem pré-fatura ligada a ele | *“O acordo de faturamento “X” já tem pré-fatura gerada e não pode ser alterado/excluído. Exclua primeiro a PRÉ-FATURA (“2. Pré-Faturas”)…”* |
 | **Pré-Fatura** | **não** tem fatura ligada a ela | *“A pré-fatura N já gerou a fatura M e não pode ser alterada/excluída. Exclua primeiro a FATURA, em “3. Faturas”…”* |
 | **Fatura** | **não** tem baixa de fatura ligada a ela | *“A fatura N tem baixa registrada e não pode ser alterada/excluída. Exclua primeiro a BAIXA, em “4. Baixa de Faturas”…”* |
 | **Baixa de Fatura** e **Movimento** | a **competência bancária** está **ABERTA** | *“A competência bancária “X” está FECHADA em dd/mm/aaaa: não é possível alterar/excluir a baixa…”* |
 
 Implementação (`motivo_recusa_edicao` / `motivo_recusa_exclusao`):
 
-- `Convenio` — `self.prefaturas.exists()`;
+- `AcordoFaturamento` — `self.prefaturas.exists()`;
 - `PreFatura` — `Fatura.objects.filter(prefatura_ptr_id=self.pk)`;
 - `Fatura` — `self.baixas_registradas().exists()`;
 - `BaixaFatura` e `MovimentoBancario` — `dt_fechamento_competencia` da

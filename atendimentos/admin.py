@@ -19,7 +19,9 @@ class AtendimentoAdmin(SomenteLeituraEstatisticoAdminMixin, AdminEstabelecimento
         total = queryset.count()
         internados_hoje = queryset.filter(dt_alta__isnull=True).count()
         altas = queryset.filter(dt_alta__isnull=False).count()
-        convenio_count = queryset.exclude(convenio__isnull=True).count()
+        acordo_faturamento_count = queryset.exclude(
+            acordo_faturamento__isnull=True).exclude(
+            acordo_faturamento='').count()
 
         return [
             {
@@ -44,9 +46,9 @@ class AtendimentoAdmin(SomenteLeituraEstatisticoAdminMixin, AdminEstabelecimento
                 'icon': '🏁',
             },
             {
-                'title': 'Por Convênios',
-                'value': f"{convenio_count:,}".replace(',', '.'),
-                'subtitle': 'Atendimentos com convênio',
+                'title': 'Por Acordo de Faturamento',
+                'value': f"{acordo_faturamento_count:,}".replace(',', '.'),
+                'subtitle': 'Atendimentos com acordo de faturamento',
                 'color_class': 'kpi-orange',
                 'icon': '📑',
             },

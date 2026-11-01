@@ -7,7 +7,7 @@ from admin_pagamentos.models import Pagamento
 from admin_faturas.models import Fatura
 from admin_faturas.dashboard import FaturasDashboardMixin
 from django.urls import reverse, path
-from dominios.utils import ExportToXLSMixin, AdminEstabelecimentoPadraoMixin, StatusFilterAdminMixin, chain_form_init, ExclusaoEmLoteComRegrasMixin
+from dominios.utils import ExportToXLSMixin, AdminEstabelecimentoPadraoMixin, StatusFilterAdminMixin, chain_form_init, ExclusaoEmLoteComRegrasMixin, BotaoExcluirLinhaMixin
 from datetime import timedelta, date
 import calendar
 from decimal import Decimal
@@ -521,7 +521,7 @@ class CompetenciaAbertaMixin:
 
 
 @admin.register(MovimentoBancario)
-class MovimentoBancarioAdmin(ExclusaoEmLoteComRegrasMixin, CompetenciaAbertaMixin, FaturasDashboardMixin, ExportToXLSMixin, AdminEstabelecimentoPadraoMixin, admin.ModelAdmin):
+class MovimentoBancarioAdmin(BotaoExcluirLinhaMixin, ExclusaoEmLoteComRegrasMixin, CompetenciaAbertaMixin, FaturasDashboardMixin, ExportToXLSMixin, AdminEstabelecimentoPadraoMixin, admin.ModelAdmin):
     form = MovimentoBancarioForm
 
     actions = ['export_as_xls', 'empacotar_movimentos', 'excluir_selecionados']
@@ -593,7 +593,7 @@ class MovimentoBancarioAdmin(ExclusaoEmLoteComRegrasMixin, CompetenciaAbertaMixi
         'valor_entrada', 'valor_saida',
         'baixa_origem_display', 'observacao', 'status_conciliacao',
         'baixa_fatura', 'us_registro', 'dt_registro', 'estabelecimento',
-        'status'
+        'status', 'excluir_linha',
     ]
 
     def status_conciliacao(self, obj):

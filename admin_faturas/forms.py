@@ -7,15 +7,15 @@ from django.forms import BaseInlineFormSet
 from django.core.exceptions import ValidationError
 from django import forms
 from dominios.utils import FilterByStatusMixin
-from .models import Convenio
+from .models import AcordoFaturamento
 from admin_cadastros.models import Estabelecimento, Pessoa
 from django.db import models
 
 
-class ConvenioForm(FilterByStatusMixin, forms.ModelForm):
+class AcordoFaturamentoForm(FilterByStatusMixin, forms.ModelForm):
 
     class Meta:
-        model = Convenio
+        model = AcordoFaturamento
         fields = '__all__'
         exclude = ['fatura_vig_inicial', 'fatura_vig_final']
 
@@ -87,8 +87,8 @@ class ConvenioForm(FilterByStatusMixin, forms.ModelForm):
                     'cliente do convênio.')
         return clientes
 
-    def clean_convenio(self):
-        return self.cleaned_data['convenio'].title()
+    def clean_acordo_faturamento(self):
+        return self.cleaned_data.get('acordo_faturamento', '').title()
 
 
 class PreFaturaForm(forms.ModelForm):
@@ -100,6 +100,15 @@ class PreFaturaForm(forms.ModelForm):
             'competencia': AdminDateWidget(),
             'dt_vencimento': AdminDateWidget(),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Ao gerar ou editar manualmente, o campo acordo de faturamento traz somente acordos ativos
+        if 'acordo_faturamento' in self.fields:
+            qs = AcordoFaturamento.objects.filter(status='A')
+            if self.instance and self.instance.pk and self.instance.acordo_faturamento_id:
+                qs = qs | AcordoFaturamento.objects.filter(pk=self.instance.acordo_faturamento_id)
+            self.fields['acordo_faturamento'].queryset = qs.distinct()
 
     def clean(self):
         cleaned_data = super().clean()
@@ -130,6 +139,24 @@ class FaturaForm(forms.ModelForm):
     # bloqueava TODA edição de fatura já finalizada — inclusive registrar uma
     # baixa no inline. A exclusão de fatura já é barrada pelo
     # `FaturaAdmin.has_delete_permission`, então a edição fica livre.
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Ao gerar ou editar manualmente, o campo acordo de faturamento traz somente acordos ativos
+        if 'acordo_faturamento' in self.fields:
+            qs = AcordoFaturamento.objects.filter(status='A')
+            if self.instance and self.instance.pk and self.instance.acordo_faturamento_id:
+                qs = qs | AcordoFaturamento.objects.filter(pk=self.instance.acordo_faturamento_id)
+            self.fields['acordo_faturamento'].queryset = qs.distinct()
+
+        # FLUXOS DISTINTOS: `faturado` (fatura FINALIZADA) só muda pelos
+        # caminhos oficiais — o botão "Finalizar fatura" (`finalizar_fatura_view`)
+        # e a ação em lote "Finalizar faturas selecionadas". No formulário o
+        # campo fica DESABILITADO (somente leitura): o POST de uma edição
+        # qualquer da fatura não pode marcar/desmarcar faturado (o checkbox
+        # editável do form antigo era o que setava faturado fora do fluxo).
+        if 'faturado' in self.fields:
+            self.fields['faturado'].disabled = True
 
 
 
@@ -187,7 +214,7 @@ class BaixaFaturaForm(forms.ModelForm):
     # changelist já a exclui (só o parent link `fatura_ptr` vai oculto).
     CAMPOS_COPIA_SOMENTE_LEITURA = tuple(
         sorted({c for c in CAMPOS_COPIA if c not in ('estabelecimento',
-                                                     'convenio')})
+                                                     'acordo_faturamento')})
         + ['estabelecimento_baixa', 'us_registro_baixa',
            'us_atualizacao_baixa']
     )
@@ -256,7 +283,7 @@ class BaixaFaturaForm(forms.ModelForm):
         for nome in self.CAMPOS_COPIA_SOMENTE_LEITURA:
             if nome in self.fields:
                 self.fields[nome].disabled = True
-        for nome in ('convenio', 'valor', 'valor_fatura', 'valor_saldo',
+        for nome in ('acordo_faturamento', 'valor', 'valor_fatura', 'valor_saldo',
                      'competencia', 'dt_vencimento', 'cliente',
                      'estabelecimento', 'us_registro'):
             if nome in self.fields:

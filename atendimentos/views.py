@@ -65,7 +65,7 @@ from django.conf import settings
 from admin_cadastros.forms import TipoAtendimentoOpForm
 from django_filters import rest_framework as filters
 from admin_cadastros.models import TipoAtendimento, Cidade
-from admin_faturas.models import Convenio
+from admin_faturas.models import AcordoFaturamento
 from dominios.choices import status_choices, entidade_encaminha_choices
 from django import forms
 import django_filters
@@ -99,10 +99,10 @@ class AtendimentoFilter(filters.FilterSet):
     entidade_encaminhamento = django_filters.ChoiceFilter(
         choices=entidade_encaminha_choices, label='Entidade')
 
-    convenio = filters.ModelChoiceFilter(
+    acordo_faturamento = filters.ModelChoiceFilter(
         # Especifique o campo da empresa que deseja filtrar
-        field_name='convenio__convenio',
-        queryset=Convenio.objects.all(), label='Convênio',)
+        field_name='acordo_faturamento__acordo_faturamento',
+        queryset=AcordoFaturamento.objects.all(), label="Acordo de Faturamento",)
 
     dt_alta = django_filters.BooleanFilter(method='filter_by_dt_alta', widget=forms.CheckboxInput(
         attrs={'checked': False, 'class': 'mt-2'}), label='Listar as altas?')

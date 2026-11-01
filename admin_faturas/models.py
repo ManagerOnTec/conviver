@@ -36,9 +36,10 @@ def periodo_cobranca(competencia, dia_envio):
         # O período termina no próprio dia de envio, não na véspera.
         fim = competencia
     return inicio, fim
-class Convenio(models.Model):
-    convenio = models.CharField(max_length=255, verbose_name='Convênio',
-                                help_text='Informe o nome do convênio do contrato')
+class AcordoFaturamento(models.Model):
+    acordo_faturamento = models.CharField(
+        max_length=255, verbose_name='Acordo de Faturamento',
+        help_text='Informe o nome do acordo de faturamento do contrato')
     modalidade_contrato = models.CharField(
         max_length=20, choices=modalidade_contrato_choices)
     estabelecimento = models.ForeignKey(
@@ -97,34 +98,33 @@ class Convenio(models.Model):
     status = models.CharField(
         max_length=1, choices=status_choices, default='A', verbose_name='Status')
 
-
-
     class Meta:
-        verbose_name = 'Convênio'
-        verbose_name_plural = '1. Convênios/Contratos'
+        db_table = 'admin_faturas_acordofaturamento'
+        verbose_name = 'Acordo de Faturamento'
+        verbose_name_plural = '1. Acordos de Faturamento'
         ordering = ['-pk']
 
     def __str__(self):
-        return self.convenio
+        return self.acordo_faturamento
 
     def motivo_recusa_edicao(self):
-        """REGRA: só se altera o convênio quando ele NÃO tem pré-fatura
+        """REGRA: só se altera o acordo quando ele NÃO tem pré-fatura
         ligada a ele (as etapas seguintes são tratadas nas próprias telas)."""
         if self.pk is None:
             return None
         if self.prefaturas.exists():
-            return (f'O convênio “{self}” já tem pré-fatura gerada e não pode '
+            return (f'O acordo de faturamento “{self}” já tem pré-fatura gerada e não pode '
                     'ser alterado. Exclua primeiro a PRÉ-FATURA '
                     '(“2. Pré-Faturas”) para liberar a edição.')
         return None
 
     def motivo_recusa_exclusao(self):
-        """REGRA: só se exclui o convênio quando ele NÃO tem pré-fatura
+        """REGRA: só se exclui o acordo quando ele NÃO tem pré-fatura
         ligada a ele (mesma condição da edição)."""
         if self.pk is None:
             return None
         if self.prefaturas.exists():
-            return (f'O convênio “{self}” já tem pré-fatura gerada e não pode '
+            return (f'O acordo de faturamento “{self}” já tem pré-fatura gerada e não pode '
                     'ser excluído. Exclua primeiro a PRÉ-FATURA, em '
                     '“2. Pré-Faturas”.')
         return None
@@ -144,8 +144,9 @@ class PreFatura(models.Model):
     status = models.CharField(
         max_length=1, choices=status_choices, default='A', verbose_name='Status')
 
-    convenio = models.ForeignKey(
-        Convenio, on_delete=models.PROTECT, related_name='prefaturas', verbose_name='Convênio')
+    acordo_faturamento = models.ForeignKey(
+        AcordoFaturamento, on_delete=models.PROTECT,
+        related_name='prefaturas', verbose_name='Acordo de Faturamento')
     cliente = models.CharField(
         max_length=1024, blank=True, null=True, verbose_name='Cliente')
     nr_contrato = models.CharField(max_length=100, blank=True, null=True)
@@ -172,7 +173,7 @@ class PreFatura(models.Model):
         ordering = ['-id']
 
     def __str__(self):
-        return f"{self.convenio}"
+        return f"{self.acordo_faturamento}"
 
     def fatura_gerada(self):
         """A FATURA gerada por esta pré-fatura (ou None)."""
@@ -226,9 +227,9 @@ class PreFatura(models.Model):
         # `Decimal(x or 0)` com x=None já vira 0; o divisor também precisa ser
         # Decimal — `Decimal / int` levanta TypeError.
         retencao_percentual = Decimal(
-            self.convenio.tx_retencao_nf or 0) / Decimal('100')
+            self.acordo_faturamento.tx_retencao_nf or 0) / Decimal('100')
         retencao = retencao_percentual * self.valor
-        retencao_fixa = Decimal(self.convenio.vl_retencao_nf or 0)
+        retencao_fixa = Decimal(self.acordo_faturamento.vl_retencao_nf or 0)
         valor_fatura = self.valor - retencao - retencao_fixa
         competencia = self.competencia
         dia_envio = self.dia_envio
@@ -236,20 +237,20 @@ class PreFatura(models.Model):
 
         # Os valores da pré-fatura são sempre brutos. Preserva-se o valor bruto
         # também na fatura; somente valor_fatura desconta retenções.
-        periodo_inicio = max(periodo_inicio, self.convenio.inicio_vigencia)
-        periodo_fim = min(periodo_fim, self.convenio.final_vigencia)
+        periodo_inicio = max(periodo_inicio, self.acordo_faturamento.inicio_vigencia)
+        periodo_fim = min(periodo_fim, self.acordo_faturamento.final_vigencia)
         periodo_tratamento = (
             f"Período de {periodo_inicio:%d/%m/%y} a "
             f"{periodo_fim:%d/%m/%y}"
         )
 
         # Criação da descrição
-        descricao_internacao = self.convenio.get_descricao_internacao_display()
-        descricao_nf = self.convenio.descricao_nf or ''
+        descricao_internacao = self.acordo_faturamento.get_descricao_internacao_display()
+        descricao_nf = self.acordo_faturamento.descricao_nf or ''
         clientes = self.cliente or ''
-        contrato = self.convenio.nr_contrato or ''
+        contrato = self.acordo_faturamento.nr_contrato or ''
 
-        if self.convenio.iniciais_cliente:
+        if self.acordo_faturamento.iniciais_cliente:
             # Separa os clientes pelo delimitador ";"
             lista_clientes = clientes.split(';')
             # Extrai as iniciais de cada cliente
@@ -270,7 +271,7 @@ class PreFatura(models.Model):
             dt_atualizacao=self.dt_atualizacao,
             us_atualizacao=self.us_atualizacao,
             status=self.status,
-            convenio=self.convenio,
+            acordo_faturamento=self.acordo_faturamento,
             cliente=self.cliente,
             nr_contrato=self.nr_contrato,
             nr_aditivo=self.nr_aditivo,
@@ -286,7 +287,7 @@ class PreFatura(models.Model):
             descricao=descricao,  # Adiciona a descrição criada
             nr_nota_fiscal='N/A',  # criar lógica
             dt_vencimento=self.dt_vencimento,
-            tx_retencao_nf=self.convenio.tx_retencao_nf,
+            tx_retencao_nf=self.acordo_faturamento.tx_retencao_nf,
             valor_fatura=valor_fatura,
             periodo_tratamento=periodo_tratamento
         )
@@ -325,8 +326,8 @@ class Fatura(PreFatura):
             # Sem taxa cadastrada (None) = sem retenção: 0. Divisor em Decimal
             # porque `Decimal / int` levanta TypeError.
             tx_retencao = Decimal(
-                self.convenio.tx_retencao_nf or 0) / Decimal('100') * self.valor
-            vl_retencao = Decimal(self.convenio.vl_retencao_nf or 0)
+                self.acordo_faturamento.tx_retencao_nf or 0) / Decimal('100') * self.valor
+            vl_retencao = Decimal(self.acordo_faturamento.vl_retencao_nf or 0)
             self.valor_fatura = self.valor - tx_retencao - vl_retencao
 
         # Inicializa o valor_saldo com valor_fatura se for None
@@ -358,7 +359,7 @@ class Fatura(PreFatura):
         competencia_formatada = self.competencia.strftime(
             '%d/%m/%Y') if self.competencia else 'N/A'
 
-        return (f"{self.id} - {self.convenio} / Vencimento: {dt_vencimento_formatado} / "
+        return (f"{self.id} - {self.acordo_faturamento} / Vencimento: {dt_vencimento_formatado} / "
                 f"Competência: {competencia_formatada} / "
                 f"Valor: {self.valor_fatura} / Saldo: {self.valor_saldo} / "
                 f"Local: {self.estabelecimento}")
@@ -387,6 +388,10 @@ class Fatura(PreFatura):
         """
         if self.pk is None:
             return None
+        if self.faturado:
+            return (f'A fatura {self.pk} está FINALIZADA e não pode ser '
+                    'alterada. Primeiro DESFECHE a fatura (botão '
+                    '“Finalizar fatura”) para depois editá-la.')
         if self.baixas_registradas().exists():
             return (f'A fatura {self.pk} tem baixa registrada e não pode ser '
                     'alterada. Exclua primeiro a BAIXA, em “4. Baixa de '
@@ -396,15 +401,26 @@ class Fatura(PreFatura):
     def motivo_recusa_exclusao(self):
         """Por que esta FATURA não pode ser excluída (ou None = pode).
 
-        REGRA: só se exclui a fatura quando ela NÃO tem BAIXA ligada a ela.
+        REGRA: finalizada (`faturado=True`) não se exclui — primeiro DESFECHE.
+        Aberta só se exclui quando NÃO tem BAIXA ligada a ela.
         """
         if self.pk is None:
             return None
+        if self.faturado:
+            return (f'A fatura {self.pk} está FINALIZADA e não pode ser '
+                    'excluída. Primeiro DESFECHE a fatura (botão “Finalizar '
+                    'fatura”) e depois exclua.')
         if self.baixas_registradas().exists():
             return ('A fatura %s já tem baixa (recebimento) registrada e não '
                     'pode ser excluída. Exclua primeiro a BAIXA, em “4. Baixa '
                     'de Faturas”.' % self.pk)
-        if BaixaFatura.objects.filter(fatura_ptr_id=self.pk).exists():
+        # Só é “baixa de fatura” se a instância for REALMENTE uma BaixaFatura.
+        # O filtro por `fatura_ptr_id` sozinho também casa com a PRÓPRIA
+        # fatura (na herança multitable a pk da fatura É o seu `fatura_ptr`),
+        # o que bloqueava a exclusão de qualquer fatura.
+        if (isinstance(self, BaixaFatura)
+                and BaixaFatura.objects.filter(
+                    fatura_ptr_id=self.pk).exists()):
             return ('O registro %s é uma baixa de fatura e não pode ser '
                     'excluído por aqui.' % self.pk)
         return None
@@ -606,7 +622,7 @@ class BaixaFatura(Fatura):
     # Campos de Fatura copiados para a baixa no registro (exceto auditoria /
     # status, que são da baixa, e os `*_baixa` que espelham as FKs).
     CAMPOS_COPIADOS_DA_FATURA = (
-        'convenio', 'cliente', 'nr_contrato', 'nr_aditivo', 'empenho',
+        'acordo_faturamento', 'cliente', 'nr_contrato', 'nr_aditivo', 'empenho',
         'dia_envio', 'dias_pagamento', 'competencia', 'pagador_pj',
         'pagador_pf', 'valor', 'pre_faturado', 'dt_vencimento',
         'tx_retencao_nf', 'valor_fatura', 'valor_saldo', 'dt_liquidacao',
@@ -903,7 +919,7 @@ class BaixaFatura(Fatura):
                     dt_atualizacao=retrato.dt_atualizacao,
                     us_atualizacao_id=retrato.us_atualizacao_id,
                     status=retrato.status,
-                    convenio_id=retrato.convenio_id,
+                    acordo_faturamento_id=retrato.acordo_faturamento_id,
                     cliente=retrato.cliente,
                     nr_contrato=retrato.nr_contrato,
                     nr_aditivo=retrato.nr_aditivo,

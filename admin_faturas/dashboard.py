@@ -14,57 +14,52 @@ superiores convivem com a barra lateral e com a pesquisa.
 """
 from datetime import date
 
+from django.db import models
 from django.utils import timezone
 from django.contrib import admin
 from dominios.admin_dashboard_mixins import AdminDashboardAndTopFilterMixin
-class ConvenioPagadorFilter(admin.SimpleListFilter):
-    title = 'Convênio / Pagador'
-    parameter_name = 'convenio_pagador'
+class AcordoFaturamentoPagadorFilter(admin.SimpleListFilter):
+    title = 'Acordo / Pagador'
+    parameter_name = 'acordo_faturamento_pagador'
 
     def lookups(self, request, model_admin):
-        from admin_faturas.models import Convenio
+        from admin_faturas.models import AcordoFaturamento
         opcoes = {}
-        for convenio in Convenio.objects.filter(status='A').select_related(
+        for acordo in AcordoFaturamento.objects.filter(status='A').select_related(
                 'pagador_pj', 'pagador_pf'):
-            if convenio.pagador_pj_id:
-                chave = f'pj:{convenio.pagador_pj_id}'
-                rotulo = str(convenio.pagador_pj)
-            elif convenio.pagador_pf_id:
-                chave = f'pf:{convenio.pagador_pf_id}'
-                rotulo = str(convenio.pagador_pf)
+            if acordo.pagador_pj_id:
+                chave = f'pj:{acordo.pagador_pj_id}'
+                rotulo = str(acordo.pagador_pj)
+            elif acordo.pagador_pf_id:
+                chave = f'pf:{acordo.pagador_pf_id}'
+                rotulo = str(acordo.pagador_pf)
             else:
-                chave = f'convenio:{convenio.pk}'
-                rotulo = f'{convenio.convenio} (sem pagador)'
+                chave = f'acordo:{acordo.pk}'
+                rotulo = f'{acordo.acordo_faturamento} (sem pagador)'
             opcoes.setdefault(chave, rotulo)
         return sorted(opcoes.items(), key=lambda opcao: opcao[1].casefold())
 
     def queryset(self, request, queryset):
         valor = self.value()
-        # O admin entrega o valor como string; a listagem editável usa a
-        # mesma lista que o `ChangeList` monta para os filtros laterais.
         if isinstance(valor, (list, tuple)):
             valor = valor[0] if valor else None
         if not valor or not isinstance(valor, str):
             return queryset
         model = queryset.model
-        if any(field.name == 'convenio' for field in model._meta.get_fields()):
-            campo = model._meta.get_field('convenio')
-            caminho = 'convenio' if campo.is_relation else ''
-        elif any(field.name == 'fatura' for field in model._meta.get_fields()):
-            caminho = 'fatura__convenio'
-        else:
-            caminho = 'convenio'
-
         if valor.startswith('pj:'):
-            lookup = f'{caminho}__pagador_pj_id' if caminho else 'pagador_pj_id'
-            return queryset.filter(**{lookup: valor[3:]}).distinct()
+            if any(f.name == 'pagador_pj' for f in model._meta.get_fields()):
+                return queryset.filter(pagador_pj_id=valor[3:]).distinct()
+            return queryset.filter(acordo_faturamento__pagador_pj_id=valor[3:]).distinct()
         if valor.startswith('pf:'):
-            lookup = f'{caminho}__pagador_pf_id' if caminho else 'pagador_pf_id'
-            return queryset.filter(**{lookup: valor[3:]}).distinct()
-        if valor.startswith('convenio:'):
-            lookup = f'{caminho}__id' if caminho else 'id'
-            return queryset.filter(**{lookup: valor.split(':', 1)[1]}).distinct()
+            if any(f.name == 'pagador_pf' for f in model._meta.get_fields()):
+                return queryset.filter(pagador_pf_id=valor[3:]).distinct()
+            return queryset.filter(acordo_faturamento__pagador_pf_id=valor[3:]).distinct()
+        if valor.startswith('acordo:'):
+            if model._meta.model_name == 'acordofaturamento':
+                return queryset.filter(pk=valor.split(':', 1)[1]).distinct()
+            return queryset.filter(acordo_faturamento_id=valor.split(':', 1)[1]).distinct()
         return queryset
+
 
 def _money(valor):
     """Formata em Reais no padrão brasileiro (sem depender do locale)."""
@@ -277,25 +272,19 @@ class FaturasDashboardMixin(AdminDashboardAndTopFilterMixin):
             if estabelecimento_id:
                 queryset = queryset.filter(estabelecimento_id=estabelecimento_id)
 
-        convenio_filtro = request.GET.get('convenio_pagador')
-        if convenio_filtro:
-            if self._modelo_tem_campo('convenio'):
-                relation = self.model._meta.get_field('convenio')
-                caminho = 'convenio' if relation.is_relation else ''
-            elif self._modelo_tem_campo('fatura'):
-                caminho = 'fatura__convenio'
-            else:
-                caminho = 'convenio'
-            campo_pj = f'{caminho}__pagador_pj_id' if caminho else 'pagador_pj_id'
-            campo_pf = f'{caminho}__pagador_pf_id' if caminho else 'pagador_pf_id'
-            campo_id = f'{caminho}__id' if caminho else 'id'
-            if convenio_filtro.startswith('pj:'):
-                queryset = queryset.filter(**{campo_pj: convenio_filtro[3:]})
-            elif convenio_filtro.startswith('pf:'):
-                queryset = queryset.filter(**{campo_pf: convenio_filtro[3:]})
-            elif convenio_filtro.startswith('convenio:'):
-                queryset = queryset.filter(
-                    **{campo_id: convenio_filtro.split(':', 1)[1]})
+        acordo_filtro = (request.GET.get('acordo_faturamento_pagador')
+                         or request.GET.get('AcordoFaturamento_pagador'))
+        if acordo_filtro:
+            if acordo_filtro.startswith('pj:'):
+                queryset = queryset.filter(pagador_pj_id=acordo_filtro[3:])
+            elif acordo_filtro.startswith('pf:'):
+                queryset = queryset.filter(pagador_pf_id=acordo_filtro[3:])
+            elif acordo_filtro.startswith(('acordo:', 'AcordoFaturamento:')):
+                pk_val = acordo_filtro.split(':', 1)[1]
+                if self.model._meta.model_name == 'acordofaturamento':
+                    queryset = queryset.filter(pk=pk_val)
+                else:
+                    queryset = queryset.filter(acordo_faturamento_id=pk_val)
             queryset = queryset.distinct()
         return queryset
     def get_top_dropdown_subfilters(self, request):
@@ -326,28 +315,28 @@ class FaturasDashboardMixin(AdminDashboardAndTopFilterMixin):
                 })
             return lista
         def pagadores():
-            from admin_faturas.models import Convenio
+            from admin_faturas.models import AcordoFaturamento
             grupos = {}
-            for convenio in Convenio.objects.filter(status='A').select_related(
+            for acordo in AcordoFaturamento.objects.filter(status='A').select_related(
                     'pagador_pj', 'pagador_pf'):
-                if convenio.pagador_pj_id:
-                    chave = f'pj:{convenio.pagador_pj_id}'
-                    rotulo = str(convenio.pagador_pj)
-                elif convenio.pagador_pf_id:
-                    chave = f'pf:{convenio.pagador_pf_id}'
-                    rotulo = str(convenio.pagador_pf)
+                if acordo.pagador_pj_id:
+                    chave = f'pj:{acordo.pagador_pj_id}'
+                    rotulo = str(acordo.pagador_pj)
+                elif acordo.pagador_pf_id:
+                    chave = f'pf:{acordo.pagador_pf_id}'
+                    rotulo = str(acordo.pagador_pf)
                 else:
-                    chave = f'convenio:{convenio.pk}'
-                    rotulo = f'{convenio.convenio} (sem pagador)'
+                    chave = f'acordo:{acordo.pk}'
+                    rotulo = f'{acordo.acordo_faturamento} (sem pagador)'
                 grupos.setdefault(chave, rotulo)
             return sorted(grupos.items(), key=lambda item: item[1].casefold())
 
-        if (self._modelo_tem_campo('convenio')
+        if (self._modelo_tem_campo('acordo_faturamento')
                 or self._modelo_tem_campo('fatura')):
             seletores.append({
-                'label': 'Convênio / Pagador',
+                'label': 'Acordo / Pagador',
                 'options': opcoes(
-                    'convenio_pagador', pagadores(), 'Todos os pagadores',
+                    'acordo_faturamento_pagador', pagadores(), 'Todos os pagadores',
                     lambda item: item[1], key=lambda item: item[0]),
             })
 

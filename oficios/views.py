@@ -64,7 +64,7 @@ from dominios.utils import AccessDenied, FilterObjectsByEstabelecimentoMixin, Cu
 from django.db.models import F
 from django.conf import settings
 from django_filters import rest_framework as filters
-from admin_faturas.models import Convenio
+from admin_faturas.models import AcordoFaturamento
 from dominios.choices import status_choices
 from django import forms
 import django_filters

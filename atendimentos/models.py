@@ -11,7 +11,7 @@ from django.core.validators import FileExtensionValidator
 from multiupload.fields import MultiFileField
 from dominios.utils import validate_anexo_file
 from admin_cadastros.models import TipoAtendimento, Empresa
-from admin_faturas.models import Convenio
+from admin_faturas.models import AcordoFaturamento
 
 
 class Atendimento(models.Model):
@@ -41,8 +41,9 @@ class Atendimento(models.Model):
         Cidade, on_delete=models.PROTECT, blank=True, null=True, verbose_name='Cidade do Encaminhamento', related_name='encaminhamento_cidade')
     entidade_encaminhamento = models.CharField(
         max_length=50, choices=entidade_encaminha_choices, verbose_name='Entidade do Encaminhamento')
-    convenio = models.ForeignKey(Convenio, on_delete=models.PROTECT, blank=True, null=True,
-                                 verbose_name='Convênio')
+    acordo_faturamento = models.CharField(
+        max_length=30, blank=True, null=True,
+        verbose_name='Acordo de Faturamento')
     diagnostico_encaminhamento = models.ManyToManyField(
         CID, blank=True, verbose_name='CID - Diagnósticos dos encaminhamentos')
     medicacao = models.CharField(max_length=400, default='',

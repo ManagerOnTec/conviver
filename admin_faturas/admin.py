@@ -10,13 +10,13 @@ from django.utils.html import format_html
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.urls import reverse
 from contas.models import Perfil
-from .models import Convenio, PreFatura, Fatura, BaixaFatura, periodo_cobranca
-from .forms import BaixaFaturaForm, ConvenioForm, FaturaForm, PreFaturaForm
+from .models import AcordoFaturamento, PreFatura, Fatura, BaixaFatura, periodo_cobranca
+from .forms import BaixaFaturaForm, AcordoFaturamentoForm, FaturaForm, PreFaturaForm
 from django.contrib import messages
 from django.utils import timezone
-from dominios.utils import ExportToXLSMixin, AdminEstabelecimentoPadraoMixin, StatusFilterAdminMixin, chain_form_init, Select2AdminModelAdminMixin, ExclusaoEmLoteComRegrasMixin, EdicaoComRegrasMixin
+from dominios.utils import ExportToXLSMixin, AdminEstabelecimentoPadraoMixin, StatusFilterAdminMixin, chain_form_init, Select2AdminModelAdminMixin, ExclusaoEmLoteComRegrasMixin, EdicaoComRegrasMixin, BotaoExcluirLinhaMixin
 from .dashboard import (
-    ConvenioPagadorFilter, FaturasDashboardMixin, _money, _qtd,
+    AcordoFaturamentoPagadorFilter, FaturasDashboardMixin, _money, _qtd,
 )
 from datetime import timedelta, date
 import calendar
@@ -34,7 +34,7 @@ from django.utils.html import format_html
 from django.urls import reverse
 from datetime import datetime
 from django.contrib import admin
-from .models import Convenio, PreFatura, Fatura, BaixaFatura
+from .models import AcordoFaturamento, PreFatura, Fatura, BaixaFatura
 from .changelist_editavel import ChangeListEditavel  # noqa: F401
 from .changelist_editavel import ChangeListEditavel  # noqa: F401
 
@@ -132,7 +132,7 @@ class EmpenhoPreFaturaFilter(admin.SimpleListFilter):
         if self.value() == 'sem':
             return queryset.filter(Q(empenho__isnull=True) | Q(empenho=''))
         return queryset
-class EmpenhoConvenioFilter(admin.SimpleListFilter):
+class EmpenhoAcordoFaturamentoFilter(admin.SimpleListFilter):
     title = 'Empenho Global'
     parameter_name = 'empenho_global_status'
 
@@ -147,7 +147,7 @@ class EmpenhoConvenioFilter(admin.SimpleListFilter):
             return queryset.filter(
                 Q(empenho_global__isnull=True) | Q(empenho_global=''))
         return queryset
-class PreFaturaAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Select2AdminModelAdminMixin, ExportToXLSMixin, admin.ModelAdmin):
+class PreFaturaAdmin(BotaoExcluirLinhaMixin, EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Select2AdminModelAdminMixin, ExportToXLSMixin, admin.ModelAdmin):
 
     form = PreFaturaForm
     actions = ['export_as_xls', 'faturar_pre_faturas_em_lote',
@@ -346,23 +346,40 @@ class PreFaturaAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEs
     readonly_fields = ['us_registro', 'dt_registro',
                        'us_atualizacao', 'dt_atualizacao']
 
-    list_display = ['id', 'convenio', 'cliente',
-                    'gerar_fatura_button', 'competencia', 'dia_envio',
-                    'dt_vencimento', 'valor',
-                    'empenho', 'nr_contrato', 'nr_aditivo','estabelecimento', 'status',]
+    def get_pagador(self, obj):
+        if obj.pagador_pj:
+            return obj.pagador_pj.empresa
+        if obj.pagador_pf:
+            return obj.pagador_pf.nome
+        return "-"
+    get_pagador.short_description = "Pagador"
+
+    def get_documento_pagador(self, obj):
+        if obj.pagador_pj and hasattr(obj.pagador_pj, 'cnpj'):
+            return obj.pagador_pj.cnpj
+        if obj.pagador_pf and hasattr(obj.pagador_pf, 'cpf'):
+            return obj.pagador_pf.cpf
+        return "-"
+    get_documento_pagador.short_description = "CNPJ / CPF"
+
+    # ORDEM: id → botões personalizados → dados → excluir (no fim).
+    list_display = ['id', 'gerar_fatura_button', 'excluir_linha',
+                    'get_pagador', 'cliente', 'competencia', 'dia_envio',
+                    'dt_vencimento', 'valor', 'empenho', 'nr_contrato',
+                    'nr_aditivo', 'estabelecimento', 'status']
     list_editable_sempre = ['valor', 'empenho', 'status']
     list_editable = list_editable_sempre
 
-    list_display_links = ['id', 'convenio']
+    list_display_links = ['id']
 
-    search_fields = ['convenio__convenio', 'empenho',
+    search_fields = ['pagador_pj__empresa', 'pagador_pf__nome', 'empenho',
                      'dia_envio', 'cliente', 'nr_contrato', 'nr_aditivo']
-    list_filter = [ConvenioPagadorFilter, StatusFilterAdminMixin,
+    list_filter = [StatusFilterAdminMixin,
                    PreFaturadoQueryFilter, EmpenhoPreFaturaFilter,
                    EstabelecimentoFilterAdminMixin,
                    'pagador_pj', 'pagador_pf',
                    'cliente', 'dia_envio', CustomDateFilter]
-    ordering = ['competencia', 'convenio', 'cliente', 'nr_contrato',
+    ordering = ['competencia', 'cliente', 'nr_contrato',
                 'nr_aditivo', 'valor', 'dia_envio', 'pre_faturado', 'id']
     list_per_page = 99
 
@@ -508,12 +525,28 @@ class PreFaturaAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEs
             obj.create_fatura()
 
     def has_delete_permission(self, request, obj=None):
+        """Permissão de exclusão (padrão do Django + regra do fluxo).
+
+        Sem `obj` é a checagem GENÉRICA (usada para exibir a ação em lote
+        "Excluir selecionados"): vale a permissão `delete` do usuário.
+        Com `obj`, a recusa por regra vira mensagem amigável.
         """
-        Permitir a exclusão apenas para o usuário 'admin'.
-        """
-        if request.user.username == 'admin':
-            return True
-        return False
+        if not super().has_delete_permission(request, obj):
+            return False
+        if obj is not None:
+            # HERANÇA MULTITABLE: ao excluir uma FATURA o Django também coleta
+            # a linha pai (PreFatura de mesma pk) e, por isso, consulta ESTE
+            # admin de novo para ela. Nesse caso não há pré-fatura a recusar
+            # — ela é a própria fatura sendo excluída. Sem este atalho a tela
+            # da fatura exibia “a pré-fatura N já gerou a fatura N” e
+            # bloqueava a exclusão (tela “Não é possível excluir Fatura”).
+            if Fatura.objects.filter(pk=obj.pk).exists():
+                return True
+            motivo = self._recusa_exclusao(obj)
+            if motivo:
+                messages.error(request, motivo)
+                return False
+        return True
 
     def _recusa_exclusao(self, obj):
         """Motivo para BLOQUEAR a exclusão, checando a pré-fatura E a fatura
@@ -559,8 +592,8 @@ class PreFaturaAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEs
         super().delete_model(request, obj)
 
 
-class ConvenioAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Select2AdminModelAdminMixin, ExportToXLSMixin, admin.ModelAdmin):
-    form = ConvenioForm
+class AcordoFaturamentoAdmin(BotaoExcluirLinhaMixin, EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Select2AdminModelAdminMixin, ExportToXLSMixin, admin.ModelAdmin):
+    form = AcordoFaturamentoForm
     dashboard_competencia_field = 'inicio_vigencia'
     dashboard_vencimento_field = 'final_vigencia'
     dashboard_valor_field = 'valor_mensal'
@@ -693,14 +726,14 @@ class ConvenioAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEst
         gerados = 0
         ignorados = 0
         erros = 0
-        for convenio in selecionados:
-            if convenio.pre_faturado:
+        for acordo_faturamento in selecionados:
+            if acordo_faturamento.pre_faturado:
                 ignorados += 1
                 continue
             try:
                 with transaction.atomic():
-                    foi_gerado = self._gerar_prefaturas_para_convenio(
-                        request, convenio)
+                    foi_gerado = self._gerar_prefaturas_para_acordo(
+                        request, AcordoFaturamento)
                 if foi_gerado:
                     gerados += 1
                 else:
@@ -723,21 +756,27 @@ class ConvenioAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEst
                 'Nenhum dado parcial desses convênios foi salvo.',
                 level=messages.ERROR)
 
-    list_display = ['id', 'convenio', 'display_clientes',  'client_count', 'nr_contrato', 'nr_aditivo', 'gerar_prefaturas_button', 'duplicate_button', 'inicio_vigencia', 'final_vigencia', 'dia_envio', 'dias_pagamento', 'valor_mensal', 'valor_diaria',  'empenho_global','total_value',
-                    'tx_retencao_nf', 'vl_retencao_nf', 'modo_fatura', 'pagador_pj', 'pagador_pf', 'estabelecimento', 'status']
+    # ORDEM: id → botões personalizados → dados.
+    # `excluir_linha` vem logo depois de "Duplicar" (último botão).
+    list_display = ['id', 'gerar_prefaturas_button', 'duplicate_button',
+                    'excluir_linha', 'acordo_faturamento', 'pagador_pj',
+                    'pagador_pf', 'display_clientes', 'client_count',
+                    'nr_contrato', 'nr_aditivo', 'inicio_vigencia',
+                    'final_vigencia', 'dia_envio', 'dias_pagamento',
+                    'valor_mensal', 'valor_diaria', 'empenho_global',
+                    'total_value', 'tx_retencao_nf', 'vl_retencao_nf',
+                    'modo_fatura', 'estabelecimento', 'status']
     readonly_fields = ['us_registro', 'dt_registro',
                        'us_atualizacao', 'dt_atualizacao']
     list_filter = (
-        ConvenioPagadorFilter, StatusFilterAdminMixin,
+        AcordoFaturamentoPagadorFilter, StatusFilterAdminMixin,
         EstabelecimentoFilterAdminMixin,
-        EmpenhoConvenioFilter, 'cliente', 'pre_faturado',
-        ('prefaturas__competencia', admin.DateFieldListFilter),
-        ('prefaturas__dt_vencimento', admin.DateFieldListFilter),
+        EmpenhoAcordoFaturamentoFilter, 'cliente', 'pre_faturado',
         'dia_envio', 'dias_pagamento', 'modo_fatura', 'dt_registro',
         'us_registro',
     )
-    search_fields = ['convenio',]
-    list_display_links = ['id', 'convenio']
+    search_fields = ['acordo_faturamento',]
+    list_display_links = ['id', 'acordo_faturamento']
     list_editable_sempre = ['status', 'valor_mensal',
                             'valor_diaria', 'dia_envio', 'dias_pagamento',
                             'empenho_global']
@@ -759,10 +798,10 @@ class ConvenioAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEst
     def get_linhas_nao_editaveis(self, request):
         """Convênios COM pré-fatura gerada: editáveis só como texto."""
         return {str(pk) for pk in PreFatura.objects.values_list(
-            'convenio_id', flat=True)}
+            'acordo_faturamento_id', flat=True)}
 
     # Recorte da busca do select2: 'cliente' só lista pacientes ativos —
-    # o mesmo queryset usado pelo ConvenioForm na validação/salvamento.
+    # o mesmo queryset usado pelo AcordoFaturamentoForm na validação/salvamento.
     select2_querysets = {
         'cliente': Pessoa.objects.filter(
             classificacao_pessoa='paciente', status='A'),
@@ -858,24 +897,29 @@ class ConvenioAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEst
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
-            path('duplicate/<int:convenio_id>/',
-                 self.admin_site.admin_view(self.duplicate_view), name='duplicate_convenio'),
-            path('gerar_prefaturas/<int:convenio_id>/', self.admin_site.admin_view(
-                self.gerar_prefaturas_view), name='gerar_prefaturas'),
+            path('duplicate/<int:acordo_faturamento_id>/',
+                 self.admin_site.admin_view(self.duplicate_view),
+                 name='duplicate_acordo_faturamento'),
+            path('gerar_prefaturas/<int:acordo_faturamento_id>/',
+                 self.admin_site.admin_view(self.gerar_prefaturas_view),
+                 name='gerar_prefaturas'),
         ]
         return custom_urls + urls
 
     def duplicate_button(self, obj):
         if obj.pre_faturado:
-            return format_html('<a class="button" href="{}">Duplicar</a>', reverse('admin:duplicate_convenio', args=[obj.pk]))
+            return format_html(
+                '<a class="button" href="{}">Duplicar</a>',
+                reverse('admin:duplicate_acordo_faturamento', args=[obj.pk]))
         return format_html('<span style="color:gray;">Duplicar</span>')
     duplicate_button.short_description = 'Duplicar'
     duplicate_button.allow_tags = True
 
     def has_delete_permission(self, request, obj=None):
-        """REGRA: o convênio só se exclui SEM pré-fatura ligada a ele
-        (`Convenio.motivo_recusa_exclusao`). A recusa vira mensagem amigável."""
-        if request.user.username != 'admin':
+        """REGRA: o acordo só se exclui SEM pré-fatura ligada a ele
+        (`AcordoFaturamento.motivo_recusa_exclusao`). A recusa vira mensagem
+        amigável; a checagem genérica (`obj=None`) vale a permissão `delete`."""
+        if not super().has_delete_permission(request, obj):
             return False
         if obj is not None:
             motivo = obj.motivo_recusa_exclusao()
@@ -921,49 +965,52 @@ class ConvenioAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEst
     gerar_prefaturas_button.short_description = 'Pré-Fatura'
     gerar_prefaturas_button.allow_tags = True
 
-    def duplicate_view(self, request, convenio_id):
-        original_convenio = get_object_or_404(Convenio, pk=convenio_id)
-        new_convenio = Convenio.objects.get(pk=original_convenio.pk)
-        new_convenio.pk = None
-        new_convenio.nr_contrato = f"{original_convenio.nr_contrato}"
-        new_convenio.pre_faturado = False
-        new_convenio.status = 'A'
-        new_convenio.save()
-        original_convenio.status = 'I'
-        original_convenio.save()
-        # Duplicate ManyToMany relationships
-        new_convenio.cliente.set(original_convenio.cliente.all())
+    def duplicate_view(self, request, acordo_faturamento_id):
+        original = get_object_or_404(AcordoFaturamento, pk=acordo_faturamento_id)
+        novo = AcordoFaturamento.objects.get(pk=original.pk)
+        novo.pk = None
+        novo.nr_contrato = f"{original.nr_contrato}"
+        novo.pre_faturado = False
+        novo.status = 'A'
+        novo.save()
+        original.status = 'I'
+        original.save()
+        # Duplica os relacionamentos ManyToMany
+        novo.cliente.set(original.cliente.all())
 
-        messages.success(request, 'Convênio duplicado com sucesso.')
-        return redirect('admin:admin_faturas_convenio_change', new_convenio.pk)
+        messages.success(request, 'Acordo de faturamento duplicado com sucesso.')
+        opts = self.model._meta
+        return redirect(f'admin:{opts.app_label}_{opts.model_name}_change', novo.pk)
 
-    def gerar_prefaturas_view(self, request, convenio_id):
-        convenio = get_object_or_404(Convenio, pk=convenio_id)
+    def gerar_prefaturas_view(self, request, acordo_faturamento_id):
+        acordo_faturamento = get_object_or_404(
+            AcordoFaturamento, pk=acordo_faturamento_id)
+        opts = self.model._meta
 
-        if convenio.pre_faturado:
+        if acordo_faturamento.pre_faturado:
             messages.error(
-                request, 'Pré-faturas já foram geradas para este convênio.')
-            return redirect('admin:admin_faturas_convenio_changelist')
+                request, 'Pré-faturas já foram geradas para este acordo de faturamento.')
+            return redirect(f'admin:{opts.app_label}_{opts.model_name}_changelist')
 
         try:
             with transaction.atomic():
-                self._gerar_prefaturas_para_convenio(request, convenio)
+                self._gerar_prefaturas_para_acordo(request, acordo_faturamento)
         except ValueError as erro:
             messages.error(request, str(erro))
-            return redirect('admin:admin_faturas_convenio_changelist')
+            return redirect(f'admin:{opts.app_label}_{opts.model_name}_changelist')
         messages.success(request, 'Pré-faturas geradas com sucesso.')
-        return redirect('admin:admin_faturas_convenio_changelist')
+        return redirect(f'admin:{opts.app_label}_{opts.model_name}_changelist')
 
-    def _gerar_prefaturas_para_convenio(self, request, convenio):
-        if convenio.pre_faturado:
+    def _gerar_prefaturas_para_acordo(self, request, acordo_faturamento):
+        if acordo_faturamento.pre_faturado:
             return False
-        start_date = convenio.inicio_vigencia
-        end_date = convenio.final_vigencia
-        dia_envio = convenio.dia_envio
-        clientes = convenio.cliente.all()
+        start_date = acordo_faturamento.inicio_vigencia
+        end_date = acordo_faturamento.final_vigencia
+        dia_envio = acordo_faturamento.dia_envio
+        clientes = acordo_faturamento.cliente.all()
 
-        valor_mensal = Decimal(convenio.valor_mensal or 0)
-        valor_diaria = Decimal(convenio.valor_diaria or 0)
+        valor_mensal = Decimal(acordo_faturamento.valor_mensal or 0)
+        valor_diaria = Decimal(acordo_faturamento.valor_diaria or 0)
 
         if start_date > end_date:
             raise ValueError('A vigência não contém período faturável.')
@@ -1056,58 +1103,60 @@ class ConvenioAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEst
             else:
                 valor_bruto_por_cliente = valor_mensal
             # A pré-fatura guarda sempre o bruto proporcional/integral.
-            if convenio.modo_fatura == 'CO':
+            if acordo_faturamento.modo_fatura == 'CO':
                 total_bruto = valor_bruto_por_cliente * clientes.count()
                 cliente_names = "; ".join(
                     [cliente.nome for cliente in clientes])
 
                 pre_fatura = PreFatura(
-                    estabelecimento=convenio.estabelecimento,
+                    estabelecimento=acordo_faturamento.estabelecimento,
                     dt_registro=timezone.now(),
                     us_registro=request.user,
                     status='A',
-                    convenio=convenio,
+                    acordo_faturamento=acordo_faturamento,
                     cliente=cliente_names,
-                    nr_contrato=convenio.nr_contrato,
-                    nr_aditivo=convenio.nr_aditivo,
-                    empenho=convenio.empenho_global,
-                    dia_envio=convenio.dia_envio,
-                    dias_pagamento=convenio.dias_pagamento,
+                    nr_contrato=acordo_faturamento.nr_contrato,
+                    nr_aditivo=acordo_faturamento.nr_aditivo,
+                    empenho=acordo_faturamento.empenho_global,
+                    dia_envio=acordo_faturamento.dia_envio,
+                    dias_pagamento=acordo_faturamento.dias_pagamento,
                     competencia=competencia,
-                    pagador_pj=convenio.pagador_pj,
-                    pagador_pf=convenio.pagador_pf,
+                    pagador_pj=acordo_faturamento.pagador_pj,
+                    pagador_pf=acordo_faturamento.pagador_pf,
                     valor=total_bruto,
                     dt_vencimento=competencia +
-                    timedelta(days=convenio.dias_pagamento)
+                    timedelta(days=acordo_faturamento.dias_pagamento)
                 )
                 pre_fatura.save()
             else:
                 for cliente in clientes:
                     pre_fatura = PreFatura(
-                        estabelecimento=convenio.estabelecimento,
+                        estabelecimento=acordo_faturamento.estabelecimento,
                         dt_registro=timezone.now(),
                         us_registro=request.user,
                         status='A',
-                        convenio=convenio,
+                        acordo_faturamento=acordo_faturamento,
                         cliente=cliente.nome,
-                        nr_contrato=convenio.nr_contrato,
-                        nr_aditivo=convenio.nr_aditivo,
-                        empenho=convenio.empenho_global,
-                        dia_envio=convenio.dia_envio,
-                        dias_pagamento=convenio.dias_pagamento,
+                        nr_contrato=acordo_faturamento.nr_contrato,
+                        nr_aditivo=acordo_faturamento.nr_aditivo,
+                        empenho=acordo_faturamento.empenho_global,
+                        dia_envio=acordo_faturamento.dia_envio,
+                        dias_pagamento=acordo_faturamento.dias_pagamento,
                         competencia=competencia,
-                        pagador_pj=convenio.pagador_pj,
-                        pagador_pf=convenio.pagador_pf,
+                        pagador_pj=acordo_faturamento.pagador_pj,
+                        pagador_pf=acordo_faturamento.pagador_pf,
                         valor=valor_bruto_por_cliente,
                         dt_vencimento=competencia +
-                        timedelta(days=convenio.dias_pagamento)
+                        timedelta(days=acordo_faturamento.dias_pagamento)
                     )
                     pre_fatura.save()
 
 
-        convenio.pre_faturado = True
-        convenio.save()
+        acordo_faturamento.pre_faturado = True
+        acordo_faturamento.save()
         return True
+
+
 class SaldoFilter(admin.SimpleListFilter):
     title = _('Saldo (Valor positivo)')
     parameter_name = 'saldo'
@@ -1292,7 +1341,7 @@ class BaixaFaturaInline(admin.TabularInline):
         return base
 
 
-class FaturaAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Select2AdminModelAdminMixin, ExportToXLSMixin, admin.ModelAdmin):
+class FaturaAdmin(BotaoExcluirLinhaMixin, EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Select2AdminModelAdminMixin, ExportToXLSMixin, admin.ModelAdmin):
     dashboard_competencia_field = 'competencia'
     dashboard_vencimento_field = 'dt_vencimento'
     dashboard_valor_field = 'valor_fatura'
@@ -1307,7 +1356,9 @@ class FaturaAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEstab
     # (parâmetro, valor). Fora deles (ex.: "Fatura Finalizada") a linha só
     # exibe o check — finalizar não faz sentido e o botão faria a linha
     # desaparecer do recorte. Vazio = botão em todas as linhas abertas.
-    finalizar_fatura_apenas_com_filtro = (('faturado_status', 'nao'),)
+    # (O botão fica sempre visível na fatura ABERTA, em qualquer recorte: o
+    # ✓ só aparece quando a fatura está de fato finalizada.)
+    finalizar_fatura_apenas_com_filtro = ()
 
     def get_top_filter_presets(self, request):
         # Presets de competência e vencimento iguais aos da pré-fatura.
@@ -1321,8 +1372,159 @@ class FaturaAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEstab
                 self.admin_site.admin_view(self.finalizar_fatura_view),
                 name='admin_faturas_fatura_finalizar',
             ),
+            # GESTÃO DE BAIXAS em modal: listar/criar/excluir por fatura.
+            path(
+                '<path:object_id>/baixas/',
+                self.admin_site.admin_view(self.baixas_da_fatura_view),
+                name='admin_faturas_fatura_baixas',
+            ),
         ]
         return custom_urls + urls
+
+    # ------------------------------------------------------------------
+    # GESTÃO DE BAIXAS (modal na tela da fatura)
+    # ------------------------------------------------------------------
+    def _resumo_baixas(self, fatura):
+        """Valores do resumo (sempre recalculados do banco)."""
+        from django.db.models import Sum
+        # Saldo SEMPRE lido do banco: o objeto em memória pode estar com o
+        # valor de antes da operação (ex.: uma baixa acabou de ser lançada).
+        fatura = Fatura.objects.get(pk=fatura.pk)
+        agregado = fatura.baixas_registradas().aggregate(
+            s=Sum('valor_baixa'), ad=Sum('valor_adicional'))
+        recebido = agregado['s'] or 0
+        adicional = agregado['ad'] or 0
+        valor_fatura = fatura.valor_fatura or 0
+        saldo = fatura.valor_saldo
+        if saldo is None:
+            saldo = valor_fatura - recebido
+        return {
+            'valor_fatura': valor_fatura,
+            'soma_baixas': recebido,
+            'valor_adicional': adicional,
+            'saldo': saldo,
+            'qtd': fatura.baixas_registradas().count(),
+        }
+
+    def baixas_da_fatura_view(self, request, object_id):
+        """Modal de gestão das baixas de UMA fatura.
+
+        GET  → tabela das baixas + resumo (valor da fatura, soma das baixas,
+                saldo) e o formulário para lançar uma nova baixa.
+        POST → lança (`acao=lancar`) ou exclui (`acao=excluir`) uma baixa,
+                recusando pelas MESMAS regras da tela de exclusão.
+
+        REGRA: só existe baixa de fatura FINALIZADA (`faturado=True`) — a
+        fatura aberta ainda não é conta a receber. A recusa vira mensagem.
+        """
+        from urllib.parse import unquote
+        from django.db import transaction
+        from django.template.response import TemplateResponse
+
+        fatura = get_object_or_404(
+            Fatura, pk=unquote(str(object_id)))
+
+        if not fatura.faturado:
+            messages.warning(
+                request,
+                f'A fatura {fatura.pk} está ABERTA e ainda não pode receber '
+                'baixas. Finalize a fatura primeiro (botão “Finalizar '
+                'fatura”) e depois lance a baixa.')
+            return redirect(
+                reverse('admin:admin_faturas_fatura_changelist'))
+
+        if request.method == 'POST':
+            acao = request.POST.get('acao') or 'lancar'
+            if acao == 'excluir':
+                baixa = BaixaFatura.objects.filter(
+                    pk=request.POST.get('baixa_id')).first()
+                if baixa is None:
+                    messages.warning(request, 'Baixa não encontrada.')
+                else:
+                    motivo = baixa.motivo_recusa_exclusao()
+                    if motivo:
+                        messages.error(request, motivo)
+                    else:
+                        pk = baixa.pk
+                        try:
+                            motivo = baixa.excluir_com_movimento()
+                        except Exception as erro:
+                            motivo = f'falha ao excluir ({erro})'
+                        if motivo:
+                            messages.error(request, motivo)
+                        else:
+                            messages.success(
+                                request,
+                                f'Baixa {pk} excluída e o valor devolvido ao '
+                                'saldo da fatura.')
+            else:
+                form = self._form_nova_baixa(request, fatura)
+                if form.is_valid():
+                    try:
+                        with transaction.atomic():
+                            obj = form.save(commit=False)
+                            object.__setattr__(
+                                obj, 'fatura_baixada_ids', [fatura.pk])
+                            obj.estabelecimento_baixa = fatura.estabelecimento
+                            obj.us_registro_baixa = request.user
+                            obj.status = 'A'
+                            obj.save()
+                        messages.success(
+                            request,
+                            f'Baixa registrada: {obj.valor_baixa}. Saldo '
+                            'atualizado.')
+                    except ValidationError as erro:
+                        form.add_error(None, erro.messages)
+                    except Exception as erro:
+                        form.add_error(None, f'Não foi possível salvar: {erro}')
+
+        contexto = dict(self.admin_site.each_context(request))
+        contexto.update({
+            'title': 'Baixas da fatura',
+            'fatura': fatura,
+            'baixas': fatura.baixas_registradas().order_by(
+                '-dt_recebimento', '-pk'),
+            'resumo': self._resumo_baixas(fatura),
+            'form_baixa': self._form_nova_baixa(request, fatura),
+            'opts': self.model._meta,
+            'model_admin': self,
+        })
+        return TemplateResponse(
+            request, 'admin_faturas/baixas_da_fatura.html', contexto)
+
+    def _form_nova_baixa(self, request, fatura):
+        """Form de lançamento (valores do POST quando houver)."""
+        dados = request.POST if request.method == 'POST' and \
+            (request.POST.get('acao') or 'lancar') == 'lancar' else None
+        form = BaixaFaturaForm(dados or None, fatura_origem=fatura)
+        form.fields['fatura_baixada'].required = False
+        # Recortes (transação bancária / competência aberta).
+        form.fields['transacao_financeira'].queryset = (
+            TransacaoFinanceira.objects.filter(
+                tipo='entrada', movimento='banco', status='A'))
+        form.fields['competencia_bancaria'].queryset = (
+            CompetenciaBancaria.objects.filter(
+                dt_fechamento_competencia__isnull=True, status='A'))
+        return form
+
+    def baixas_button(self, obj):
+        """Botão do modal de baixas — só em fatura FINALIZADA.
+
+        Fatura ABERTA ainda não é conta a receber: o botão saí CINZA com a
+        razão no `title` (o servidor também recusa, ver `baixas_da_fatura_view`).
+        """
+        if not obj.faturado:
+            return format_html(
+                '<span title="A fatura está ABERTA: finalize a fatura antes '
+                'de lançar baixas." style="color:#9ca3af; '
+                'cursor:not-allowed;">Baixas</span>')
+        url = reverse('admin:admin_faturas_fatura_baixas', args=[obj.pk])
+        qtd = obj.baixas_registradas().count()
+        return format_html(
+            '<button type="button" class="button js-baixas-modal" '
+            'data-url="{}">Baixas ({})</button>', url, qtd)
+    baixas_button.short_description = 'Baixas'
+    baixas_button.allow_tags = True
     def finalizar_fatura_view(self, request, object_id):
         """Alterna SOMENTE o campo `faturado` da fatura clicada.
 
@@ -1335,6 +1537,21 @@ class FaturaAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEstab
                 reverse('admin:admin_faturas_fatura_changelist'))
 
         fatura = get_object_or_404(Fatura, pk=object_id)
+        # REABRIR uma fatura COM BAIXA é recusado: desfaria o recebimento
+        # sem devolver o valor ao saldo. Primeiro se exclui a baixa.
+        if fatura.faturado and fatura.baixas_registradas().exists():
+            messages.error(
+                request,
+                f'A fatura {fatura.pk} tem baixa registrada e não pode ser '
+                'reaberta. Exclua primeiro a BAIXA, em “4. Baixa de Faturas” '
+                '(o valor volta ao saldo), e depois reabra.')
+            return_to = request.POST.get('return_to', '')
+            if not url_has_allowed_host_and_scheme(
+                    return_to, allowed_hosts={request.get_host()},
+                    require_https=request.is_secure()):
+                return_to = reverse('admin:admin_faturas_fatura_changelist')
+            return redirect(return_to)
+
         fatura.faturado = not fatura.faturado
         fatura.us_atualizacao = request.user
         fatura.dt_atualizacao = timezone.now()
@@ -1366,11 +1583,27 @@ class FaturaAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEstab
         return any(request.GET.get(chave) == valor for chave, valor in exigidos)
 
     def finalizar_fatura_button(self, obj):
+        """Botão da FATURA: ABERTA mostra "Finalizar fatura"; FINALIZADA
+        mostra "Reabrir" — mas só se NÃO houver baixa registrada (a
+        reabertura desfaria o recebimento)."""
         request = self._current_request
-        if obj.faturado or not self.botao_finalizar_visivel(request):
+        if obj.faturado:
+            com_baixa = obj.baixas_registradas().exists()
+            if com_baixa:
+                return format_html(
+                    '<span title="Fatura FINALIZADA com baixa registrada. '
+                    'Exclua primeiro a BAIXA (em “4. Baixa de Faturas”) e '
+                    'depois reabra." style="color:#9ca3af; font-weight:bold;'
+                    '">&#128274; Finalizada</span>')
+            url = reverse(
+                'admin:admin_faturas_fatura_finalizar', args=[obj.pk])
+            csrf_token = get_token(request)
             return format_html(
-                '<span title="Faturada" style="color:#198754;font-size:18px;'
-                'font-weight:bold;">&#10003;</span>')
+                '<button type="button" class="button js-faturar-prefatura" '
+                'data-url="{}" data-csrf="{}" title="Fatura finalizada — '
+                'clique para REABRIR e editar">'
+                '<span style="color:#198754;font-weight:bold;">&#10003;</span>'
+                ' Reabrir</button>', url, csrf_token)
         url = reverse('admin:admin_faturas_fatura_finalizar', args=[obj.pk])
         csrf_token = get_token(request)
         # Os filtros da listagem seguem na query string do POST (ver o script
@@ -1380,7 +1613,7 @@ class FaturaAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEstab
             '<button type="button" class="button js-faturar-prefatura" '
             'data-url="{}" data-csrf="{}">Finalizar fatura</button>',
             url, csrf_token)
-    finalizar_fatura_button.short_description = 'Finalizar Fatura'
+    finalizar_fatura_button.short_description = 'Finalizar / Reabrir'
     finalizar_fatura_button.allow_tags = True
     def changelist_view(self, request, extra_context=None):
         self._current_request = request
@@ -1400,6 +1633,7 @@ class FaturaAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEstab
         return ChangeListEditavel
 
     actions = ['export_as_xls', 'finalizar_faturas_em_lote',
+               'abrir_faturas_em_lote',
                'excluir_selecionados']
 
     @admin.action(description='Finalizar faturas selecionadas')
@@ -1443,12 +1677,72 @@ class FaturaAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEstab
                 'As outras selecionadas foram processadas normalmente.',
                 level=messages.ERROR)
 
-    readonly_fields = ['us_registro', 'dt_registro',
-                       'us_atualizacao', 'dt_atualizacao', 'pre_faturado']
+    @admin.action(description='Abrir faturas selecionadas (reabrir para edição)')
+    def abrir_faturas_em_lote(self, request, queryset):
+        """DESFECHA (`faturado=False`) as faturas selecionadas.
 
-    # Cada fatura recebe VÁRIAS baixas (recebimentos parciais) direto no seu
-    # formulário.
-    inlines = [BaixaFaturaInline]
+        A fatura FINALIZADA não pode ser editada nem excluída — a única forma
+        de voltar é reabri-la. Mas a reabertura é o desfazer do RECEBIMENTO:
+        por isso **fatura com baixa não pode ser reaberta** (primeiro se
+        excluem as baixas, em “4. Baixa de Faturas”, cada uma devolvendo o
+        valor ao saldo).
+
+        As já abertas são ignoradas e cada linha é atualizada em sua própria
+        transação. Só o campo `faturado` (e a auditoria) é gravado.
+        """
+        agora = timezone.now()
+        abertas = 0
+        ja_abertas = 0
+        com_baixa = 0
+        erros = 0
+        for fatura in queryset:
+            if not fatura.faturado:
+                ja_abertas += 1
+                continue
+            if fatura.baixas_registradas().exists():
+                com_baixa += 1
+                continue
+            try:
+                with transaction.atomic():
+                    fatura.faturado = False
+                    fatura.us_atualizacao = request.user
+                    fatura.dt_atualizacao = agora
+                    fatura.save(update_fields=[
+                        'faturado', 'us_atualizacao', 'dt_atualizacao',
+                    ])
+                abertas += 1
+            except Exception:
+                erros += 1
+        if abertas:
+            self.message_user(
+                request,
+                f'{abertas} fatura(s) reaberta(s) para edição.',
+                level=messages.SUCCESS)
+        if com_baixa:
+            self.message_user(
+                request,
+                f'{com_baixa} fatura(s) NÃO foram reabertas: têm baixa '
+                'registrada. Exclua primeiro a BAIXA, em “4. Baixa de '
+                'Faturas” (o valor volta ao saldo), e depois reabra.',
+                level=messages.WARNING)
+        if ja_abertas:
+            self.message_user(
+                request, f'{ja_abertas} fatura(s) já estavam abertas; '
+                'foram ignoradas.', level=messages.WARNING)
+        if erros:
+            self.message_user(
+                request, f'Falha ao reabrir {erros} fatura(s). '
+                'As outras selecionadas foram processadas normalmente.',
+                level=messages.ERROR)
+
+    readonly_fields = ['us_registro', 'dt_registro',
+                       'us_atualizacao', 'dt_atualizacao', 'pre_faturado',
+                       'faturado']
+
+    # As baixas são geridas em MODAL (botão "Baixas" na linha e na tela da
+    # fatura) — ver `baixas_da_fatura_view`. Sem inline: o `fk_name`/M2M não
+    # fecha no formulário e a tela ficava sem as baixas.
+    inlines = []
 
     def save_formset(self, request, form, formset, change):
         """Amarra cada baixa do inline à fatura que está sendo editada."""
@@ -1479,35 +1773,53 @@ class FaturaAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEstab
             obj.delete()
         formset.save_m2m()
 
-    list_display_links = ('id', 'convenio')
+    list_display_links = ('id',)
 
     search_fields = ('cliente__nome', 'id')
 
     form = FaturaForm
 
-    list_display = ['id', 'convenio', 'cliente', 'get_documento_pagador', 'finalizar_fatura_button', 'periodo_tratamento', 'competencia', 'dia_envio', 'dt_vencimento', 'valor', 'valor_fatura', 'valor_saldo',
-                    'dt_liquidacao', 'descricao', 'nr_nota_fiscal', 'anexo_nf', 'estabelecimento', 'status', ]
+    def get_pagador(self, obj):
+        if obj.pagador_pj:
+            return obj.pagador_pj.empresa
+        if obj.pagador_pf:
+            return obj.pagador_pf.nome
+        return "-"
+    get_pagador.short_description = "Pagador"
+
+    # ORDEM: id → botões personalizados → dados.
+    list_display = ['id', 'finalizar_fatura_button', 'baixas_button',
+                    'excluir_linha', 'get_pagador', 'cliente',
+                    'periodo_tratamento', 'competencia', 'dia_envio',
+                    'dt_vencimento', 'valor', 'valor_fatura', 'valor_saldo',
+                    'dt_liquidacao', 'descricao', 'nr_nota_fiscal',
+                    'anexo_nf', 'estabelecimento', 'status']
     list_editable_sempre = ['valor_fatura', 'descricao', 'nr_nota_fiscal',
                             'anexo_nf', 'status']
     list_editable = list_editable_sempre
 
     def get_linhas_nao_editaveis(self, request):
-        """Faturas COM BAIXA: só texto na listagem.
+        """Faturas TRAVADAS na listagem: só texto, sem edição em linha.
 
-        Mesma regra da tela de alteração (`Fatura.motivo_recusa_edicao`):
-        fatura só se altera quando não tem baixa ligada a ela.
+        Trava quando (mesma régua da tela de alteração/exclusão):
+        - está FINALIZADA (`faturado=True`) — só pode ser desfechada pelo
+          botão "Finalizar fatura" e depois editada/excluída; ou
+        - já tem BAIXA registrada (`motivo_recusa_edicao` da fatura).
         """
         from admin_faturas.models import BaixaFatura as _BF
-        return {str(pk) for pk in _BF.objects.filter(
-                    fatura_baixada__isnull=False).values_list(
-                    'fatura_baixada__pk', flat=True)}
-    search_fields = ['convenio__convenio',
+        pks = set(Fatura.objects.filter(
+            faturado=True).values_list('pk', flat=True))
+        pks.update(_BF.objects.filter(
+            fatura_baixada__isnull=False).values_list(
+            'fatura_baixada__pk', flat=True))
+        return {str(pk) for pk in pks}
+    search_fields = ['pagador_pj__empresa', 'pagador_pf__nome',
                      'nr_contrato', 'nr_aditivo', 'descricao', 'nr_nota_fiscal']
     list_filter = [FaturadoStatusFilter, NotaFiscalFilter, ArquivoNotaFiscalFilter,
-                   SaldoFilter, ConvenioPagadorFilter, StatusFilterAdminMixin,
+                   SaldoFilter, StatusFilterAdminMixin,
                    EstabelecimentoFilterAdminMixin,
                    'pagador_pj', 'pagador_pf', 'cliente', 'dia_envio', CustomDateFilter]
-    ordering = ['competencia', 'convenio', 'cliente',
+    ordering = ['competencia', 'cliente',
                 'nr_contrato', 'nr_aditivo', 'valor', 'dia_envio', 'faturado', 'id']
     list_per_page = 99
 
@@ -1620,7 +1932,7 @@ class FaturaAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEstab
             return self.readonly_fields  # Não altera o comportamento padrão
         else:  # Se for uma nova instância (add)
             # Converter para lista para permitir a concatenação
-            return self.readonly_fields + ['faturado', 'status']
+            return self.readonly_fields + ['status']
 
     def save_model(self, request, obj, form, change):
         if not change:
@@ -1634,8 +1946,9 @@ class FaturaAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEstab
 
     def has_delete_permission(self, request, obj=None):
         """Além da permissão do usuário, a FATURA FINALIZADA ou COM MOVIMENTO
-        não pode ser excluída (a aberta e sem movimento pode)."""
-        if request.user.username != 'admin':
+        não pode ser excluída (a aberta e sem movimento pode). A checagem
+        genérica (`obj=None`) vale a permissão `delete`."""
+        if not super().has_delete_permission(request, obj):
             return False
         if obj is not None:
             motivo = obj.motivo_recusa_exclusao()
@@ -1855,7 +2168,7 @@ class VencimentoDateFilter(CustomDateFilter):
         return queryset
 
 
-class BaixaFaturaAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Select2AdminModelAdminMixin, ExportToXLSMixin, admin.ModelAdmin):
+class BaixaFaturaAdmin(BotaoExcluirLinhaMixin, EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Select2AdminModelAdminMixin, ExportToXLSMixin, admin.ModelAdmin):
     form = BaixaFaturaForm
 
     # Baixa não tem competência/vencimento próprios: o período é o recebimento.
@@ -1882,15 +2195,31 @@ class BaixaFaturaAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, Admin
     # O template da listagem editável lê este atributo.
     selecao_desabilitada = False
 
+    def get_documento_pagador(self, obj):
+        """
+        Retorna CNPJ se Pagador PJ
+        Retorna CPF se Pagador PF
+        """
+        if obj.pagador_pj and hasattr(obj.pagador_pj, 'cnpj'):
+            return obj.pagador_pj.cnpj
+
+        if obj.pagador_pf and hasattr(obj.pagador_pf, 'cpf'):
+            return obj.pagador_pf.cpf
+
+        return "-"
+
+    get_documento_pagador.short_description = "CNPJ / CPF"
+
     # A listagem é das FATURAS finalizadas em aberto (contas a receber).
     # Colunas de identificação vêm da fatura; só os campos exclusivos da
     # baixa são editáveis.
     list_display = (
-        'id', 'convenio', 'cliente', 'competencia', 'dt_vencimento',
+        'id', 'get_documento_pagador', 'cliente', 'competencia', 'dt_vencimento',
         'valor_fatura', 'valor_saldo', 'estabelecimento',
         'valor_baixa', 'valor_adicional', 'valor_total_empacotado',
         'dt_recebimento', 'transacao_financeira',
         'competencia_bancaria', 'observacao', 'excluir_button',
+        'excluir_linha',
     )
 
     list_editable_sempre = [
@@ -1939,9 +2268,9 @@ class BaixaFaturaAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, Admin
     excluir_button.short_description = 'Excluir baixa'
     excluir_button.allow_tags = True
 
-    search_fields = ('id', 'convenio__convenio', 'cliente',
-                     'nr_nota_fiscal', 'convenio__pagador_pj__empresa',
-                     'convenio__pagador_pf__nome')
+    search_fields = ('id', 'cliente',
+                     'nr_nota_fiscal', 'pagador_pj__empresa',
+                     'pagador_pf__nome')
 
     readonly_fields = ['us_registro', 'dt_registro',
                        'us_atualizacao', 'dt_atualizacao']
@@ -1955,10 +2284,11 @@ class BaixaFaturaAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, Admin
               'transacao_financeira', 'competencia_bancaria', 'observacao')
 
     list_filter = [VencimentoDateFilter, CustomDateFilter,
-                   ConvenioPagadorFilter, SaldoFaturaFilter,
+                   SaldoFaturaFilter,
                    StatusFilterAdminMixin, EstabelecimentoFilterAdminMixin,
                    ClienteFaturaFilter, DataRecebimentoFilter,
-                   CompetenciaBancariaFilter]
+                   CompetenciaBancariaFilter,
+                   'pagador_pj', 'pagador_pf']
 
     # A ordenação padrão do modelo (`-dt_recebimento`) não existe na fatura
     # listada: as contas a receber saem por vencimento.
@@ -1995,7 +2325,7 @@ class BaixaFaturaAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, Admin
             base['dt_vencimento__year'] = hoje.year
             base['dt_vencimento__month'] = hoje.month
         faturas = Fatura.objects.filter(
-            **base).select_related('convenio', 'estabelecimento')
+            **base).select_related('estabelecimento')
 
         perfil = getattr(request.user, 'perfil', None)
         if perfil is not None:
@@ -2493,6 +2823,9 @@ class BaixaFaturaAdmin(EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, Admin
 
 # Registro dos admins no Django
 admin.site.register(PreFatura, PreFaturaAdmin)
-admin.site.register(Convenio, ConvenioAdmin)
+admin.site.register(AcordoFaturamento, AcordoFaturamentoAdmin)
 admin.site.register(Fatura, FaturaAdmin)
-admin.site.register(BaixaFatura, BaixaFaturaAdmin)
+# BaixaFatura NÃO tem mais tela própria (item “4. Baixas”): a gestão é feita
+# pelo MODAL “Baixas (n)” na listagem da fatura — ver `baixas_da_fatura_view`.
+# A administração continua registrada apenas nos Livros de Recibos/contas a
+# receber, onde a baixa é lançada como linha da fatura.
