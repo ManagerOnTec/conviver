@@ -86,9 +86,38 @@ class BaixaPagamentoForm(forms.ModelForm):
         model = BaixaPagamento
         fields = '__all__'
         exclude = ['estabelecimento']  # Remover o campo estabelecimento do formulário
+        # DATA como `type="date"` (calendário do navegador) — sem widget o
+        # Django renderiza `<input type="text">` e o usuário digita o texto.
+        widgets = {
+            'dt_pagamento': forms.DateInput(
+                format='%Y-%m-%d', attrs={'type': 'date'}),
+        }
 
     def __init__(self, *args, **kwargs):
+        # O MODAL passa o pagamento da URL: a instância já nasce ligada a ele.
+        self.pagamento_fixo = kwargs.pop('pagamento', None)
         super().__init__(*args, **kwargs)
+        if self.pagamento_fixo is not None:
+            if 'pagamento' in self.fields:
+                self.fields['pagamento'].required = False
+            self.instance.pagamento = self.pagamento_fixo
+            self.instance.estabelecimento = self.pagamento_fixo.estabelecimento
+        # AUDITORIA e controle são preenchidos pelo admin, não pelo usuário:
+        # sem tirar do form eles aparecem como OBRIGATÓRIOS na validação
+        # (e o POST do modal não os enviava, derrubando o lançamento).
+        for nome in ('us_registro', 'us_atualizacao', 'dt_registro',
+                     'dt_atualizacao', 'status', 'pagamento_baixado'):
+            if nome in self.fields:
+                self.fields[nome].required = False
+        # O `format='%Y-%m-%d'` do widget só vale para exibição se o campo
+        # aceitar a entrada nesse formato (o `type=date` do HTML manda ISO).
+        campo_data = self.fields.get('dt_pagamento')
+        if campo_data is not None:
+            campo_data.input_formats = ['%Y-%m-%d', '%d/%m/%Y']
+            campo_data.widget.format = '%Y-%m-%d'
+            # Garante o calendário do navegador (`type="date"`): o `Meta`
+            # define o widget, mas o input precisa do attr explícito.
+            campo_data.widget.input_type = 'date'
         # TRANSAÇÃO: pagamento é sempre SAÍDA (banco ou caixa). A própria
         # transação escolhida define o lado: uma transação de ENTRADA é de
         # fatura (recebimento), não de pagamento.
@@ -125,9 +154,30 @@ class BaixaPagamentoForm(forms.ModelForm):
         except Exception:
             pass
 
+    def _post_clean(self):
+        """Aceita o form SEM o campo `pagamento`.
+
+        O `pagamento` vem da URL do modal (a view injeta `obj.pagamento`).
+        O `_post_clean` do ModelForm roda `full_clean` no MODELO e devolve
+        "Pagamento é obrigatório." quando o campo não está no POST — por isso
+        ele é excluído da validação do modelo apenas quando não veio dado.
+        """
+        if not self.cleaned_data.get('pagamento'):
+            excluir = tuple(self._meta.exclude or ())
+            if 'pagamento' not in excluir:
+                # `instance._meta` é a do MODELO (compartilhada), então o
+                # ajuste fica restrito a esta chamada e é desfeito depois.
+                self.instance._meta.exclude = excluir + ('pagamento',)
+                try:
+                    super()._post_clean()
+                finally:
+                    self.instance._meta.exclude = excluir
+                return
+        super()._post_clean()
+
     def clean(self):
         cleaned_data = super().clean()
-        pagamento = cleaned_data.get('pagamento')
+        pagamento = cleaned_data.get('pagamento') or self.pagamento_fixo
         transacao_financeira = cleaned_data.get('transacao_financeira')
         competencia_bancaria = cleaned_data.get('competencia_bancaria')
         competencia_caixa = cleaned_data.get('competencia_caixa')
@@ -138,6 +188,11 @@ class BaixaPagamentoForm(forms.ModelForm):
         if pagamento:
             # Atribui o estabelecimento da fatura ao campo estabelecimentos
             cleaned_data['estabelecimento'] = pagamento.estabelecimento
+        elif self.instance.pagamento_id:
+            # No MODAL o pagamento vem da URL (injetado pela view): o
+            # `pagamento_id` já está na instância e não precisa vir no POST.
+            cleaned_data['estabelecimento'] = (
+                self.instance.pagamento.estabelecimento)
         else:
             raise forms.ValidationError('Pagamento é obrigatório.')
 

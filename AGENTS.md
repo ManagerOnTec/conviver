@@ -48,6 +48,34 @@ demais (ver “Padrão obrigatório dos admins” abaixo).
    `admin/filter_select2.html` = dropdown com busca) e **sempre** dentro de
    `try/except` — filtro inválido não pode derrubar a listagem.
 
+   **9.a Estabelecimento do usuário (PADRÃO OBRIGATÓRIO).** Todo
+   ModelAdmin cujo modelo **tenha o campo `estabelecimento`** inclui o
+   `EstabelecimentoFilterAdminMixin` (`admin_cadastros/utils.py`) no
+   `list_filter`:
+
+   ```python
+   from admin_cadastros.utils import EstabelecimentoFilterAdminMixin
+   list_filter = [..., EstabelecimentoFilterAdminMixin, ...]
+   ```
+
+   Ele filtra, **sem o usuário escolher nada**, pelo estabelecimento da
+   **sessão** (`request.session['estabelecimento_id']`) e, sem sessão, pelo
+   `estabelecimento_padrao` do perfil. Regras:
+
+   - sessão **liberada** para o perfil → aplica o da sessão;
+   - sessão **não liberada** → `PermissionDenied` (não cai em outro em
+     silêncio);
+   - usuário **sem perfil** (superuser puro) → não restringe;
+   - escolha **manual** no filtro prevalece, limitada aos liberados;
+   - gravação do valor: `AdminEstabelecimentoPadraoMixin` (fixa o campo no
+     `get_form`, o usuário nunca troca).
+
+   **Não use** o filtro em modelo **sem** o campo `estabelecimento`
+   (ex.: `AcordoPagamento`, onde `estabelecimento` é `property` derivada do
+   fornecedor): filtraria por um campo inexistente e a tela quebra com
+   `FieldError`. Nesses casos o recorte é feito pelo **fornecedor/pagador**
+   (`FornecedorPagadorFilter`).
+
 10. **Telas listview do admin — layout obrigatório** (`admin_faturas/admin.py` e
     `admin_financeiro/admin.py` são a referência).
 

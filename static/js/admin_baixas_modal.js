@@ -12,6 +12,20 @@
   'use strict';
 
   var overlay = null;
+  // Algo mudou dentro do modal (baixa lançada/excluída)? Ao fechar,
+  // recarrega a LISTAGEM para atualizar o saldo e o contador "Baixas (n)".
+  var houveAlteracao = false;
+
+  /**
+   * Recarrega a changelist MANTENDO os filtros.
+   *
+   * `location.reload()` preserva a query string inteira (busca, período,
+   * atalhos, dropdowns e paginação), então os filtros continuam aplicados —
+   * só zeram pelo botão “✕ Limpar Todos os Filtros”.
+   */
+  function recarregarListagem() {
+    window.location.reload();
+  }
 
   /**
    * Garante o CSS do modal e o do conteúdo das baixas.
@@ -62,6 +76,10 @@
 
   function fechar() {
     if (overlay) overlay.style.display = 'none';
+    if (houveAlteracao) {
+      houveAlteracao = false;
+      recarregarListagem();
+    }
   }
 
   function extrairConteudo(html) {
@@ -127,7 +145,8 @@
           return;
         }
         var dados = new FormData(form);
-        fetch(url, {
+        var alvo = form.getAttribute('data-url') || url;
+        fetch(alvo, {
           method: 'POST',
           body: dados,
           headers: { 'X-Requested-With': 'XMLHttpRequest' },
@@ -143,6 +162,9 @@
               return;
             }
             corpo.innerHTML = conteudo;
+            // O POST passou (a tela voltou renderizada): marca para
+            // atualizar a listagem no fechamento.
+            houveAlteracao = true;
             ligarFormularios(corpo, url);
           })
           .catch(function () {

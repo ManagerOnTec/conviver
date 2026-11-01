@@ -589,11 +589,14 @@ class MovimentoBancarioAdmin(BotaoExcluirLinhaMixin, ExclusaoEmLoteComRegrasMixi
               'valor_saida', 'competencia_caixa', 'observacao', 'status']
 
     list_display = [
+        # O botão de função/exclusão vem no INÍCIO (AGENTS.md, item 10):
+        # mesma posição das telas de faturas.
+        'excluir_linha',
         'competencia_bancaria', 'dt_movimento', 'transacao_financeira',
         'valor_entrada', 'valor_saida',
         'baixa_origem_display', 'observacao', 'status_conciliacao',
-        'baixa_fatura', 'us_registro', 'dt_registro', 'estabelecimento',
-        'status', 'excluir_linha',
+        'baixa_fatura', 'baixa_pagamento', 'us_registro', 'dt_registro',
+        'estabelecimento', 'status',
     ]
 
     def status_conciliacao(self, obj):
@@ -806,18 +809,61 @@ class MovimentoBancarioAdmin(BotaoExcluirLinhaMixin, ExclusaoEmLoteComRegrasMixi
         conciliado. A fatura finalizada NÃO entra nesta regra."""
         return obj.pode_excluir()
 
+    def _baixa_e_dono_do_movimento(self, obj):
+        """Qual BAIXA/objeto de exclusão este movimento alimenta.
+
+        O lado é decidido pelo SENTIDO do lançamento, não pelo vínculo que
+        estiver preenchido:
+
+        - **ENTRADA** (`valor_entrada > 0`) → baixa de **FATURA** (o
+          recebimento gerou o crédito);
+        - **SAÍDA** (`valor_saida > 0`) → baixa de **PAGAMENTO** (o
+          pagamento gerou o débito).
+
+        Devolve `(tipo, baixa)` com `tipo` em `'fatura'`, `'pagamento'` ou
+        `None`. Os dois nunca podem coexistir.
+        """
+        entrada = (obj.valor_entrada or 0) > 0
+        saida = (obj.valor_saida or 0) > 0
+
+        if entrada and not saida:
+            if obj.baixa_fatura_id:
+                try:
+                    return 'fatura', obj.baixa_fatura
+                except Exception:
+                    return 'fatura', None
+            return 'fatura', None
+
+        if saida and not entrada:
+            if obj.baixa_pagamento_id:
+                try:
+                    return 'pagamento', obj.baixa_pagamento
+                except Exception:
+                    return 'pagamento', None
+            return 'pagamento', None
+
+        # Sem valor definido (ou os dois preenchidos): cai no vínculo real.
+        baixa = obj.baixa_de_origem()
+        if obj.baixa_pagamento_id and baixa is not None:
+            return 'pagamento', baixa
+        if obj.baixa_fatura_id and baixa is not None:
+            return 'fatura', baixa
+        return None, None
+
     def delete_model(self, request, obj):
-        """Exclusão do movimento — SEMPRE com a BAIXA de fatura junto.
+        """Exclusão do movimento — SEMPRE com a BAIXA de origem junto.
 
         Movimento e baixa são concomitantes: a baixa gerou o lançamento, então
-        sai junto e devolve o valor ao saldo da fatura. Só a COMPETÊNCIA
+        sai junto e devolve o valor ao saldo do objeto de origem. O objeto é
+        escolhido pelo SENTIDO do movimento — ENTRADA → **fatura**, SAÍDA →
+        **pagamento** (ver `_baixa_e_dono_do_movimento`). Só a COMPETÊNCIA
         BANCÁRIA decide (aberta pode, fechada não).
         """
         motivo = obj.pode_excluir()
         if motivo:
             admin_messages.error(request, motivo)
             return
-        baixa = obj.baixa_de_origem()
+        tipo, baixa = self._baixa_e_dono_do_movimento(obj)
         baixa_pk = baixa.pk if baixa is not None else None
         pk = obj.pk
         try:
@@ -827,10 +873,21 @@ class MovimentoBancarioAdmin(BotaoExcluirLinhaMixin, ExclusaoEmLoteComRegrasMixi
                 request,
                 f'Não foi possível excluir o movimento: {erro}')
             return
-        texto = f'Movimento {pk} excluído e saldo do banco atualizado.'
-        if baixa_pk is not None:
-            texto += (f' A baixa de fatura {baixa_pk} foi excluída junto e o '
-                      'valor voltou ao saldo da fatura.')
+
+        if tipo == 'pagamento':
+            texto = (f'Movimento {pk} (SAÍDA) excluído e saldo do banco '
+                     'atualizado.')
+            if baixa_pk is not None:
+                texto += (f' A baixa de PAGAMENTO {baixa_pk} foi excluída '
+                          'junto e o valor voltou ao saldo do pagamento.')
+        elif tipo == 'fatura':
+            texto = (f'Movimento {pk} (ENTRADA) excluído e saldo do banco '
+                     'atualizado.')
+            if baixa_pk is not None:
+                texto += (f' A baixa de FATURA {baixa_pk} foi excluída junto '
+                          'e o valor voltou ao saldo da fatura.')
+        else:
+            texto = f'Movimento {pk} excluído e saldo do banco atualizado.'
         admin_messages.success(request, texto)
 
     def _response_delete_sem_padrao(self, request, object_id,
@@ -903,9 +960,10 @@ class MovimentoBancarioAdmin(BotaoExcluirLinhaMixin, ExclusaoEmLoteComRegrasMixi
     def delete_view(self, request, object_id, extra_context=None):
         """Tela de confirmação da exclusão do movimento.
 
-        A BAIXA de fatura vai junto **sempre** (são concomitantes): a tela só
-        avisa disso. Competência fechada/conciliado → mensagem amigável e
-        volta para a listagem.
+        A BAIXA de origem vai junto **sempre** (são concomitantes): a tela só
+        avisa disso. O objeto mostrado depende do SENTIDO do movimento —
+        ENTRADA → **fatura**, SAÍDA → **pagamento**. Competência
+        fechada/conciliado → mensagem amigável e volta para a listagem.
         """
         from django.http import HttpResponseRedirect
         from django.urls import reverse
@@ -923,12 +981,22 @@ class MovimentoBancarioAdmin(BotaoExcluirLinhaMixin, ExclusaoEmLoteComRegrasMixi
                 admin_messages.error(request, motivo)
                 return HttpResponseRedirect(reverse(
                     'admin:admin_financeiro_movimentobancario_changelist'))
-            baixa = obj.baixa_de_origem()
+            tipo, baixa = self._baixa_e_dono_do_movimento(obj)
             if baixa is not None:
                 extra_context['excluir_baixa_junto'] = baixa.pk
                 extra_context['baixa_pk'] = baixa.pk
-                fatura = baixa.fatura_baixada_do_bd()
-                extra_context['fatura_pk'] = fatura.pk if fatura else None
+                extra_context['baixa_tipo'] = tipo
+                if tipo == 'pagamento':
+                    # SAÍDA: a baixa é do PAGAMENTO (o débito saiu daqui).
+                    extra_context['pagamento_pk'] = (
+                        getattr(baixa, 'pagamento_id', None))
+                    extra_context['fatura_pk'] = None
+                else:
+                    # ENTRADA: a baixa é da FATURA (o crédito entrou aqui).
+                    fatura = baixa.fatura_baixada_do_bd()
+                    extra_context['fatura_pk'] = (
+                        fatura.pk if fatura else None)
+                    extra_context['pagamento_pk'] = None
         return super().delete_view(request, object_id,
                                    extra_context=extra_context)
 

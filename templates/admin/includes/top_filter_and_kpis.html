@@ -52,6 +52,12 @@
       <a href="{{ request.path }}" class="top-filter-quick-clear">
         <span>✕ Limpar Todos os Filtros</span>
       </a>
+    {% else %}
+      {# Sem filtro ativo: o botão fica esmaecido e não navega (AGENTS.md). #}
+      <a href="{{ request.path }}" class="top-filter-quick-clear is-empty"
+         title="Nenhum filtro ativo">
+        <span>✕ Limpar Todos os Filtros</span>
+      </a>
     {% endif %}
   </div>
 

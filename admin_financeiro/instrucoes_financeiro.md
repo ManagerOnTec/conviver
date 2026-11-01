@@ -64,11 +64,28 @@ Ordem do menu (por `verbose_name_plural`):
 - **Baixa de fatura** gera entrada automaticamente (`BaixaFatura.save`), com
   `baixa_fatura` e `origem` preenchida.
 - **Exclusão do movimento** — exige competência ABERTA e o movimento NÃO
-  conciliado. O saldo do banco é recalculado. Se o movimento veio de uma
-  baixa de fatura, a **tela de confirmação pergunta** (radios
-  `excluir_baixa_junto`): *Sim* → a baixa é excluída junto e o valor volta ao
-  saldo da fatura; *Não* → só o movimento sai e a baixa permanece (pode ser
-  excluída depois, em “4. Baixa de Faturas”).
+  conciliado. O saldo do banco é recalculado.
+
+  O objeto de exclusão é escolhido pelo **SENTIDO** do lançamento, nunca
+  pelo vínculo que estiver preenchido
+  (`MovimentoBancarioAdmin._baixa_e_dono_do_movimento`):
+
+  | Movimento | Baixa de origem | Saldo devolvido |
+  |---|---|---|
+  | **ENTRADA** (`valor_entrada > 0`) | `baixa_fatura` | saldo da **fatura** |
+  | **SAÍDA** (`valor_saida > 0`) | `baixa_pagamento` | saldo do **pagamento** |
+
+  A tela de confirmação (`templates/admin/delete_confirmation.html`) mostra
+  o texto do lado certo a partir de `baixa_tipo` (`'fatura'` |
+  `'pagamento'`): “*este movimento é uma SAÍDA e veio da baixa de PAGAMENTO
+  #N … o valor pago volta ao saldo do pagamento*”.
+  A mensagem de sucesso também diz o lado (`ENTRADA`/`SAÍDA`).
+- **Coluna “Excluir”** do movimento fica no **INÍCIO** da listagem
+  (`list_display` começa em `excluir_linha`), na mesma posição das telas de
+  faturas — AGENTS.md, item 10.
+- A coluna **“Origem (Baixa)”** mostra `Baixa #N (fatura X)` nas **entradas**
+  e `Baixa #N (pagamento X)` nas **saídas**; lançamento manual mostra a
+  observação.
 - **Baixa de pagamento** gera saída (`BaixaPagamento.save`), com
   `baixa_pagamento`.
 - **Transferência caixa ⇄ banco** — o par é criado pelo `admin_tesouraria`
@@ -139,3 +156,68 @@ conciliação."*
      fechar;
   5. fechar sem conciliação → bloqueado; com divergência → bloqueado.
 - `python manage.py check` antes de concluir.
+
+## Movimentos gerados por CONTAS A PAGAR (fluxo de SAÍDA)
+
+O admin de pagamentos (`admin_pagamentos`) gera movimentos neste app. O
+fluxo é o ESPELHO do de entradas (`admin_faturas`):
+
+```
+AcordoPagamento → PrePagamento → Pagamento → BaixaPagamento → Movimento (SAÍDA)
+Convenio/Acordo → PreFatura → Fatura → BaixaFatura → Movimento (ENTRADA)
+```
+
+### Saída de BANCO
+
+`BaixaPagamento` com `transacao_financeira.movimento == 'banco'` cria
+**um** `MovimentoBancario`:
+
+- `valor_entrada = 0` e `valor_saida = baixa.valor_pagamento`;
+- `competencia_bancaria` da própria baixa (**obrigatória e ABERTA**);
+- `dt_movimento = dt_pagamento`;
+- `baixa_pagamento = <baixa>` (origem) e `observacao = "Pagamento #ID"`;
+- o saldo da competência é recalculado (`recalcular_saldos`).
+
+### Saída de CAIXA
+
+`movimento == 'caixa'` cria **um** `MovimentoCaixa` (tipo `'S'`,
+`origem='pagamento'`, `valor_saida`, ligado à `competencia_caixa` aberta) e
+desconta do saldo do caixa. **Nunca banco e caixa na mesma baixa.**
+
+### Regras que este app precisa honrar
+
+1. **Competência FECHADA trava tudo.** Bancária fechada trava o movimento de
+   saída, a baixa, o pagamento, o pré-pagamento e o acordo. Competência de
+   caixa fechada trava a baixa em caixa e o que está acima dela.
+   Mensagem: *“A competência X “Y” está FECHADA em dd/mm/aaaa: não é possível
+   lançar nem alterar movimentos dela.”*
+2. **Data dentro do período** — `dt_movimento` (a `dt_pagamento`) entre a
+   abertura e o fechamento (ou hoje).
+3. **BAIXA ⇄ MOVIMENTO são CONCOMITANTES** — excluir o movimento de saída
+   leva a baixa de pagamento junto (e ela devolve o valor ao
+   `valor_saldo` do pagamento); excluir a baixa leva o movimento.
+   Se algum dos dois estiver barrado (competência fechada / conciliado),
+   **nada sai** e o motivo volta como mensagem.
+4. **A fatura/pagamento FINALIZADO não impede** excluir a baixa nem o
+   movimento — quem decide é a **competência** (senão não haveria como
+   desfazer a baixa).
+5. **Movimento conciliado não é excluído** sem antes desfazer a conciliação.
+
+### Onde está implementado
+
+- `admin_pagamentos.BaixaPagamento.save()` — cria o movimento da baixa
+  (banco **ou** caixa), sem duplicar se a baixa for re-salva;
+- `admin_pagamentos.BaixaPagamento.excluir_com_movimento()` — exclui a baixa
+  e os movimentos dela, devolvendo o saldo do pagamento;
+- `admin_financeiro.MovimentoBancario.delete()` — apaga a baixa de fatura de
+  origem (entrada) e o par de pagamento (saída), devolvendo o saldo.
+
+### Como testar (lado das saídas)
+
+1. baixa de pagamento com transação **banco** e competência aberta → **1**
+   `MovimentoBancario` com `valor_saida` e saldo recalculado;
+2. a mesma baixa com competência **fechada** → recusada com mensagem;
+3. baixa com transação **caixa** e caixa aberto → **1** `MovimentoCaixa`
+   tipo `'S'`; com caixa fechado → recusada;
+4. excluir o movimento de saída → a baixa sai e o `valor_saldo` do pagamento
+   volta; salvar a mesma baixa duas vezes → **não** duplica o movimento.

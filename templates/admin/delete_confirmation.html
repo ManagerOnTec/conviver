@@ -33,18 +33,35 @@
 <form method="post">{% csrf_token %}
   {% if excluir_baixa_junto %}
     {% comment %}
-      Movimento gerado por uma BAIXA DE FATURA: a baixa sai JUNTO, sempre
-      (são concomitantes). O valor recebido volta ao saldo da fatura.
+      Movimento gerado por uma BAIXA: ela sai JUNTO, sempre (são
+      concomitantes) e o valor volta ao saldo do OBJETO DE ORIGEM —
+      escolhido pelo SENTIDO do movimento:
+        ENTRADA → baixa de FATURA (o recebimento voltou ao saldo da fatura)
+        SAÍDA   → baixa de PAGAMENTO (o pagamento voltou ao saldo do pagamento)
+      A `view` manda `baixa_tipo` ('fatura' | 'pagamento').
     {% endcomment %}
-    <fieldset class="module" style="padding:10px 14px; margin-bottom:12px; border-left:4px solid #b45309;">
-      <p style="margin:0 0 6px;">
-        <strong>Este movimento veio da baixa de fatura #{{ baixa_pk }}{% if fatura_pk %} (fatura {{ fatura_pk }}){% endif %}.</strong>
-      </p>
-      <p style="margin:0;">
-        A <strong>baixa de fatura será excluída junto</strong> com o movimento, e
-        o valor recebido <strong>volta ao saldo da fatura</strong>.
-      </p>
-    </fieldset>
+    {% if baixa_tipo == 'pagamento' %}
+      <fieldset class="module" style="padding:10px 14px; margin-bottom:12px; border-left:4px solid #b45309;">
+        <p style="margin:0 0 6px;">
+          <strong>Este movimento é uma SAÍDA e veio da baixa de PAGAMENTO #{{ baixa_pk }}{% if pagamento_pk %} (pagamento {{ pagamento_pk }}){% endif %}.</strong>
+        </p>
+        <p style="margin:0;">
+          A <strong>baixa de pagamento será excluída junto</strong> com o
+          movimento, e o valor pago <strong>volta ao saldo do
+          pagamento</strong>.
+        </p>
+      </fieldset>
+    {% else %}
+      <fieldset class="module" style="padding:10px 14px; margin-bottom:12px; border-left:4px solid #b45309;">
+        <p style="margin:0 0 6px;">
+          <strong>Este movimento é uma ENTRADA e veio da baixa de FATURA #{{ baixa_pk }}{% if fatura_pk %} (fatura {{ fatura_pk }}){% endif %}.</strong>
+        </p>
+        <p style="margin:0;">
+          A <strong>baixa de fatura será excluída junto</strong> com o movimento, e
+          o valor recebido <strong>volta ao saldo da fatura</strong>.
+        </p>
+      </fieldset>
+    {% endif %}
     <input type="hidden" name="excluir_baixa_junto" value="1">
   {% endif %}
   <div>

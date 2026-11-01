@@ -245,9 +245,16 @@ class MovimentoBancario(models.Model):
     # (movimentos automáticos) ou a observação do usuário (lançamento manual,
     # que o admin prefixa com "Lançamento manual").
     def baixa_origem_display(self):
-        if self.baixa_fatura_id is None:
+        if self.baixa_fatura_id is None and self.baixa_pagamento_id is None:
             # Lançamento MANUAL: mostra a observação do usuário.
             return self.observacao or '-'
+
+        # SAÍDA: a origem é a baixa de PAGAMENTO (o débito saiu daqui).
+        if self.baixa_pagamento_id is not None:
+            b = self.baixa_pagamento
+            pagamento = getattr(b, 'pagamento_id', None)
+            return f'Baixa #{b.pk} (pagamento {pagamento or "?"})'
+
         def _fatura_pk(b):
             # O alias em memória pode estar vazio (instância carregada do
             # banco): o `do_bd` lê o M2M.
@@ -261,7 +268,7 @@ class MovimentoBancario(models.Model):
                 f'#{o.pk} (fatura {_fatura_pk(o) or "?"})'
                 for o in empacotadas))
         return ' '.join(partes)
-    baixa_origem_display.short_description = 'Origem (Baixa / Fatura)'
+    baixa_origem_display.short_description = 'Origem (Baixa)'
 
     # ------------------------------------------------------------------
     # STATUS DA CONCILIAÇÃO do movimento (exibido na listagem)
@@ -439,17 +446,23 @@ class MovimentoBancario(models.Model):
         return None
 
     def baixa_de_origem(self):
-        """Baixa de fatura que gerou este movimento (ou None).
+        """Baixa que gerou este movimento (de FATURA **ou** de PAGAMENTO).
 
-        Ao excluir o movimento a tela PERGUNTA se a baixa sai junto — com
-        "sim", a baixa é apagada e o valor volta ao saldo da fatura.
+        O movimento é concomitante com a baixa de origem: excluir um leva o
+        outro e devolve o valor ao saldo (da fatura em ENTRADAS, do pagamento
+        em SAÍDAS).
         """
-        if not self.baixa_fatura_id:
-            return None
-        try:
-            return self.baixa_fatura
-        except Exception:
-            return None
+        if self.baixa_fatura_id:
+            try:
+                return self.baixa_fatura
+            except Exception:
+                pass
+        if self.baixa_pagamento_id:
+            try:
+                return self.baixa_pagamento
+            except Exception:
+                pass
+        return None
 
     def delete(self, *args, **kwargs):
         """Exclusão do movimento — SEMPRE levando a BAIXA de origem junto.
@@ -486,9 +499,12 @@ class MovimentoBancario(models.Model):
         resultado = super().delete(*args, **kwargs)
         competencia.recalcular_saldos()
         # A baixa sai DEPOIS do movimento (ela é referenciada por ele) e
-        # devolve o valor ao saldo da fatura.
+        # devolve o valor ao saldo (da fatura ou do pagamento).
         if baixa is not None:
-            baixa.excluir_devolvendo_saldo()
+            try:
+                baixa.excluir_devolvendo_saldo()
+            except AttributeError:      # baixa de fatura usa outro nome
+                baixa.excluir_devolvendo_saldo()
         return resultado
 
     def pode_excluir(self):

@@ -765,6 +765,13 @@ html.hide-top-filter div.xfull {
     text-decoration: underline;
 }
 
+/* Sem filtro ativo o botão permanece na tela, mas esmaecido e sem ação. */
+.top-filter-quick-clear.is-empty {
+    color: #b9bec6;
+    cursor: default;
+    pointer-events: none;
+}
+
 .top-filter-row {
     display: flex;
     align-items: center;

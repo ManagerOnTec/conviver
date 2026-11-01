@@ -305,6 +305,12 @@ class MovimentoCaixa(models.Model):
         'admin_pagamentos.Pagamento', on_delete=models.PROTECT,
         blank=True, null=True, related_name='movimentos_caixa',
         verbose_name='Pagamento')
+    # Baixa de pagamento de ORIGEM do lançamento (concomitante: excluir um
+    # exclui o outro, devolvendo o valor ao saldo do pagamento).
+    baixa_pagamento = models.ForeignKey(
+        'admin_pagamentos.BaixaPagamento', on_delete=models.PROTECT,
+        blank=True, null=True, related_name='movimentos_caixa',
+        verbose_name='Baixa de Pagamento')
 
     us_registro = models.ForeignKey(
         User, related_name='mov_caixa_registro', on_delete=models.PROTECT,
@@ -470,6 +476,10 @@ class MovimentoCaixa(models.Model):
 
     def delete(self, *args, **kwargs):
         competencia = self.competencia_caixa
+        # BAIXA DE PAGAMENTO ⇄ MOVIMENTO DE CAIXA: a saída gera o lançamento
+        # e a baixa foi ligada a ele. Excluir o movimento leva a baixa junto
+        # (ela devolve o valor ao saldo do pagamento).
+        baixa = self.baixa_pagamento if self.baixa_pagamento_id else None
         # Apaga também o OUTRO lado da transferência (caixa ⇄ banco).
         if self.transferencia_id:
             from admin_financeiro.models import MovimentoBancario
@@ -477,6 +487,8 @@ class MovimentoCaixa(models.Model):
                 transferencia_id=self.transferencia_id).delete()
         super().delete(*args, **kwargs)
         competencia.recalcular_saldos()
+        if baixa is not None:
+            baixa.excluir_devolvendo_saldo()
 
 
 def _transacao_movimenta_caixa(transacao):

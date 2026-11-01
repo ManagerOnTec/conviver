@@ -1,0 +1,166 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+GESTÃO DE BAIXAS de UM pagamento (modal/tela reaproveitando o layout das
+baixas de fatura).
+
+- Resumo: valor do pagamento, soma das baixas e saldo.
+- Tabela: data, valor e “Excluir” por linha (a regra da competência é
+revalidada no servidor).
+- Formulário: valor, data, transação (banco/caixa), competência.
+{% endcomment %}
+{% load static %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'css/admin_baixas_modal.css' %}">
+<style>
+  .baixas-wrap {
+    padding: 12px 16px;
+    font-size: 12.5px;
+  }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}{% endblock %}
+
+{% block content %}
+<div class="baixas-wrap">
+  {% if messages %}
+  <div class="baixas-mensagens">
+    {% for message in messages %}
+    <div class="baixas-msg baixas-msg-{{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="baixas-cab">
+    <div class="baixas-cab-titulo">
+      <h2>Baixas do pagamento {{ pagamento.pk }}</h2>
+      <span class="sub">
+        {{ pagamento.fornecedor }} · Vencimento
+        {{ pagamento.dt_vencimento|date:"d/m/Y" }}
+      </span>
+    </div>
+    {% if resumo.saldo > 0 %}
+    <span class="baixas-selo aberta">Em aberto</span>
+    {% else %}
+    <span class="baixas-selo quitada">Quitado</span>
+    {% endif %}
+  </div>
+
+  <div class="baixas-resumo">
+    <div class="baixas-kpi fatura">
+      <div class="rot">Valor do pagamento</div>
+      <div class="val">R$ {{ resumo.valor_pagamento|floatformat:2 }}</div>
+    </div>
+    <div class="baixas-kpi baixas">
+      <div class="rot">Soma das baixas ({{ resumo.qtd }})</div>
+      <div class="val">R$ {{ resumo.soma_baixas|floatformat:2 }}</div>
+    </div>
+    <div class="baixas-kpi {% if resumo.saldo > 0 %}saldo-alerta{% else %}saldo-ok{% endif %}">
+      <div class="rot">Saldo</div>
+      <div class="val">R$ {{ resumo.saldo|floatformat:2 }}</div>
+    </div>
+  </div>
+
+  <div class="baixas-secao">
+    <p class="baixas-secao-titulo">
+      <span>Saídas registradas</span>
+      <span>{{ resumo.qtd }} baixa{{ resumo.qtd|pluralize }}</span>
+    </p>
+
+    <table class="baixas-tabela">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Data</th>
+          <th>Destino</th>
+          <th class="num">Valor</th>
+          <th>Ação</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for baixa in baixas %}
+        <tr>
+          <td class="id-col">{{ baixa.pk }}</td>
+          <td>{{ baixa.dt_pagamento|date:"d/m/Y" }}</td>
+          <td>
+            {% if baixa.competencia_bancaria %}
+            Banco · {{ baixa.competencia_bancaria }}
+            {% elif baixa.competencia_caixa %}
+            Caixa · {{ baixa.competencia_caixa }}
+            {% else %}-{% endif %}
+          </td>
+          <td class="num total">R$ {{ baixa.valor_pagamento|floatformat:2 }}</td>
+          <td>
+            <form method="post" style="margin:0"
+              onsubmit="return confirm('Excluir a baixa {{ baixa.pk }}? O valor volta ao saldo do pagamento.');">
+              {% csrf_token %}
+              <input type="hidden" name="acao" value="excluir">
+              <input type="hidden" name="baixa_id" value="{{ baixa.pk }}">
+              <button type="submit" class="btn-excluir-baixa" title="Exclui a baixa e devolve o valor ao saldo">
+                Excluir
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="5" class="baixas-vazio">
+            Nenhuma baixa registrada neste pagamento.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="baixas-secao baixas-form">
+    <p class="baixas-secao-titulo"><span>Lançar nova baixa</span></p>
+    {% if form_baixa.errors %}
+    <div class="erros-baixa">
+      {{ form_baixa.non_field_errors }}
+      {% for field in form_baixa %}
+      {% for erro in field.errors %}
+      <div>{{ field.label }}: {{ erro }}</div>
+      {% endfor %}
+      {% endfor %}
+    </div>
+    {% endif %}
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="acao" value="lancar">
+      {{ form_baixa.pagamento }}
+      <div class="linha-campos">
+        <div class="campo">
+          <label for="{{ form_baixa.valor_pagamento.id_for_label }}">Valor</label>
+          {{ form_baixa.valor_pagamento }}
+        </div>
+        <div class="campo">
+          <label for="{{ form_baixa.dt_pagamento.id_for_label }}">Data</label>
+          {{ form_baixa.dt_pagamento }}
+        </div>
+        <div class="campo">
+          <label for="{{ form_baixa.transacao_financeira.id_for_label }}">Transação</label>
+          {{ form_baixa.transacao_financeira }}
+        </div>
+        <div class="campo">
+          <label for="{{ form_baixa.competencia_bancaria.id_for_label }}">Competência bancária</label>
+          {{ form_baixa.competencia_bancaria }}
+        </div>
+        <div class="campo">
+          <label for="{{ form_baixa.competencia_caixa.id_for_label }}">Competência de caixa</label>
+          {{ form_baixa.competencia_caixa }}
+        </div>
+        <div class="campo">
+          <label for="{{ form_baixa.observacao.id_for_label }}">Observação</label>
+          {{ form_baixa.observacao }}
+        </div>
+        <div class="campo campo-botao">
+          <button type="submit" class="btn-lancar">Lançar baixa</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
