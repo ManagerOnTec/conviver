@@ -352,6 +352,15 @@ class EstabelecimentoForm(FilterByStatusMixin, forms.ModelForm):
         if self.instance._state.adding:
             self.fields['status'].widget = forms.HiddenInput()
 
+        # A empresa da unidade tem de ser do TIPO estabelecimento. O vínculo
+        # já salvo é preservado para não invalidar a edição de registros
+        # antigos (o `clean()` do modelo faz o resto da validação).
+        if 'empresa' in self.fields:
+            from django.db.models import Q
+            atual = self.instance.empresa_id if self.instance.pk else None
+            self.fields['empresa'].queryset = Empresa.objects.filter(
+                Q(tipo='estabelecimento', status='A') | Q(pk=atual))
+
     def clean_estabelecimento(self):
         return self.cleaned_data['estabelecimento'].title()
 

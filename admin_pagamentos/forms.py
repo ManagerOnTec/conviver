@@ -1,4 +1,5 @@
-from .models import BaixaPagamento, ClassificacaoFornecedor, Fornecedor, ClassificacaoPagamento, Pagamento
+from .models import BaixaPagamento, ClassificacaoFornecedor, Fornecedor, ClassePagamento, Pagamento
+from admin_cadastros.models import Empresa
 from admin_financeiro.models import MovimentoBancario, CompetenciaBancaria
 from django.core.exceptions import ValidationError
 from admin_cadastros_financeiros.models import TransacaoFinanceira
@@ -27,9 +28,9 @@ class ClassificacaoFornecedorForm(forms.ModelForm):
 
 
 
-class ClassificacaoPagamentoForm(forms.ModelForm):
+class ClassePagamentoForm(forms.ModelForm):
     class Meta:
-        model = ClassificacaoPagamento
+        model = ClassePagamento
         fields = '__all__'
 
     def clean_descricao(self):
@@ -52,6 +53,18 @@ class FornecedorForm(forms.ModelForm):
     class Meta:
         model = Fornecedor
         fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Só empresas do TIPO FORNECEDOR podem virar fornecedor (a mesma
+        # tabela Empresa atende convênio e estabelecimento). O registro já
+        # salvo é preservado para não invalidar a edição.
+        if 'empresa' in self.fields:
+            from django.db.models import Q
+            atual = self.instance.empresa_id if self.instance.pk else None
+            self.fields['empresa'].queryset = Empresa.objects.filter(
+                Q(tipo='fornecedor', status='A') | Q(pk=atual)
+            )
 
     def clean(self):
         cleaned_data = super().clean()

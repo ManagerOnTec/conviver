@@ -4,7 +4,7 @@ from datetime import datetime
 from django.utils import timezone
 from django.contrib.auth.models import User
 from django.db import models
-from dominios.choices import classificacao_pessoa_choices, religiao_choices, cor_raca_choices, estado_civil_choices, nacionalidade_choices, obrigatorios_choices, sexo_choices, sn_choices, status_choices, pessoa_choices, estabelecimento_choices, pessoa_atributo_choices, empresa_atributo_choices
+from dominios.choices import classificacao_pessoa_choices, religiao_choices, cor_raca_choices, estado_civil_choices, nacionalidade_choices, obrigatorios_choices, sexo_choices, sn_choices, status_choices, pessoa_choices, estabelecimento_choices, pessoa_atributo_choices, empresa_atributo_choices, tipo_empresa_choices
 from django.core.exceptions import ValidationError
 from django import forms
 from django.contrib.contenttypes.fields import GenericForeignKey
@@ -216,6 +216,16 @@ class Pessoa(models.Model):
 
 
 class Empresa(models.Model):
+    # PAPEL da empresa. Cada vínculo exige o tipo correspondente:
+    #   fornecedor     → Fornecedor.empresa
+    #   convenio       → AcordoFaturamento.pagador_pj
+    #   estabelecimento→ Estabelecimento.empresa
+    tipo = models.CharField(
+        max_length=20, choices=tipo_empresa_choices, default='convenio',
+        verbose_name='Tipo', db_index=True,
+        help_text='Define onde esta empresa pode ser usada: fornecedor, '
+                  'convênio (pagador) ou estabelecimento.')
+
     nacionalidade = models.CharField(
         max_length=255, choices=nacionalidade_choices, default='b', verbose_name='Nacionalidade')
 
@@ -311,6 +321,21 @@ class Estabelecimento(models.Model):
             models.UniqueConstraint(
                 fields=['estabelecimento', 'status'], name='unique_estabelecimento_status')
         ]
+
+    def clean(self):
+        """A empresa do estabelecimento tem de ser do TIPO estabelecimento.
+
+        A mesma tabela `Empresa` atende fornecedor, convênio e unidade — o
+        tipo evita apontar um hospital para uma empresa de fornecedor.
+        """
+        if self.empresa_id and self.empresa.tipo != 'estabelecimento':
+            raise ValidationError({
+                'empresa': 'A empresa “%s” é do tipo “%s”. Para o '
+                           'estabelecimento, escolha uma empresa do tipo '
+                           'ESTABELECIMENTO (cadastre-a em “8. Empresas”).'
+                           % (self.empresa, self.empresa.get_tipo_display())
+            })
+        return super().clean()
 
     def __str__(self):
         return self.estabelecimento

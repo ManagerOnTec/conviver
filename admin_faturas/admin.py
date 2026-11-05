@@ -594,6 +594,9 @@ class PreFaturaAdmin(BotaoExcluirLinhaMixin, EdicaoComRegrasMixin, ExclusaoEmLot
 
 class AcordoFaturamentoAdmin(BotaoExcluirLinhaMixin, EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Select2AdminModelAdminMixin, ExportToXLSMixin, admin.ModelAdmin):
     form = AcordoFaturamentoForm
+    # Tela de ADD com os DOIS botoes: Salvar (manual) e “Importar planilha”.
+    # O template estende o change_form e so injeta o botao extra no form.
+    change_form_template = 'admin_faturas/acordo_faturamento_change_form.html'
     dashboard_competencia_field = 'inicio_vigencia'
     dashboard_vencimento_field = 'final_vigencia'
     dashboard_valor_field = 'valor_mensal'
@@ -903,8 +906,138 @@ class AcordoFaturamentoAdmin(BotaoExcluirLinhaMixin, EdicaoComRegrasMixin, Exclu
             path('gerar_prefaturas/<int:acordo_faturamento_id>/',
                  self.admin_site.admin_view(self.gerar_prefaturas_view),
                  name='gerar_prefaturas'),
+            # IMPORTAÇÃO da planilha CONVENIOS.xlsx (botão na tela de ADD).
+            path('importar-planilha/',
+                 self.admin_site.admin_view(self.importar_planilha_view),
+                 name='admin_faturas_acordofaturamento_importar'),
         ]
         return custom_urls + urls
+
+    # ------------------------------------------------------------------
+    # IMPORTAÇÃO DE PLANILHA (CONVENIOS.xlsx)
+    # ------------------------------------------------------------------
+    def add_view(self, request, form_url='', extra_context=None):
+        """Tela de ADD com o botão "Importar planilha" ao lado de Salvar.
+
+        A importação NÃO substitui o cadastro manual: a tela continua sendo
+        a de add normal, apenas com um segundo botão que leva à tela de
+        upload/pré-visualização (ver `importar_planilha_view`).
+        """
+        extra_context = dict(extra_context or {})
+        extra_context['importar_planilha_url'] = reverse(
+            'admin:admin_faturas_acordofaturamento_importar')
+        return super().add_view(request, form_url, extra_context)
+
+    def importar_planilha_view(self, request):
+        """Upload → PRÉ-VISUALIZAÇÃO → confirmação da importação.
+
+        Fluxo em duas etapas:
+
+        1. GET / POST sem `confirmar`: lê a planilha e mostra quantos
+           acordos serão criados, quais empresas/cidades nascem e as
+           divergências encontradas. NADA é gravado;
+        2. POST com `confirmar=1`: grava tudo dentro de UMA transação — se
+           qualquer acordo falhar, o lote inteiro é desfeito.
+        """
+        from urllib.parse import unquote
+        from django.template.response import TemplateResponse
+        from .importacao import ler_planilha, importar
+
+        contexto = dict(self.admin_site.each_context(request))
+        contexto.update({'title': 'Importar acordos de faturamento',
+                         'opts': self.model._meta,
+                         'model_admin': self})
+
+        if request.method == 'POST' and request.POST.get('confirmar'):
+            # Etapa 2 — GRAVAÇÃO. A planilha é relida do caminho temporário
+            # guardado na etapa 1 (não confiamos em dados vindos do POST).
+            caminho = request.session.get(
+                'importacao_acordos_arquivo')
+            if not caminho:
+                messages.error(
+                    request,
+                    'A sessão de importação expirou. Envie a planilha '
+                    'novamente.')
+                return redirect(reverse(
+                    'admin:admin_faturas_acordofaturamento_importar'))
+            try:
+                acordos, _avisos = ler_planilha(caminho)
+                estabelecimento, liberado = self._estabelecimento_da_sessao(
+                    request, getattr(request.user, 'perfil', None))
+                if estabelecimento is None:
+                    messages.error(
+                        request,
+                        'Nenhum estabelecimento definido para o usuário. '
+                        'Escolha o estabelecimento na sessão antes de '
+                        'importar.')
+                    return redirect(reverse(
+                        'admin:admin_faturas_acordofaturamento_changelist'))
+                with transaction.atomic():
+                    resumo = importar(acordos, request.user,
+                                      estabelecimento)
+                criados = len(resumo['acordos_criados'])
+                if criados:
+                    messages.success(
+                        request,
+                        f'{criados} acordo(s) importado(s) com sucesso. '
+                        f'{len(resumo["empresas_criadas"])} empresa(s) e '
+                        f'{len(resumo["cidades_criadas"])} cidade(s) '
+                        'criada(s).')
+                if resumo['acordos_ignorados']:
+                    messages.warning(
+                        request,
+                        f'{len(resumo["acordos_ignorados"])} acordo(s) '
+                        'não foram importados: veja o motivo na lista abaixo.')
+                    for cnpj, motivo in resumo['acordos_ignorados'][:10]:
+                        messages.warning(request, f'{cnpj}: {motivo}')
+            except Exception as erro:
+                messages.error(
+                    request,
+                    f'Não foi possível importar a planilha: {erro}. '
+                    'Nada foi gravado.')
+            request.session.pop('importacao_acordos_arquivo', None)
+            return redirect(reverse(
+                'admin:admin_faturas_acordofaturamento_changelist'))
+
+        # Etapa 1 — LEITURA / PRÉ-VISUALIZAÇÃO
+        if request.method == 'POST' and request.FILES.get('planilha'):
+            arquivo = request.FILES['planilha']
+            if not arquivo.name.lower().endswith(('.xlsx', '.xlsm')):
+                messages.error(
+                    request,
+                    'Envie uma planilha .xlsx (formato do Excel).')
+                return TemplateResponse(
+                    request,
+                    'admin_faturas/importar_acordos.html', contexto)
+            import tempfile
+            destino = tempfile.NamedTemporaryFile(
+                suffix='.xlsx', delete=False)
+            for chunk in arquivo.chunks():
+                destino.write(chunk)
+            destino.close()
+            request.session['importacao_acordos_arquivo'] = destino.name
+            try:
+                acordos, avisos = ler_planilha(destino.name)
+            except Exception as erro:
+                messages.error(
+                    request,
+                    f'Não foi possível ler a planilha: {erro}')
+                return TemplateResponse(
+                    request,
+                    'admin_faturas/importar_acordos.html', contexto)
+            contexto.update({
+                'acordos': acordos,
+                'avisos': avisos,
+                'total_competencias': sum(
+                    a['qtd_competencias'] for a in acordos),
+                'previa': True,
+            })
+            return TemplateResponse(
+                request,
+                'admin_faturas/importar_acordos.html', contexto)
+
+        return TemplateResponse(
+            request, 'admin_faturas/importar_acordos.html', contexto)
 
     def duplicate_button(self, obj):
         if obj.pre_faturado:

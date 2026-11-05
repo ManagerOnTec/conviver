@@ -248,42 +248,148 @@ class PagamentosDashboardMixin(AdminDashboardAndTopFilterMixin):
     def _modelo_tem_campo(self, nome):
         return any(f.name == nome for f in self.model._meta.get_fields())
 
+    def classe_fornecedor(self, obj):
+        """Classe do fornecedor para o `list_display`.
+
+        Fica no MIXIN (e não num admin específico) porque as três telas do
+        fluxo mostram a coluna: o nome acompanha o par `classe_pagamento`.
+        """
+        return obj.fornecedor.classificacao if obj.fornecedor_id else '-'
+    classe_fornecedor.short_description = "Classe Fornecedor"
+    classe_fornecedor.admin_order_field = 'fornecedor__classificacao'
+
     # ------------------------------------------------------------------
     # Dropdown do topo: fornecedor
     # ------------------------------------------------------------------
-    def get_top_dropdown_subfilters(self, request):
-        from admin_pagamentos.models import Fornecedor
+    # ------------------------------------------------------------------
+    # Lookups LIBERADOS (o Django só aceita traversal de FK por padrão)
+    # ------------------------------------------------------------------
+    LOOKUPS_LIBERADOS = (
+        'fornecedor__classificacao__id__exact',
+    )
 
-        def opcoes(param, objs, rotulo_vazio, fmt):
+    def lookup_allowed(self, lookup, value, request=None):
+        """Libera a consulta por um campo de FK ANINHADA do fornecedor.
+
+        O Django só deixa passar o lookup de chave estrangeira quando o campo
+        base está em `list_filter`/`search_fields` (traversal de 1 nível).
+        `fornecedor__classificacao` é de 2 níveis e cairia em
+        `DisallowedModelAdminLookup` (tela 400) — o seletor “Classe
+        Fornecedor” do topo usa justamente esse look-up, então ele é liberado
+        explicitamente aqui.
+        """
+        if lookup in self.LOOKUPS_LIBERADOS:
+            return True
+        try:
+            return super().lookup_allowed(lookup, value, request)
+        except TypeError:
+            # Django < 4.1 não recebe o `request`.
+            return super().lookup_allowed(lookup, value)
+
+    def get_top_dropdown_subfilters(self, request):
+        from admin_pagamentos.models import (
+            ClassificacaoFornecedor, ClassePagamento, Fornecedor)
+
+        def opcoes(param, objs, rotulo_vazio, fmt, key=None, default=None):
             atuais = set(filter(None, request.GET.getlist(param)))
             lista = [{
                 'label': rotulo_vazio,
                 'url': self._url_com(request, **{param: None}),
-                'selected': not atuais,
+                'selected': not atuais and not default,
             }]
             vistos = set()
             for obj in objs:
-                if obj.pk in vistos:
+                valor = key(obj) if key is not None else obj.pk
+                if valor in vistos:
                     continue
-                vistos.add(obj.pk)
+                vistos.add(valor)
                 lista.append({
                     'label': fmt(obj),
-                    'url': self._url_com(request, **{param: obj.pk}),
-                    'selected': str(obj.pk) in atuais,
+                    'url': self._url_com(request, **{param: valor}),
+                    'selected': (str(valor) in atuais
+                                 or (not atuais
+                                     and str(valor) == str(default))),
                 })
             return lista
 
-        if not self._modelo_tem_campo('fornecedor'):
-            return []
+        seletores = []
 
-        fornecedores = Fornecedor.objects.filter(
-            status='A').order_by('descricao')
-        return [{
-            'label': 'Fornecedor',
-            'options': opcoes(
-                'fornecedor_pagador', fornecedores, 'Todos os fornecedores',
-                lambda f: f.descricao),
-        }]
+        # FORNECEDOR (o “pagador” do fluxo de saída).
+        if self._modelo_tem_campo('fornecedor'):
+            fornecedores = Fornecedor.objects.filter(
+                status='A').order_by('descricao')
+            seletores.append({
+                'label': 'Fornecedor',
+                'options': opcoes(
+                    'fornecedor_pagador', fornecedores,
+                    'Todos os fornecedores', lambda f: f.descricao),
+            })
+
+        # CLASSE DO FORNECEDOR — NÃO tem campo próprio: é a classificação do
+        # `fornecedor` (FK do acordo, que tem a FK `classificacao`). Nos
+        # modelos derivados (pré-pagamento/pagamento) o fornecedor também
+        # existe, então o look-up `fornecedor__classificacao` vale nos três.
+        if self._modelo_tem_campo('fornecedor'):
+            param = 'fornecedor__classificacao__id__exact'
+            classificacoes = ClassificacaoFornecedor.objects.filter(
+                status='A').order_by('descricao')
+            seletores.append({
+                'label': 'Classe Fornecedor',
+                'options': opcoes(
+                    param, classificacoes, 'Todas as classes',
+                    lambda c: c.descricao),
+            })
+
+        # CLASSIFICAÇÃO DO PAGAMENTO (campo próprio no Acordo/Previsão/
+        # Pagamento, herdado pelo multitable).
+        if self._modelo_tem_campo('classe_pagamento'):
+            classificacoes = ClassePagamento.objects.filter(
+                status='A').order_by('descricao')
+            seletores.append({
+                'label': 'Classe Pagamento',
+                'options': opcoes(
+                    'classe_pagamento__id__exact', classificacoes,
+                    'Todas as classes', lambda c: c.descricao),
+            })
+
+        # ESTABELECIMENTO — seletor do topo (o mesmo padrão do fluxo de
+        # faturas). Lista os estabelecimentos LIBERADOS para o perfil (ou
+        # todos, para superuser sem perfil) — o seletor aparece SEMPRE, mesmo
+        # com um único liberado: é ali que o usuário vê e troca o recorte.
+        if self._modelo_tem_campo('estabelecimento'):
+            from admin_cadastros.models import Estabelecimento
+            perfil = getattr(request.user, 'perfil', None)
+            if perfil is not None:
+                estabelecimentos = perfil.estabelecimento.filter(
+                    status='A')
+                if perfil.estabelecimento_padrao_id:
+                    estabelecimentos = (estabelecimentos |
+                                        Estabelecimento.objects.filter(
+                                            pk=perfil.estabelecimento_padrao_id,
+                                            status='A'))
+            else:
+                estabelecimentos = Estabelecimento.objects.filter(
+                    status='A')
+            estabelecimentos = estabelecimentos.distinct().order_by(
+                'estabelecimento')
+            if estabelecimentos.exists():
+                # Mesmo parâmetro do fluxo de faturas: o Django resolve
+                # `estabelecimento__id__exact` como FILTRO DE CAMPO (a
+                # listagem recorta direto); o `EstabelecimentoFilterAdminMixin`
+                # (`parameter_name = 'estabelecimento'`) segue como o filtro da
+                # barra lateral, aplicando o padrão da sessão quando nada é
+                # escolhido aqui.
+                atual = (request.GET.get('estabelecimento__id__exact')
+                         or request.GET.get('estabelecimento'))
+                seletores.append({
+                    'label': 'Estabelecimento',
+                    'options': opcoes(
+                        'estabelecimento__id__exact', estabelecimentos,
+                        'Todos os meus', lambda e: str(e),
+                        default=atual),
+                })
+
+        return seletores
 
     # ------------------------------------------------------------------
     # KPIs (cada admin sobrescreve com os seus)

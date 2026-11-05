@@ -39,26 +39,33 @@ from .dashboard import FornecedorPagadorFilter, PagamentosDashboardMixin, \
 
 from .forms import (
     BaixaPagamentoForm, ClassificacaoFornecedorForm,
-    ClassificacaoPagamentoForm, FornecedorForm,
+    ClassePagamentoForm, FornecedorForm,
 )
 from .models import (
     AcordoPagamento, BaixaPagamento, ClassificacaoFornecedor,
-    ClassificacaoPagamento, Fornecedor, Pagamento, PrePagamento,
+    ClassePagamento, Fornecedor, Pagamento, PrePagamento,
 )
 
 
 # ----------------------------------------------------------------------
 # Cadastros auxiliares
 # ----------------------------------------------------------------------
-class ClassificacaoFornecedorAdmin(ExportToXLSMixin, admin.ModelAdmin):
+class ClassificacaoFornecedorAdmin(PagamentosDashboardMixin, ExportToXLSMixin,
+                                   admin.ModelAdmin):
+    """Cadastro simples: herda só o TOPO (barra de busca, atalhos de status e
+    indicadores) do `PagamentosDashboardMixin`, para ter o mesmo padrão das
+    telas do fluxo.
+    """
     form = ClassificacaoFornecedorForm
     actions = ['export_as_xls']
+    dashboard_valor_field = 'descricao'
     readonly_fields = ['us_registro', 'dt_registro',
                        'us_atualizacao', 'dt_atualizacao']
     list_display = ['descricao', 'observacao',
                     'us_registro', 'dt_registro', 'status']
     list_editable = ['status', 'observacao']
     list_filter = [StatusFilterAdminMixin]
+    search_fields = ['descricao', 'observacao']
     list_per_page = 99
 
     def save_model(self, request, obj, form, change):
@@ -74,15 +81,21 @@ class ClassificacaoFornecedorAdmin(ExportToXLSMixin, admin.ModelAdmin):
 admin.site.register(ClassificacaoFornecedor, ClassificacaoFornecedorAdmin)
 
 
-class ClassificacaoPagamentoAdmin(ExportToXLSMixin, admin.ModelAdmin):
-    form = ClassificacaoPagamentoForm
+class ClassePagamentoAdmin(PagamentosDashboardMixin, ExportToXLSMixin,
+                           admin.ModelAdmin):
+    """Cadastro simples: mesmo topo (busca/status/indicadores) das telas do
+    fluxo.
+    """
+    form = ClassePagamentoForm
     actions = ['export_as_xls']
+    dashboard_valor_field = 'descricao'
     readonly_fields = ['us_registro', 'dt_registro',
                        'us_atualizacao', 'dt_atualizacao']
     list_display = ['descricao', 'observacao',
                     'us_registro', 'dt_registro', 'status']
     list_editable = ['status', 'observacao']
     list_filter = [StatusFilterAdminMixin]
+    search_fields = ['descricao', 'observacao']
     list_per_page = 99
 
     def save_model(self, request, obj, form, change):
@@ -95,18 +108,25 @@ class ClassificacaoPagamentoAdmin(ExportToXLSMixin, admin.ModelAdmin):
         super().save_model(request, obj, form, change)
 
 
-admin.site.register(ClassificacaoPagamento, ClassificacaoPagamentoAdmin)
+admin.site.register(ClassePagamento, ClassePagamentoAdmin)
 
 
-class FornecedorAdmin(ExportToXLSMixin, admin.ModelAdmin):
+class FornecedorAdmin(PagamentosDashboardMixin, ExportToXLSMixin,
+                      admin.ModelAdmin):
+    """Cadastro de fornecedores: topo com busca, atalhos de status e os
+    seletores de CLASSE DO FORNECEDOR e ESTABELECIMENTO (conforme o modelo
+    tiver o campo).
+    """
     form = FornecedorForm
     actions = ['export_as_xls']
+    dashboard_valor_field = 'descricao'
     readonly_fields = ['us_registro', 'dt_registro',
                        'us_atualizacao', 'dt_atualizacao']
     list_display = ['id', 'descricao', 'empresa',
                     'pessoa', 'classificacao', 'observacao', 'dt_registro',
                     'status']
     list_filter = ['empresa', 'pessoa', StatusFilterAdminMixin]
+    search_fields = ['descricao', 'observacao']
     list_display_links = ['id', 'descricao']
     list_editable = ['observacao', 'status']
     list_per_page = 99
@@ -130,9 +150,15 @@ admin.site.register(Fornecedor, FornecedorAdmin)
 class AcordoPagamentoAdmin(
         PagamentosDashboardMixin, BotaoExcluirLinhaMixin,
         EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin,
+        AdminEstabelecimentoPadraoMixin,
         ExportToXLSMixin, admin.ModelAdmin):
-    """Acordo de pagamento — não tem campo `estabelecimento` próprio (vem
-    do fornecedor), por isso não usa o `AdminEstabelecimentoPadraoMixin`."""
+    """Acordo de pagamento.
+
+    O modelo TEM o campo `estabelecimento` (FK preenchida com o padrão da
+    sessão/perfil) → segue o padrão do resto do fluxo:
+    `AdminEstabelecimentoPadraoMixin` fixa o campo no formulário e
+    `EstabelecimentoFilterAdminMixin` recorta a listagem.
+    """
 
     # INDICADORES / FILTROS (espelho do fluxo de faturas).
     dashboard_competencia_field = 'data_inicio'
@@ -168,16 +194,21 @@ class AcordoPagamentoAdmin(
                'excluir_selecionados']
 
     list_display = ['id', 'gerar_previsoes_button', 'duplicate_button',
-                    'excluir_linha', 'fornecedor', 'classificacao_pagamento',
+                    'excluir_linha', 'fornecedor', 'fornecedor_classificacao', 'classe_pagamento',
                     'valor_previsto', 'tx_retencao', 'vl_retencao',
                     'recorrencia', 'data_inicio',
-                    'data_fim', 'pre_pago', 'status']
+                    'data_fim', 'estabelecimento', 'pre_pago', 'status']
     list_display_links = ['id', 'fornecedor']
     # EDIÇÃO EM LINHA (a mesma regra da tela): acordo que JÁ gerou previsão
     # não edita nenhuma coluna.
     list_editable_sempre = ['valor_previsto', 'tx_retencao', 'vl_retencao',
                             'recorrencia', 'status']
     list_editable = list_editable_sempre
+
+    def fornecedor_classificacao(self, obj):
+        return obj.fornecedor.classificacao
+    fornecedor_classificacao.short_description = "Classe Fornecedor"
+
 
     def get_changelist(self, request, **kwargs):
         """Listagem EDITÁVEL com o CADEADO nas linhas travadas.
@@ -211,11 +242,10 @@ class AcordoPagamentoAdmin(
             return set()
     list_editable_sempre = ['status']
     list_editable = list_editable_sempre
-    # O `AcordoPagamento` NÃO tem campo `estabelecimento` (é uma property
-    # derivada do fornecedor): o `EstabelecimentoFilterAdminMixin` filtraria
-    # por um campo inexistente e derrubaria a listagem. O recorte por
-    # estabelecimento é feito pelo FORNECEDOR (`FornecedorPagadorFilter`).
+    # O `AcordoPagamento` TEM o campo `estabelecimento` (FK preenchida com o
+    # padrão da sessão/perfil), então entra o filtro padrão do projeto.
     list_filter = [FornecedorPagadorFilter, StatusFilterAdminMixin,
+                   EstabelecimentoFilterAdminMixin,
                    'fornecedor', 'recorrencia', 'pre_pago']
     list_per_page = 99
 
@@ -403,7 +433,7 @@ class PrePagamentoAdmin(
                'excluir_selecionados']
 
     list_display = ['id', 'gerar_pagamento_button', 'excluir_linha',
-                    'fornecedor', 'classificacao_pagamento', 'valor',
+                    'fornecedor', 'classe_fornecedor', 'classe_pagamento','valor',
                     'competencia', 'dt_vencimento', 'acordo_pagamento',
                     'previsto_fechado', 'estabelecimento', 'status']
     list_display_links = ['id', 'fornecedor']
@@ -604,7 +634,7 @@ class PagamentoAdmin(
                'abrir_pagamentos_em_lote', 'excluir_selecionados']
 
     list_display = ['id', 'finalizar_pagamento_button', 'baixas_button',
-                    'excluir_linha', 'fornecedor', 'classificacao_pagamento',
+                    'excluir_linha', 'fornecedor', 'classe_fornecedor','classe_pagamento',
                     'valor_pagamento', 'valor_saldo', 'dt_vencimento',
                     'dt_liquidacao', 'estabelecimento', 'status']
     list_display_links = ['id', 'fornecedor']
@@ -913,16 +943,26 @@ admin.site.register(Pagamento, PagamentoAdmin)
 # 7. BAIXA DE PAGAMENTO — tela própria retirada (a gestão é no MODAL)
 # ----------------------------------------------------------------------
 class BaixaPagamentoAdmin(
+        PagamentosDashboardMixin,
         BotaoExcluirLinhaMixin, EdicaoComRegrasMixin,
         ExclusaoEmLoteComRegrasMixin, AdminSaveModelAuditMixin,
         AdminEstabelecimentoPadraoMixin, ExportToXLSMixin, admin.ModelAdmin):
-    """Mantido apenas para consulta/histórico; o lançamento é pelo modal."""
+    """Mantido apenas para consulta/histórico; o lançamento é pelo modal.
+
+    Herda o `PagamentosDashboardMixin` (indicadores + seletores do topo,
+    inclusive ESTABELECIMENTO) e o `AdminEstabelecimentoPadraoMixin` como as
+    demais etapas: o campo `estabelecimento` é fixado no estabelecimento da
+    sessão/perfil (aqui ele também é derivado do pagamento no `save_model`).
+    """
 
     form = BaixaPagamentoForm
     actions = ['export_as_xls', 'excluir_selecionados']
     list_editable_sempre = ['observacao', 'status']
     list_editable = list_editable_sempre
 
+    # O `estabelecimento` sai como READONLY (derivado do pagamento no
+    # `save_model`): não há campo para o mixin fixar no formulário, mas ele
+    # segue aplicando o recorte/bloqueio de sessão.
     readonly_fields = ['us_registro', 'dt_registro', 'us_atualizacao',
                        'dt_atualizacao', 'estabelecimento']
     list_display = ['id', 'excluir_linha', 'pagamento', 'competencia_bancaria',

@@ -116,6 +116,12 @@
         {% endblock %}
 
         {% block after_related_objects %}{% endblock %}
+        {% comment %}
+          O template “Faturar” da pré-FATURA é opcional: a tela de alteração
+          de OUTROS admins (ex.: Pré-Pagamento, em `admin_pagamentos`) não
+          define `faturar_form_template`. Sem o `default`, o Django levanta
+          `VariableDoesNotExist` e a tela cai em 500/302.
+        {% endcomment %}
         {% if faturar_form_template %}
           {% include faturar_form_template %}
         {% endif %}

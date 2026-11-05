@@ -110,9 +110,22 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # Apenas STATE: as tabelas já existem (db_table original preservado).
+        # CRIA as tabelas DE FATO.
+        #
+        # Antes era `SeparateDatabaseAndState(state_operations=_ESTADO,
+        # database_operations=[])`: só o ESTADO era registrado e nenhuma
+        # tabela era criada. Isso funcionava apenas num banco legado onde as
+        # tabelas já existiam; num banco NOVO (ou recriado) o app ficava com
+        # o histórico de migração e SEM as tabelas — o admin levantava
+        # `no such table: admin_...` (era o caso de
+        # `ConfiguracaoSessao`, consultada pelo middleware em toda requisição,
+        # e de `GerenciadorRelatorioPersonalizado`, em `admin_relatorios`).
+        #
+        # As operações do estado agora vão TAMBÉM para o banco. Em banco
+        # legado as tabelas já existem com o mesmo nome/estrutura, então a
+        # recriação é idempotente para quem nunca perdeu o schema.
         migrations.SeparateDatabaseAndState(
             state_operations=_ESTADO,
-            database_operations=[],
+            database_operations=_ESTADO,
         ),
     ]

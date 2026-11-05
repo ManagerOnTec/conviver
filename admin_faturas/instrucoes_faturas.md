@@ -192,9 +192,131 @@ Uso: `class XAdmin(ExclusaoEmLoteComRegrasMixin, ..., admin.ModelAdmin)` e
 - Não usar `HttpResponseRedirect` cru no meio de `delete_queryset` (as
   mensagens se perdem): recusar linha a linha com `messages` e seguir.
 
+## IMPORTAÇÃO DE ACORDOS (planilha CONVENIOS.xlsx)
+
+Tela própria em `admin_faturas/importacao.py`, aberta pelo botão
+**“Importar planilha”** que fica ao lado de **“Salvar”** na tela de **ADD**
+de AcordoFaturamento.
+
+### Regra central: linha repetida é COMPETÊNCIA, não acordo novo
+
+A planilha tem **uma linha por competência**. O mesmo órgão + cliente
+aparece em várias linhas: isso é **UM** acordo, e a repetição é a vigência.
+
+```
+grupo = (cidade_normalizada, cnpj_limpo, contrato)
+inicio_vigencia = min(EMITIDO EM)
+final_vigencia  = max(EMITIDO EM)
+qtd_competencias = nº de linhas do grupo   (relatório, não é campo)
+```
+
+### Colunas lidas
+
+| Col | Campo | Uso |
+|---|---|---|
+| [1] | CIDADE | vira `Cidade` (UF fixa **SC**); o sufixo depois de ` - ` é o setor e é **descartado** na busca da cidade |
+| [2] | CNPJ | vira `Empresa` → `pagador_pj` do acordo |
+| [3] | acolhidos | nomes de clientes (não vinculados na importação) |
+| [5] | EMITIDO EM | competência; define vigência e `dia_envio` |
+| [7] | VALOR | valor da NF daquela competência |
+| [10] | DESCRIÇÃO | decisores (abaixo) |
+
+### Decisores da descrição (colunas J e K)
+
+- `CT <n>/<ano>` ou `Contrato: <n>` → `nr_contrato`
+- `Empenho <n>` → `empenho_global`
+- `Diária de R$ <v>` → `valor_diaria`
+
+**Onde a diária pode estar (procura nesta ordem):**
+
+1. na descrição (coluna J): `Diária de R$ 375,84`;
+2. na observação (coluna K);
+3. na **FÓRMULA** da coluna de valor, no formato
+   `diária × acolhidos × dias`: `=425*9*O$1` → diária 425.
+
+**Como a fórmula é reconhecida (e como NÃO é):**
+
+| Fórmula | Diária | Por quê |
+|---|---|---|
+| `=425*9*O$1` | 425,00 | 3 fatores (diária, acolhidos, dias) |
+| `=11*31*277.52` | 277,52 | tem centavos |
+| `=12*J134` | **nenhuma** | só 1 número — o `12` é a QUANTIDADE DE DIAS |
+| `92665.91` | **nenhuma** | valor fixo, sem multiplicação |
+
+> Regra: exige **2+ fatores numéricos**; a diária é o fator com centavos
+> ou o primeiro quando todos são inteiros. Fórmulas com 1 número só são
+> dias × valor e **não** são diária.
+
+**Por diária:** `valor_diaria` recebe a diária e `valor_mensal` fica **0**
+(o valor real é recalculado mês a mês pelos dias). Sem diária:
+`valor_mensal` = VALOR e `valor_diaria` = 0.
+
+### CLIENTES (coluna D) — criados e vinculados
+
+A coluna D traz **um acolhido por linha da célula**, no formato
+`Nome - dd-mm-aa`:
+
+```
+Valci Maria Lucindo - 31-08-26
+Marli Moreira de Sa - 16-05-26
+```
+
+Cada nome vira uma `Pessoa` com `classificacao_pessoa='paciente'` e
+`dt_nascimento` da planilha, e é **vinculado ao acordo** (`acordo.cliente`).
+
+- `rg`/`cpf` vão como `None` (são `UNIQUE`; `''` quebraria no 2º cliente);
+- `sexo='f'`/`alergico='N'` são defaults da planilha (não traz o campo) —
+  ajustáveis depois na tela do paciente;
+- o MESMO nome + nascimento não é duplicado entre acordos.
+
+### LINHA VERMELHA não é competência
+
+As linhas com a **coluna A preenchida de vermelho** (`FFFF0000`) NÃO
+entram na vigência: são previsões/futuras, não competências já faturadas.
+Elas são **ignoradas** e o total aparece como alerta na pré-visualização:
+
+> *“N linha(s) em VERMELHO na planilha foram IGNORADAS da vigência…”*
+
+### Normalizações obrigatórias
+
+- CNPJ: só os 14 dígitos (aceita `"08259606000158'` com apóstrofo);
+- Cidade: sem acento/espaço extra, com título corrigido
+  (`itajai` → `Itajaí`, `camboriu` → `Camboriú`);
+- Gênero: a mesma cidade em dois CNPJs distintos = **dois** acordos.
+
+### Campos fixos na importação
+
+`modo_fatura='CL'`, `modalidade_contrato='CO'`, `dias_pagamento=30`,
+`dia_envio` = dia do primeiro `EMITIDO EM`, `descricao_internacao='acolhimento'`,
+retenções zeradas, `estabelecimento` = o da sessão/perfil.
+
+### Fluxo em duas etapas (nada grava na etapa 1)
+
+1. **Upload** → a view lê e mostra: quantos acordos, quantas competências,
+   empresas/cidades que serão criadas e as **divergências**;
+2. **Confirmar** → grava tudo em **UMA** transação (falha → lote inteiro
+   desfeito).
+
+Divergências reportadas sem bloquear: valores diferentes no mesmo grupo
+(usa o primeiro) e linhas com CNPJ inválido. Linhas separadoras (`-`) são
+ignoradas silenciosamente.
+
+### Não fazer na importação
+
+- Não criar um acordo por linha (a linha é competência);
+- Não criar duplicado se a previsão já gerou pagamento — a importação só
+  cria acordos **novos**;
+- Não confiar em dados do POST na etapa 2: a planilha é **relida** do
+  arquivo temporário guardado na sessão.
+
 ## Como testar
 
 - Em `with transaction.atomic():` + `raise RuntimeError('rollback')`.
 - Cenários: fatura finalizada / com baixa / aberta sem movimento; pré-fatura com
   e sem fatura; baixa associada; convênio com e sem pré-fatura gerada.
+- **Importação**: `ler_planilha()` deve agrupar as linhas repetidas em UM
+  acordo por `(cidade, cnpj, contrato)`; a prévia NÃO pode gravar nada;
+  confirmar deve criar todos em uma transação. Com a `CONVENIOS.xlsx` atual:
+  **33 acordos / 280 competências / 76 clientes** (39 linhas vermelhas
+  ignoradas).
 - `python manage.py check` antes de concluir.

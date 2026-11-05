@@ -14,6 +14,7 @@ from dominios.choices import (
 from django.contrib.auth.models import User
 from admin_cadastros.models import Estabelecimento, Pessoa, Empresa
 import calendar
+from django.core.exceptions import ValidationError
 from admin_financeiro.models import CompetenciaBancaria, MovimentoBancario
 from dominios.utils import EncryptedTextField, validate_anexo_file
 from django.core.validators import FileExtensionValidator
@@ -128,6 +129,22 @@ class AcordoFaturamento(models.Model):
                     'ser excluído. Exclua primeiro a PRÉ-FATURA, em '
                     '“2. Pré-Faturas”.')
         return None
+
+    def clean(self):
+        """O PAGADOR PJ tem de ser uma empresa do TIPO convênio.
+
+        A mesma tabela `Empresa` atende fornecedor, convênio e unidade — o
+        tipo evita lançar um convênio com CNPJ de fornecedor.
+        """
+        if self.pagador_pj_id and self.pagador_pj.tipo != 'convenio':
+            raise ValidationError({
+                'pagador_pj': 'A empresa “%s” é do tipo “%s”. Como pagador '
+                               'do convênio, escolha uma empresa do tipo '
+                               'CONVÊNIO (cadastre-a em “8. Empresas”).'
+                               % (self.pagador_pj,
+                                  self.pagador_pj.get_tipo_display())
+            })
+        return super().clean()
 
 
 class PreFatura(models.Model):

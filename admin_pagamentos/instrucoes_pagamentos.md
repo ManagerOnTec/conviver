@@ -95,10 +95,119 @@ EXCLUIR:  Acordo ◄── Pré-Pagamento ◄── Pagamento ◄── Baixa �
   competência de caixa (obrigatória, **aberta**). **Nunca os dois.**
 - Regra de valor: **> 0** e **≤ saldo** do pagamento.
 
+## Estabelecimento — sessão/padrão (mixin obrigatório)
+
+Os quatro admins do fluxo usam **`AdminEstabelecimentoPadraoMixin`**
+(AGENTS.md, item 9.a) + `EstabelecimentoFilterAdminMixin` nos filtros.
+
+| Admin | Campo `estabelecimento` | Como o recorte é feito |
+|---|---|---|
+| **AcordoPagamento** | **FK própria** (antes era `property`) | padrão do mixin |
+| PrePagamento | próprio | padrão do mixin |
+| Pagamento | herdado (multitable) | padrão do mixin |
+| BaixaPagamento (modal/histórico) | próprio | padrão do mixin |
+
+**Regra do mixin** (`dominios/utils.py::AdminEstabelecimentoPadraoMixin`):
+
+1. **sessão** (`request.session['estabelecimento_id']`) **liberada** para o
+   perfil → o campo é fixado nesse estabelecimento;
+2. **sessão não liberada** → `PermissionDenied` (nunca cair em outro em
+   silêncio);
+3. **sem sessão** → `estabelecimento_padrao` do perfil;
+4. **usuário sem perfil** (superuser puro) → não restringe;
+5. **escolha manual** no filtro do topo prevalece, limitada aos liberados.
+
+O usuário **nunca** troca o estabelecimento pelo formulário (o campo sai
+desabilitado); filtrar por outro é possível somente pelo seletor do topo.
+
+> Modelo SEM o campo (o caso do Acordo): o mixin não fixa nada no form e o
+> recorte da listagem passa a usar **`estabelecimento_lookup`**. Sem isso, ou
+> se usa o `EstabelecimentoFilterAdminMixin` num modelo que não tem o campo,
+> a tela quebra com `FieldError`.
+
+## Indicadores e FILTROS do TOPO (espelho de `admin_faturas`)
+
+Todos os admins herdam `PagamentosDashboardMixin` (`admin_pagamentos/dashboard.py`) —
+**inclusive os três cadastros auxiliares** (Classe Fornecedor, Classe
+Pagamento e Fornecedor), que antes eram `admin.ModelAdmin` puro e não tinham
+barra de busca/indicadores/atalhos:
+
+| Admin | Busca | Indicadores | Atalhos de status | Seletores do topo |
+|---|---|---|---|---|
+| Classe Fornecedor | ✅ | ✅ | ✅ | — |
+| Classe Pagamento | ✅ | ✅ | ✅ | — |
+| Fornecedor | ✅ | ✅ | ✅ | Classe Fornecedor + Estabelecimento |
+| Acordo / Pré / Pagamento / Baixa | ✅ | ✅ | ✅ | Fornecedor, Classe Fornecedor, Classe Pagamento, Estabelecimento |
+
+Os cadastros precisam de **`search_fields`** para a barra de busca aparecer —
+sem ele o `PagamentosDashboardMixin` renderiza os KPIs e os atalhos, mas
+nenhum campo de digitação.
+
+- **presets de período** (Todos / competência atual e anterior / vencidas /
+  a vencer) montados sobre `dashboard_competencia_field` e
+  `dashboard_vencimento_field`;
+- **atalhos** de status, pré-pago/previsto e finalizado/aberto, e de saldo
+  (em aberto / pago) quando o modelo tem `valor_saldo`;
+- **dropdowns seletores do topo** (`get_top_dropdown_subfilters`), cada um
+  com a opção “Todos …” que **remove só aquele parâmetro** (os demais
+  filtros continuam aplicados):
+
+| Seletor | Parâmetro da URL | Aparece em |
+|---|---|---|
+| **Fornecedor** | `fornecedor_pagador` | acordo, pré-pagamento, pagamento |
+| **Classe Fornecedor** | `fornecedor__classificacao__id__exact` | acordo, pré-pagamento, pagamento |
+| **Classe Pagamento** | `classe_pagamento__id__exact` | acordo, pré-pagamento, pagamento |
+| **Estabelecimento** | `estabelecimento__id__exact` | acordo, pré-pagamento, pagamento, **baixa** e **movimento** |
+
+> **O seletor de estabelecimento aparece SEMPRE** que o modelo tem o campo —
+> mesmo quando o perfil enxerga um único estabelecimento. É ali que o usuário
+> vê e troca o recorte; escondê-lo por “só tem um” deixava a opção
+> inacessível.
+>
+> Ele lista os **liberados** do perfil (mais o `estabelecimento_padrao`) ou
+> todos, para superuser sem perfil, e marca o `default` no item atual.
+>
+> O parâmetro é `estabelecimento__id__exact` — o mesmo do fluxo de faturas,
+> resolvido pelo Django como **filtro de campo** (recorta direto). O
+> `EstabelecimentoFilterAdminMixin` (`parameter_name = 'estabelecimento'`)
+> continua sendo o filtro da barra lateral e aplica o padrão da sessão quando
+> nada é escolhido. Ver também `get_top_dropdown_subfilters` de
+> `admin_faturas/dashboard.py` (usado por Movimento).
+
+O seletor só é renderizado quando o **modelo tem o campo**
+(`_modelo_tem_campo`).
+
+**Classe do fornecedor NÃO é um campo próprio:** é `fornecedor.classificacao`
+(a FK `Fornecedor.classificacao`). O acordo aponta para o `fornecedor`, e é
+por ele que o filtro entra — look-up `fornecedor__classificacao__id__exact`,
+que vale nos três modelos (todos têm `fornecedor`).
+
+> **Traversal de FK aninhada:** o Django só aceita lookup de FK de **1 nível**
+> e apenas quando o campo base está em `list_filter`/`search_fields`; com
+> `fornecedor__classificacao` ele levanta `DisallowedModelAdminLookup` (tela
+> **400**, “Filtering by … not allowed”). A liberação é explícita:
+>
+> ```python
+> LOOKUPS_LIBERADOS = ('fornecedor__classificacao__id__exact',)
+>
+> def lookup_allowed(self, lookup, value, request=None):
+>     if lookup in self.LOOKUPS_LIBERADOS:
+>         return True
+>     ...
+> ```
+>
+> Fica em `PagamentosDashboardMixin`, então vale para acordo, pré-pagamento e
+> pagamento. **Não** crie um campo `classificacao_fornecedor` no modelo para
+> “resolver” isto: o determinante é o fornecedor, e a cópia duplicaria dado
+> que já está a um `JOIN` de distância.
+
+- **Limpar todos os filtros**: cada tela tem o botão que devolve a lista
+  sem nenhum parâmetro (o “Todos” de cada grupo é peça da mesma família).
+
 ## Menu e telas (ordem)
 
 - `1. Classificação Fornecedores`
-- `2. Classificação Pagamentos`
+- `2. Classes Pagamentos`
 - `3. Fornecedores`
 - `4. Acordos de Pagamento` — botões **Gerar previsões** e **Duplicar**
 - `5. Pré-Pagamentos` — botão **Gerar pagamento**
@@ -113,7 +222,7 @@ Mesma regra do **Duplicar** do `AcordoFaturamento`:
 - o botão só fica ativo depois que o acordo **gerou as previsões**
   (`pre_pago=True`); antes disso sai **cinza**;
 - a ação cria um **acordo NOVO** copiando o contrato
-  (`fornecedor`, `classificacao_pagamento`, `valor_previsto`,
+  (`fornecedor`, `classe_pagamento`, `valor_previsto`,
   `dia_pagamento`, `recorrencia`, `data_inicio`, `data_fim`,
   `forma_pagamento`, `observacao`), com:
   - `pre_pago = False` — **nenhuma previsão** é copiada (a nova despesa

@@ -855,6 +855,12 @@ class AdminEstabelecimentoPadraoMixin:
     - Só quem não tem perfil (superuser puro) continua escolhendo livremente.
     """
 
+    # Modelos SEM o campo `estabelecimento` (ex.: `AcordoPagamento`, onde ele
+    # é uma property derivada do fornecedor): o recorte é feito por este
+    # caminho de look-up. `None` = modelo tem o campo próprio (comportamento
+    # padrão).
+    estabelecimento_lookup = None
+
     @staticmethod
     def _estabelecimento_da_sessao(request, perfil):
         """

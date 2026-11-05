@@ -287,6 +287,18 @@ class ModuloProntuarioFilter(admin.SimpleListFilter):
 class RelatorioAdmin(AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
     dashboard_date_field = 'dt_registro'
 
+    def get_changelist(self, request, **kwargs):
+        """A listagem usa o template editável do projeto
+        (`templates/admin/change_list.html` -> `change_list_results_editavel.
+        html`), que monta a tabela a partir de `cl.linhas_renderizadas`.
+
+        Sem esta troca o Django usa o `ChangeList` PADRÃO, que não tem esse
+        atributo: o `{% if cl.linhas_renderizadas %}` falha no lookup (log de
+        `VariableDoesNotExist`) e a listagem cai no `{% result_list cl %}`.
+        """
+        from admin_faturas.changelist_editavel import ChangeListEditavel
+        return ChangeListEditavel
+
     def get_dashboard_kpis(self, request, queryset):
         total_listagem = queryset.count()
         total_ativos = queryset.filter(status='A').count()

@@ -15,6 +15,18 @@ from django.core.validators import FileExtensionValidator
 User = get_user_model()
 
 
+def _padrao():
+    """Estabelecimento de FALLBACK (último recurso).
+
+    Usado só quando o acordo antigo ainda não tem `estabelecimento` e não há
+    como derivá-lo do fornecedor: a previsão precisa de UM estabelecimento
+    (campo obrigatório) e nunca deve nascer sem vínculo. Em operação normal
+    o acordo já vem com o padrão da sessão/perfil.
+    """
+    return Estabelecimento.objects.filter(status='A').first() \
+        or Estabelecimento.objects.first()
+
+
 class ClassificacaoFornecedor(models.Model):
     descricao = models.CharField(
         max_length=255, verbose_name='Classificacao do Fornecedor')
@@ -42,9 +54,14 @@ class ClassificacaoFornecedor(models.Model):
     
 
 
-class ClassificacaoPagamento(models.Model):
+class ClassePagamento(models.Model):
+    """CLASSE de pagamento (antes `ClassificacaoPagamento`).
+
+    Nome curto por decisão de projeto: o rótulo das telas e a FK nos modelos
+    do fluxo (`classe_pagamento`) seguem o mesmo nome — sem alias.
+    """
     descricao = models.CharField(
-        max_length=255, verbose_name='Classificacao do Pagamento')
+        max_length=255, verbose_name='Classe do Pagamento')
 
     observacao = models.CharField(
         max_length=80, verbose_name='Observações', blank=True, null=True
@@ -61,8 +78,9 @@ class ClassificacaoPagamento(models.Model):
         max_length=1, choices=status_choices, default='A', verbose_name='Status')
 
     class Meta:
-        verbose_name = "Classificacao Pagamento"
-        verbose_name_plural = "2. Classificação Pagamentos"
+        verbose_name = "Classe Pagamento"
+        verbose_name_plural = "2. Classes Pagamentos"
+        db_table = 'admin_pagamentos_classificacaopagamento'
 
     def __str__(self):
         return self.descricao
@@ -100,6 +118,17 @@ class Fornecedor(models.Model):
         verbose_name = "Fornecedor"
         verbose_name_plural = "3. Fornecedores"
 
+    def clean(self):
+        """A empresa do fornecedor tem de ser do TIPO fornecedor."""
+        if self.empresa_id and self.empresa.tipo != 'fornecedor':
+            raise ValidationError({
+                'empresa': 'A empresa “%s” é do tipo “%s”. Para fornecedor, '
+                           'escolha uma empresa do tipo FORNECEDOR '
+                           '(cadastre-a em “8. Empresas”).'
+                           % (self.empresa, self.empresa.get_tipo_display())
+            })
+        return super().clean()
+
     def __str__(self):
         return self.descricao
 
@@ -124,9 +153,9 @@ class AcordoPagamento(models.Model):
     fornecedor = models.ForeignKey(
         Fornecedor, on_delete=models.PROTECT, verbose_name='Fornecedor'
     )
-    classificacao_pagamento = models.ForeignKey(
-        ClassificacaoPagamento, on_delete=models.PROTECT,
-        verbose_name='Classificação Pagamento', blank=True, null=True)
+    classe_pagamento = models.ForeignKey(
+        ClassePagamento, on_delete=models.PROTECT,
+        verbose_name='Classe Pagamento', blank=True, null=True)
     valor_previsto = models.DecimalField(
         max_digits=10, decimal_places=2, verbose_name='Valor Previsto'
     )
@@ -170,6 +199,14 @@ class AcordoPagamento(models.Model):
     # Marca que as previsões foram geradas (evita gerar duas vezes).
     pre_pago = models.BooleanField(default=False, verbose_name='Pré-Pago')
 
+    # ESTABELECIMENTO do acordo. Era uma `property` derivada do fornecedor;
+    # agora é campo PRÓPRIO (FK), preenchido com o estabelecimento padrão da
+    # sessão/perfil — a mesma régua do resto do fluxo. O recorte e a grade
+    # passam a usar o campo direto (`AdminEstabelecimentoPadraoMixin`).
+    estabelecimento = models.ForeignKey(
+        Estabelecimento, on_delete=models.PROTECT,
+        verbose_name='Estabelecimento', blank=True, null=True)
+
     us_registro = models.ForeignKey(
         User, related_name='parametro_registro', on_delete=models.PROTECT
     )
@@ -189,18 +226,6 @@ class AcordoPagamento(models.Model):
         verbose_name = 'Acordo de Pagamento'
         verbose_name_plural = '4. Acordos de Pagamento'
 
-    @property
-    def estabelecimento(self):
-        """O estabelecimento do acordo (via fornecedor → empresa/pessoa)."""
-        if self.fornecedor_id is None:
-            return None
-        forn = self.fornecedor
-        if forn.empresa_id and hasattr(forn.empresa, 'estabelecimento_set'):
-            est = forn.empresa.estabelecimento_set.first()
-            if est is not None:
-                return est
-        return Estabelecimento.objects.first()
-
     def __str__(self):
         fornecedor = self.fornecedor.descricao if self.fornecedor \
             else 'Fornecedor não definido'
@@ -209,6 +234,18 @@ class AcordoPagamento(models.Model):
     # ------------------------------------------------------------------
     # REGRAS (espelho do AcordoFaturamento)
     # ------------------------------------------------------------------
+    def save(self, *args, **kwargs):
+        """ESTABELECIMENTO: nenhum acordo nasce sem vínculo.
+
+        O form do admin já carrega o padrão da sessão/perfil
+        (`AdminEstabelecimentoPadraoMixin`); esta é a rede de segurança para
+        o acordo criado FORA do admin (script, shell, fixtures) — que sem
+        isso deixaria a previsão sem estabelecimento (campo obrigatório).
+        """
+        if self.estabelecimento_id is None:
+            self.estabelecimento = _padrao()
+        return super().save(*args, **kwargs)
+
     def motivo_recusa_edicao(self):
         if self.pk is None:
             return None
@@ -277,7 +314,7 @@ class AcordoPagamento(models.Model):
                 PrePagamento.objects.create(
                     acordo_pagamento=self,
                     fornecedor=self.fornecedor,
-                    classificacao_pagamento=self.classificacao_pagamento,
+                    classe_pagamento=self.classe_pagamento,
                     valor=self.valor_previsto,
                     competencia=venc,
                     dt_vencimento=venc,
@@ -286,7 +323,10 @@ class AcordoPagamento(models.Model):
                     # + valor fixo), como na pré-fatura.
                     tx_retencao=self.tx_retencao,
                     vl_retencao=self.vl_retencao,
-                    estabelecimento=self.estabelecimento,
+                    # ESTABELECIMENTO: o da sessão/perfil quando o acordo
+                    # estiver sem vínculo (acordo antigo) — o campo é
+                    # obrigatório na previsão.
+                    estabelecimento=self.estabelecimento or _padrao(),
                     us_registro=self.us_registro,
                     observacao=f'Previsão gerada do acordo #{self.pk}',
                 )
@@ -316,9 +356,9 @@ class PrePagamento(models.Model):
         related_name='prepagamentos', blank=True, null=True, verbose_name='Acordo de Pagamento')
     fornecedor = models.ForeignKey(
         Fornecedor, on_delete=models.PROTECT, verbose_name='Fornecedor')
-    classificacao_pagamento = models.ForeignKey(
-        ClassificacaoPagamento, on_delete=models.PROTECT,
-        verbose_name='Classificação Pagamento', blank=True, null=True)
+    classe_pagamento = models.ForeignKey(
+        ClassePagamento, on_delete=models.PROTECT,
+        verbose_name='Classe Pagamento', blank=True, null=True)
 
     valor = models.DecimalField(
         max_digits=10, decimal_places=2, verbose_name='Valor Previsto')

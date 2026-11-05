@@ -10,6 +10,7 @@ demais (ver “Padrão obrigatório dos admins” abaixo).
 | `admin_tesouraria/` | `instrucoes_tesouraria.md` | caixas, competências de caixa, movimentos de caixa, conferência |
 | `admin_faturas/` | `instrucoes_faturas.md` | faturas, baixas, empacotamento, listagem editável |
 | `admin_pagamentos/` | `instrucoes_pagamentos.md` | baixas de pagamento (banco **ou** caixa) |
+| `admin_cadastros/` | `instrucoes_cadastros.md` | pessoas, empresas (`tipo`), estabelecimentos, barra de KPIs/filtros |
 | `dominios/` | `instrucoes_dominios.md` | mixins, breadcrumbs, widgets, utils (vale para todos) |
 
 > Se o app ainda não tem `instrucoes_*.md`, crie-o antes de implementar —

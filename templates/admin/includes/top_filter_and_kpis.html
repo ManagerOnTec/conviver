@@ -131,6 +131,15 @@
     {% if top_dropdown_subfilters %}
     <div class="top-filter-row top-filter-selects">
       {% for sub in top_dropdown_subfilters %}
+        {% if sub.is_clear %}
+          {# Botão "Limpar filtros": zera SÓ os parâmetros da barra de topo
+             e preserva busca/laterais, que têm filtros próprios. #}
+          <a href="{{ sub.options.0.value }}" class="top-preset-btn"
+             title="Zera mês, idade, tipo e sexo (mantém a busca e os filtros laterais)">
+            <i class="fas fa-eraser"></i>
+            <span>{{ sub.options.0.label }}</span>
+          </a>
+        {% else %}
         <label class="top-subfilter-group">
           <span class="filter-group-label">{{ sub.label }}:</span>
           <select class="top-subfilter-select" onchange="if (this.value) window.location.href=this.value;">
@@ -139,6 +148,7 @@
             {% endfor %}
           </select>
         </label>
+        {% endif %}
       {% endfor %}
     </div>
     {% endif %}

@@ -8,7 +8,7 @@ from django.core.exceptions import ValidationError
 from django import forms
 from dominios.utils import FilterByStatusMixin
 from .models import AcordoFaturamento
-from admin_cadastros.models import Estabelecimento, Pessoa
+from admin_cadastros.models import Empresa, Estabelecimento, Pessoa
 from django.db import models
 
 
@@ -44,6 +44,15 @@ class AcordoFaturamentoForm(FilterByStatusMixin, forms.ModelForm):
         )
         # O select2 de múltipla escolha dispensa o help_text de "Ctrl/Cmd".
         self.fields['cliente'].help_text = None
+
+        # PAGADOR PJ: só empresas do TIPO convênio (a mesma tabela Empresa
+        # atende fornecedor e estabelecimento). O vínculo já salvo é
+        # preservado para não invalidar a edição de registros antigos.
+        if 'pagador_pj' in self.fields:
+            from django.db.models import Q
+            atual = self.instance.pagador_pj_id if self.instance.pk else None
+            self.fields['pagador_pj'].queryset = Empresa.objects.filter(
+                Q(tipo='convenio', status='A') | Q(pk=atual))
 
     def clean(self):
         cleaned_data = super().clean()

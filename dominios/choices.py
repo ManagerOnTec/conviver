@@ -421,3 +421,21 @@ classificacao_pessoa_choices = (
     ('paciente', 'Paciente'),
     ('funcionario', 'Funcionário'),
 )
+
+
+# TIPO DE EMPRESA ###########################################
+# A mesma tabela `Empresa` atende papéis diferentes no sistema. O `tipo`
+# diz QUAL papel aquele CNPJ exerce, e cada vínculo exige o tipo certo:
+#
+#   Fornecedor     → `Fornecedor.empresa` (fluxo de SAÍDA, admin_pagamentos)
+#   Convênio       → `AcordoFaturamento.pagador_pj` (fluxo de ENTRADA)
+#   Estabelecimento→ `Estabelecimento.empresa` (a própria unidade)
+#
+# Sem isso, o mesmo cadastro de empresa aparece em todos os selects e um
+# hospital pode virar “fornecedor” por simples escolha errada.
+tipo_empresa_choices = (
+    ('fornecedor', 'Fornecedor'),
+    ('convenio', 'Convênio'),
+    ('estabelecimento', 'Estabelecimento'),
+)
+# FIM CHOICES ###############################################

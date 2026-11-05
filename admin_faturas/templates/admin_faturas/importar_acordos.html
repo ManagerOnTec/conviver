@@ -1,0 +1,122 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% comment %}
+IMPORTAR ACORDOS DE FATURAMENTO (CONVENIOS.xlsx).
+
+Duas etapas no MESMO template:
+1. sem `previa` → só o formulário de upload;
+2. com `previa` → tabela do que SERÁ criado + divergências + botão
+“Confirmar importação”.
+
+Nada é gravado na etapa 1: a view só lê e mostra.
+{% endcomment %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Início</a>
+  &rsaquo; <a href="{% url 'admin:admin_faturas_acordofaturamento_changelist' %}">Acordos de Faturamento</a>
+  &rsaquo; Importar planilha
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="impor-wrap" style="padding:12px 16px;max-width:1400px">
+
+  {% if messages %}
+  <ul class="messagelist">
+    {% for m in messages %}<li class="{{ m.tags }}">{{ m }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+
+  <h1 style="font-size:18px;margin:0 0 6px">Importar acordos de faturamento</h1>
+  <p style="color:#6b7280;font-size:12px;margin:0 0 14px">
+    Planilha <strong>CONVENIOS.xlsx</strong>. Cada linha é uma competência;
+    linhas repetidas do mesmo órgão + cliente formam <strong>um</strong> acordo
+    (a vigência vai da primeira à última emissão).
+  </p>
+
+  {% if not previa %}
+  <form method="post" enctype="multipart/form-data"
+    style="border:1px solid #e5e7eb;border-radius:6px;padding:14px;background:#f9fafb;max-width:560px">
+    {% csrf_token %}
+    <label for="planilha" style="display:block;font-size:12px;font-weight:600;margin-bottom:6px">
+      Arquivo (.xlsx)
+    </label>
+    <input type="file" name="planilha" id="planilha" accept=".xlsx,.xlsm" required
+      style="display:block;margin-bottom:12px;font-size:12px">
+    <button type="submit" class="button default">Ler planilha e pré-visualizar</button>
+    <a class="button" style="margin-left:8px" href="{% url 'admin:admin_faturas_acordofaturamento_add' %}">Voltar ao
+      cadastro</a>
+  </form>
+
+  {% else %}
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+    <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px 14px;background:#f9fafb">
+      <div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:600">Acordos a criar</div>
+      <div style="font-size:18px;font-weight:700">{{ acordos|length }}</div>
+    </div>
+    <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px 14px;background:#f9fafb">
+      <div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:600">Competências somadas</div>
+      <div style="font-size:18px;font-weight:700">{{ total_competencias }}</div>
+    </div>
+  </div>
+
+  {% if avisos %}
+  <div style="margin-bottom:12px;border:1px solid #e0a800;background:#fff8e1;border-radius:6px;padding:10px 14px">
+    <strong style="font-size:12px">Divergências encontradas ({{ avisos|length }})</strong>
+    <ul style="margin:6px 0 0 18px;font-size:12px;color:#713f12">
+      {% for nivel, msg in avisos %}<li>{{ msg }}</li>{% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <div style="overflow:auto;max-height:60vh;border:1px solid #e5e7eb;border-radius:6px">
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead>
+        <tr style="background:#f3f4f6;position:sticky;top:0">
+          <th style="padding:5px 8px;text-align:left">Cidade</th>
+          <th style="padding:5px 8px;text-align:left">CNPJ (pagador)</th>
+          <th style="padding:5px 8px;text-align:left">Contrato</th>
+          <th style="padding:5px 8px;text-align:center">Compet.</th>
+          <th style="padding:5px 8px;text-align:left">Vigência</th>
+          <th style="padding:5px 8px;text-align:right">Valor mensal</th>
+          <th style="padding:5px 8px;text-align:right">Diária</th>
+          <th style="padding:5px 8px;text-align:left">Empenho</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in acordos %}
+        <tr style="border-bottom:1px solid #eef0f3">
+          <td style="padding:4px 8px">{{ a.cidade_rotulo }}</td>
+          <td style="padding:4px 8px;font-variant-numeric:tabular-nums">{{ a.cnpj }}</td>
+          <td style="padding:4px 8px">{{ a.nr_contrato|default:"—" }}</td>
+          <td style="padding:4px 8px;text-align:center">{{ a.qtd_competencias }}</td>
+          <td style="padding:4px 8px;white-space:nowrap">
+            {{ a.inicio_vigencia|date:"d/m/Y" }} → {{ a.final_vigencia|date:"d/m/Y" }}
+          </td>
+          <td style="padding:4px 8px;text-align:right">{{ a.valor_mensal }}</td>
+          <td style="padding:4px 8px;text-align:right">{{ a.valor_diaria }}</td>
+          <td style="padding:4px 8px">{{ a.empenho_global|default:"—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <form method="post" style="margin-top:14px">
+    {% csrf_token %}
+    <input type="hidden" name="confirmar" value="1">
+    <button type="submit" class="button default"
+      onclick="return confirm('Gravar {{ acordos|length }} acordo(s) agora?')">
+      Confirmar importação ({{ acordos|length }} acordo(s))
+    </button>
+    <a class="button" style="margin-left:8px" href="{% url 'admin:admin_faturas_acordofaturamento_importar' %}">
+      Enviar outra planilha
+    </a>
+    <a class="button" style="margin-left:8px" href="{% url 'admin:admin_faturas_acordofaturamento_changelist' %}">
+      Cancelar
+    </a>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}
