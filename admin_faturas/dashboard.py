@@ -275,10 +275,35 @@ class FaturasDashboardMixin(AdminDashboardAndTopFilterMixin):
         acordo_filtro = (request.GET.get('acordo_faturamento_pagador')
                          or request.GET.get('AcordoFaturamento_pagador'))
         if acordo_filtro:
+            # AcordoFaturamento possui um CharField com o mesmo nome do
+            # modelo (`acordo_faturamento`); só Pré-Fatura/Fatura possuem a
+            # relação FK. Não confundir a coincidência de nome com relação.
+            tem_acordo = any(
+                campo.name == 'acordo_faturamento' and campo.is_relation
+                for campo in self.model._meta.get_fields()
+            )
             if acordo_filtro.startswith('pj:'):
-                queryset = queryset.filter(pagador_pj_id=acordo_filtro[3:])
+                pagador_id = acordo_filtro[3:]
+                if tem_acordo:
+                    # Pré-Faturas/Faturas mantêm o pagador copiado no registro,
+                    # mas também consultamos o acordo de origem para incluir
+                    # registros históricos/importados cujo snapshot esteja nulo
+                    # ou divergente.
+                    queryset = queryset.filter(
+                        models.Q(pagador_pj_id=pagador_id)
+                        | models.Q(pagador_pj__isnull=True,
+                                   acordo_faturamento__pagador_pj_id=pagador_id))
+                else:
+                    queryset = queryset.filter(pagador_pj_id=pagador_id)
             elif acordo_filtro.startswith('pf:'):
-                queryset = queryset.filter(pagador_pf_id=acordo_filtro[3:])
+                pagador_id = acordo_filtro[3:]
+                if tem_acordo:
+                    queryset = queryset.filter(
+                        models.Q(pagador_pf_id=pagador_id)
+                        | models.Q(pagador_pf__isnull=True,
+                                   acordo_faturamento__pagador_pf_id=pagador_id))
+                else:
+                    queryset = queryset.filter(pagador_pf_id=pagador_id)
             elif acordo_filtro.startswith(('acordo:', 'AcordoFaturamento:')):
                 pk_val = acordo_filtro.split(':', 1)[1]
                 if self.model._meta.model_name == 'acordofaturamento':
@@ -317,18 +342,45 @@ class FaturasDashboardMixin(AdminDashboardAndTopFilterMixin):
         def pagadores():
             from admin_faturas.models import AcordoFaturamento
             grupos = {}
-            for acordo in AcordoFaturamento.objects.filter(status='A').select_related(
-                    'pagador_pj', 'pagador_pf'):
-                if acordo.pagador_pj_id:
-                    chave = f'pj:{acordo.pagador_pj_id}'
-                    rotulo = str(acordo.pagador_pj)
-                elif acordo.pagador_pf_id:
-                    chave = f'pf:{acordo.pagador_pf_id}'
-                    rotulo = str(acordo.pagador_pf)
-                else:
-                    chave = f'acordo:{acordo.pk}'
-                    rotulo = f'{acordo.acordo_faturamento} (sem pagador)'
-                grupos.setdefault(chave, rotulo)
+            tem_acordo_relacionado = any(
+                campo.name == 'acordo_faturamento' and campo.is_relation
+                for campo in self.model._meta.get_fields()
+            )
+            if tem_acordo_relacionado:
+                # Na listview de Pré-Faturas/Faturas, derive as opções dos
+                # registros dessas telas, incluindo seus acordos relacionados.
+                # Esse select_related NÃO pode ser usado na listview de acordos,
+                # porque AcordoFaturamento não tem relação consigo mesmo.
+                registros = self.model._default_manager.select_related(
+                    'pagador_pj', 'pagador_pf',
+                    'acordo_faturamento__pagador_pj',
+                    'acordo_faturamento__pagador_pf',
+                )
+                for registro in registros:
+                    acordo = registro.acordo_faturamento
+                    pagador_pj = registro.pagador_pj or acordo.pagador_pj
+                    pagador_pf = registro.pagador_pf or acordo.pagador_pf
+                    if pagador_pj:
+                        chave, rotulo = f'pj:{pagador_pj.pk}', str(pagador_pj)
+                    elif pagador_pf:
+                        chave, rotulo = f'pf:{pagador_pf.pk}', str(pagador_pf)
+                    else:
+                        chave = f'acordo:{acordo.pk}'
+                        rotulo = f'{acordo.acordo_faturamento} (sem pagador)'
+                    grupos.setdefault(chave, rotulo)
+            else:
+                for acordo in AcordoFaturamento.objects.filter(status='A').select_related(
+                        'pagador_pj', 'pagador_pf'):
+                    if acordo.pagador_pj_id:
+                        chave = f'pj:{acordo.pagador_pj_id}'
+                        rotulo = str(acordo.pagador_pj)
+                    elif acordo.pagador_pf_id:
+                        chave = f'pf:{acordo.pagador_pf_id}'
+                        rotulo = str(acordo.pagador_pf)
+                    else:
+                        chave = f'acordo:{acordo.pk}'
+                        rotulo = f'{acordo.acordo_faturamento} (sem pagador)'
+                    grupos.setdefault(chave, rotulo)
             return sorted(grupos.items(), key=lambda item: item[1].casefold())
 
         if (self._modelo_tem_campo('acordo_faturamento')

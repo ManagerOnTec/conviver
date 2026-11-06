@@ -720,44 +720,10 @@ class AcordoFaturamentoAdmin(BotaoExcluirLinhaMixin, EdicaoComRegrasMixin, Exclu
         from .changelist_editavel import ChangeListEditavel
         return ChangeListEditavel
 
-    actions = ['export_as_xls', 'gerar_prefaturas_em_lote',
-               'excluir_selecionados']
-
-    @admin.action(description='Gerar pré-faturas dos convênios selecionados')
-    def gerar_prefaturas_em_lote(self, request, queryset):
-        selecionados = list(queryset)
-        gerados = 0
-        ignorados = 0
-        erros = 0
-        for acordo_faturamento in selecionados:
-            if acordo_faturamento.pre_faturado:
-                ignorados += 1
-                continue
-            try:
-                with transaction.atomic():
-                    foi_gerado = self._gerar_prefaturas_para_acordo(
-                        request, AcordoFaturamento)
-                if foi_gerado:
-                    gerados += 1
-                else:
-                    ignorados += 1
-            except Exception:
-                erros += 1
-        if gerados:
-            self.message_user(
-                request, f'Pré-faturas geradas para {gerados} convênio(s).',
-                level=messages.SUCCESS)
-        if ignorados:
-            self.message_user(
-                request,
-                f'{ignorados} convênio(s) ignorado(s): já tinham pré-faturas.',
-                level=messages.WARNING)
-        if erros:
-            self.message_user(
-                request,
-                f'Não foi possível gerar pré-faturas para {erros} convênio(s). '
-                'Nenhum dado parcial desses convênios foi salvo.',
-                level=messages.ERROR)
+    # A geração de pré-faturas é feita pelo botão "Pré-faturar" de cada linha
+    # (`gerar_prefaturas_button`). Não existe ação em lote: ela recebia o
+    # ModelAdmin no lugar do acordo e não gerava nada.
+    actions = ['export_as_xls', 'excluir_selecionados']
 
     # ORDEM: id → botões personalizados → dados.
     # `excluir_linha` vem logo depois de "Duplicar" (último botão).
@@ -780,9 +746,12 @@ class AcordoFaturamentoAdmin(BotaoExcluirLinhaMixin, EdicaoComRegrasMixin, Exclu
     )
     search_fields = ['acordo_faturamento',]
     list_display_links = ['id', 'acordo_faturamento']
-    list_editable_sempre = ['status', 'valor_mensal',
-                            'valor_diaria', 'dia_envio', 'dias_pagamento',
-                            'empenho_global']
+    list_editable_sempre = [
+        'status', 'valor_mensal', 'valor_diaria', 'dia_envio',
+        'dias_pagamento', 'empenho_global', 'nr_contrato', 'nr_aditivo',
+        'inicio_vigencia', 'final_vigencia', 'tx_retencao_nf',
+        'vl_retencao_nf',
+    ]
     list_editable = list_editable_sempre
     list_per_page = 99
 
@@ -2527,8 +2496,10 @@ class BaixaFaturaAdmin(BotaoExcluirLinhaMixin, EdicaoComRegrasMixin, ExclusaoEmL
         queryset, use_distinct = super().get_search_results(request, queryset, search_term)
 
         if 'HTTP_REFERER' in request.META:
-            referer_path = request.META['HTTP_REFERER'].split(
-                request.META['HTTP_HOST'])[1]
+            # HTTP_HOST pode estar ausente (ex.: alguns clientes ajax) — não
+            # pode derrubar a busca; deriva o path direto do referer.
+            from urllib.parse import urlparse
+            referer_path = urlparse(request.META['HTTP_REFERER']).path
             if '/add/' in referer_path or '/change/' in referer_path:
                 queryset = queryset.filter(status='A')
 

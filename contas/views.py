@@ -46,6 +46,24 @@ basicConfig(
 )
 
 
+def _tem_perfil_com_estabelecimento(user):
+    """O usuário já tem PERFIL e ao menos um ESTABELECIMENTO liberado?
+
+    Enquanto não tiver (fase de implantação, logo após o deploy), não há o
+    que escolher no `select_estabelecimento` — o admin entra direto no
+    /admin. Com perfil e estabelecimento, o fluxo é o dos demais usuários.
+    """
+    perfil = getattr(user, 'perfil', None)
+    if perfil is None:
+        return False
+    try:
+        if perfil.estabelecimento.exists():
+            return True
+    except Exception:
+        return False
+    return bool(perfil.estabelecimento_padrao_id)
+
+
 def home(request):
     context = {
         'mostrar_rodape': False,
@@ -124,16 +142,26 @@ def login(request):
             context['captcha_token'], context['captcha_svg'] = captcha.build_challenge(request)
             return render(request, 'contas/login.html', context)
 
-        # Verificar se a senha foi alterada
-
+        # IMPLANTAÇÃO: o usuário admin (ou staff) que ainda NÃO tem perfil ou
+        # NÃO tem estabelecimento entra direto no /admin — sem estabelecimento
+        # cadastrado não há o que escolher no `select_estabelecimento`.
+        # Assim que o perfil e o estabelecimento existirem, ele passa pelo
+        # MESMO fluxo dos demais (select_estabelecimento → sessão → admin).
         if user.username == 'admin' or (next_url.startswith('/admin') and user.is_staff):
-            auth.login(request, user)
-            return redirect(next_url if next_url.startswith('/admin') else '/admin')
+            if not _tem_perfil_com_estabelecimento(user):
+                auth.login(request, user)
+                messages.warning(
+                    request,
+                    'Nenhum perfil/estabelecimento vinculado a este usuário '
+                    'ainda. Você está no admin em modo de IMPLANTAÇÃO: cadastre '
+                    'o estabelecimento e o perfil para liberar o fluxo normal '
+                    '(escolha do estabelecimento antes do admin).')
+                return redirect(next_url if next_url.startswith('/admin') else '/admin')
 
         try:
             perfil = user.perfil
             senha_alterada = perfil.senha_alterada
-        except:
+        except Exception:
             messages.warning(
                 request, 'Perfil de usuário não liberado, contate o administrador do sistema!')
             return redirect('logout')
@@ -141,10 +169,9 @@ def login(request):
         auth.login(request, user)
         if not senha_alterada:
             return redirect('alterar')
-        elif next_url and user.is_staff:
-            return redirect(next_url)
-        else:
-            return redirect('select_estabelecimento')
+        # Com perfil e estabelecimento, o fluxo é SEMPRE o mesmo: escolher o
+        # estabelecimento (grava a sessão) e só então seguir para o destino.
+        return redirect('select_estabelecimento')
     else:
         return render(request, 'contas/login.html', context)
 

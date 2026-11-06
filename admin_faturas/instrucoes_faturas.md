@@ -5,13 +5,18 @@ Fluxo: **Acordo de Faturamento → Pré-Fatura → Fatura → Baixa de Fatura**.
 
 ## Fluxo de negócio
 
-1. **Acordo de Faturamento** (`AcordoFaturamento` / `AcordoFaturamento`) — contrato; gera as pré-faturas por competência.
+1. **Acordo de Faturamento** (`AcordoFaturamento` / `AcordoFaturamento`) — contrato; gera as pré-faturas por competência. Na listview, `nr_contrato`, `nr_aditivo`, `inicio_vigencia`, `final_vigencia`, `tx_retencao_nf` e `vl_retencao_nf` também são editáveis, sujeitos à regra de edição abaixo.
 2. **Pré-Fatura** (`PreFatura`) — lançamento do acordo (`create_fatura()`
    vira a fatura).
 3. **Fatura** (`Fatura`) — herda de `PreFatura` (multitable: a pk da fatura é o
    `prefatura_ptr`). Aberta (`faturado=False`) → finalizada (`faturado=True`).
 4. **Baixa de Fatura** (`BaixaFatura`, item 4) — recebimento; abate
    `valor_saldo` da fatura e gera o movimento bancário.
+
+### Filtro superior de pagador
+- Na changelist de Pré-Faturas/Faturas, opções de pagador são derivadas dos registros dessas telas (inclusive acordos inativos/históricos), usando o pagador do próprio registro ou, se estiver nulo, o do acordo.
+- Ao filtrar, corresponde ao pagador gravado na Pré-Fatura/Fatura; usa o pagador do acordo como fallback somente quando o snapshot do registro está nulo. Não incluir registros com pagador explicitamente diferente.
+- Na changelist de Acordos, as opções continuam derivadas dos acordos ativos.
 
 ## Regras de EDIÇÃO e EXCLUSÃO (prevalecem sobre o resto)
 
@@ -194,6 +199,8 @@ Uso: `class XAdmin(ExclusaoEmLoteComRegrasMixin, ..., admin.ModelAdmin)` e
 
 ## IMPORTAÇÃO DE ACORDOS (planilha CONVENIOS.xlsx)
 
+**Padrão obrigatório:** acordos importados recebem `modo_fatura='CO'` (um acordo consolidado), independentemente da contagem de clientes na planilha. Não importar como `CL`.
+
 Tela própria em `admin_faturas/importacao.py`, aberta pelo botão
 **“Importar planilha”** que fica ao lado de **“Salvar”** na tela de **ADD**
 de AcordoFaturamento.
@@ -247,9 +254,59 @@ qtd_competencias = nº de linhas do grupo   (relatório, não é campo)
 > ou o primeiro quando todos são inteiros. Fórmulas com 1 número só são
 > dias × valor e **não** são diária.
 
-**Por diária:** `valor_diaria` recebe a diária e `valor_mensal` fica **0**
-(o valor real é recalculado mês a mês pelos dias). Sem diária:
-`valor_mensal` = VALOR e `valor_diaria` = 0.
+### O VALOR É SEMPRE POR CLIENTE (regra central)
+
+A planilha lança, por competência, o **total do grupo**. O sistema fatura
+**por cliente** (`valor_mensal` × nº de clientes), então o import DIVIDE:
+
+```
+valor_mensal (acordo) = total da nota / nº de clientes da linha
+```
+
+- o divisor é `extrair_quantidade(K)` (`9 Pacientes`) ou, sem ele, a
+  própria contagem da coluna D;
+- `valor_mensal` fica **0** quando o contrato é por diária (o valor real é
+  diária × dias × clientes);
+- a pré-visualização mostra `valor_total_competencia`, `qtd_clientes` e
+  `valor_mensal` (por cliente) separados;
+- se o valor **por cliente** muda entre competências → alerta (reajuste);
+  se só o **total** muda → alerta informando que o nº de clientes variou.
+
+### Divisor de clientes: `;`, `,` ou quebra de linha
+
+A coluna D usa os três separadores, às vezes na mesma planilha:
+
+```
+Valci Maria Lucindo - 31-08-26     (quebra)
+Amarildo Forbici; Joao da Silva    (ponto e vírgula)
+Ester Amaral, Laura Batista, Kleber (vírgula)
+```
+
+**Uma única função** (`_partes_clientes`) divide para CRIAR e para CONTAR.
+Se a contagem usasse outra regra, o divisor do valor divergiria da
+quantidade de nomes efetivamente criados.
+
+### Diária: como distinguir de um TOTAL repetido
+
+A diária pode estar na coluna J (número puro), na K (`Diária R$ …` ou
+apenas `R$ 415,00`) ou na fórmula. A armadilha é a coluna J trazendo o
+**total da nota** repetido:
+
+| Grupo | Coluna J | Observação | Diagnóstico |
+|---|---|---|---|
+| Itajaí (9 cli.) | `415` | `9 Pacientes / R$ 415,00` | DIÁRIA |
+| Navegantes (10) | `277.52` | `62 diárias a 277,52 dia` | DIÁRIA |
+| Joinville (12) | `8348.28` | sem valor, sem total (H) | **TOTAL** |
+
+Ordem de decisão:
+
+1. K tem `Diária R$ …` → é a diária;
+2. K tem `<valor> dia` / `a <valor> dia` → é a diária;
+3. K tem `R$ …` → é a diária (quem declara na nota está dando o unitário);
+4. senão, o número da coluna J só vale se **NÃO** for ≥ o total (H);
+5. fechado o grupo, `refinar_diaria_do_grupo`: número **igual em todas as
+   linhas** só é diária se couber em 1 dia de atendimento (≤ R$ 1.000).
+   `8348.28` em 8 competências não é preço de 1 dia → descartado.
 
 ### CLIENTES (coluna D) — criados e vinculados
 
@@ -317,6 +374,6 @@ ignoradas silenciosamente.
 - **Importação**: `ler_planilha()` deve agrupar as linhas repetidas em UM
   acordo por `(cidade, cnpj, contrato)`; a prévia NÃO pode gravar nada;
   confirmar deve criar todos em uma transação. Com a `CONVENIOS.xlsx` atual:
-  **33 acordos / 280 competências / 76 clientes** (39 linhas vermelhas
-  ignoradas).
+  **34 acordos / 246 competências / 79 clientes** (linhas vermelhas
+  ignoradas; competências = dias de emissão **distintos** por grupo).
 - `python manage.py check` antes de concluir.

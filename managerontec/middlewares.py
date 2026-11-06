@@ -232,3 +232,40 @@ class LimitUserLoginsMiddleware:
             }
 
         return self.get_response(request)
+
+
+# ============================================================================
+# AVISO "SEM ESTABELECIMENTO NA SESSÃO" — versão via CONTEXT PROCESSOR
+# ----------------------------------------------------------------------------
+# Antes isto era feito com messages.warning no middleware. Isso DUPLICAVA a
+# mensagem na primeira tela do admin (a pendente do storage somava com a nova)
+# e não aparecia nas demais (já consumida). Agora o aviso é calculado por
+# requisição e renderizado como BANNER fixo no base_site.html do admin:
+# aparece UMA VEZ EM CADA TELA do admin, exatamente quando não há
+# estabelecimento na sessão — sem storage, sem consumo, sem duplicação.
+# ============================================================================
+def aviso_sem(request):
+    """Context processor: expõe `aviso_sem_estab` (html seguro) ao template."""
+    aviso = ''
+    try:
+        user = getattr(request, 'user', None)
+        if user is not None and user.is_authenticated \
+                and request.path.startswith('/admin/') \
+                and not request.session.get('estabelecimento_id'):
+            perfil = getattr(user, 'perfil', None)
+            if perfil is None:
+                aviso = (
+                    '<strong>Modo de implantação:</strong> nenhum '
+                    'perfil/estabelecimento vinculado a este usuário. Cadastre '
+                    'o estabelecimento e o perfil para liberar o fluxo normal '
+                    '(escolha do estabelecimento antes do admin).')
+            else:
+                from django.urls import reverse
+                aviso = (
+                    '<strong>Nenhum estabelecimento selecionado:</strong> as '
+                    'listagens ficam vazias até você escolher um estabelecimento'
+                    ' — <a href="%s">clique aqui para escolher</a>.'
+                    % reverse('select_estabelecimento'))
+    except Exception:
+        aviso = ''  # o aviso é acessório: nunca derruba a tela
+    return {'aviso_sem_estab': aviso}

@@ -1,0 +1,15 @@
+{% comment %}
+Widget de seleção com botão "+" próprio do Perfil (Usuário).
+O botão é desenhado por este template, ao lado do select, com a URL de
+popup do admin do modelo relacionado (widget.add_url). O clique usa
+`showAddAnotherPopup` (admin/js/RelatedObjectLookups.js, já carregado nas
+telas do admin) — ao salvar no popup, o próprio Django atualiza o select
+daqui (id âncora = add_ + id do select).
+{% endcomment %}
+{% with id=widget.attrs.id %}
+<div class="perfil-add-wrap">
+  {% include "django/forms/widgets/select.html" %}
+  <a class="perfil-add-btn" id="add_{{ id }}" href="{{ widget.add_url }}?_popup=1"
+     onclick="return showAddAnotherPopup(this);" title="Adicionar novo registro">+</a>
+</div>
+{% endwith %}

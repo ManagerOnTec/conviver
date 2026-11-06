@@ -1,0 +1,980 @@
+/* ==========================================================================
+   CONVIVER / MANAGERONTEC - ADMIN FORMS CUSTOM CSS
+   Formulários Amplos, Espaçosos e com Campos Grandes (100% de Largura)
+   ========================================================================== */
+
+/* 1. WRAPPER EXTERNO 100% AMPLO */
+.admin-change-form-wrapper {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 10px 0 40px 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+}
+
+/* 2. CARD/SHELL ENVOLVENTE DO FORMULÁRIO (OCUPA TODA A LARGURA) */
+.admin-form-shell {
+    background: var(--body-bg, #ffffff) !important;
+    border: 1px solid var(--border-color, #cbd5e1) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05) !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+}
+
+/* 3. CABEÇALHO DO FORMULÁRIO */
+.admin-form-shell-header {
+    background: var(--darkened-bg, #f8fafc) !important;
+    border-bottom: 1px solid var(--border-color, #e2e8f0) !important;
+    padding: 20px 28px !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: 16px !important;
+    flex-wrap: wrap !important;
+}
+
+.admin-form-title-group {
+    display: flex !important;
+    align-items: center !important;
+    gap: 16px !important;
+}
+
+.admin-form-icon {
+    width: 48px !important;
+    height: 48px !important;
+    border-radius: 10px !important;
+    background: rgba(13, 110, 253, 0.12) !important;
+    color: var(--primary, #0d6efd) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 1.4rem !important;
+    flex-shrink: 0 !important;
+}
+
+.admin-form-main-title {
+    font-size: 1.4rem !important;
+    font-weight: 700 !important;
+    margin: 0 0 4px 0 !important;
+    color: var(--body-fg, #0f172a) !important;
+    line-height: 1.25 !important;
+}
+
+.admin-form-subtitle {
+    font-size: 0.88rem !important;
+    color: var(--body-quiet-color, #64748b) !important;
+    display: block !important;
+}
+
+/* Ferramentas no Topo */
+.admin-form-tools {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    list-style: none !important;
+}
+
+.admin-form-tools li a {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    padding: 8px 18px !important;
+    font-size: 0.85rem !important;
+    font-weight: 600 !important;
+    border-radius: 6px !important;
+    background: var(--body-bg, #fff) !important;
+    border: 1px solid var(--border-color, #cbd5e1) !important;
+    color: var(--body-fg, #334155) !important;
+    text-decoration: none !important;
+    transition: all 0.15s ease !important;
+}
+
+.admin-form-tools li a:hover {
+    background: rgba(13, 110, 253, 0.08) !important;
+    border-color: var(--primary, #0d6efd) !important;
+    color: var(--primary, #0d6efd) !important;
+}
+
+/* 4. CORPO DO FORMULÁRIO */
+.admin-form-body {
+    padding: 10px 0 0 0 !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+/* 5. FIELDSETS AMPLOS COMO CARDS */
+.admin-custom-change-form fieldset.module {
+    background: var(--body-bg, #ffffff) !important;
+    border: 1px solid var(--border-color, #e2e8f0) !important;
+    border-radius: 10px !important;
+    margin: 20px 24px !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02) !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+}
+
+.admin-custom-change-form fieldset.module > h2 {
+    background: var(--darkened-bg, #f1f5f9) !important;
+    color: var(--body-fg, #0f172a) !important;
+    font-size: 1rem !important;
+    font-weight: 700 !important;
+    padding: 14px 22px !important;
+    margin: 0 !important;
+    border-bottom: 1px solid var(--border-color, #e2e8f0) !important;
+    border-left: 5px solid var(--primary, #0d6efd) !important;
+    letter-spacing: 0.3px !important;
+}
+
+.admin-custom-change-form fieldset.module .description {
+    padding: 12px 22px !important;
+    font-size: 0.88rem !important;
+    color: var(--body-quiet-color, #475569) !important;
+    background: rgba(13, 110, 253, 0.04) !important;
+    border-bottom: 1px solid var(--hairline-color, #e2e8f0) !important;
+    line-height: 1.5 !important;
+}
+
+/* 6. LINHAS DE FORMULÁRIO (LAYOUT VERTICAL COM 100% DE LARGURA)
+   Escopo restrito a fieldset/div: os inlines tabulares do Django usam
+   <tr class="form-row"> e NÃO podem virar flex (isso quebrava as colunas dos
+   inlines, ex.: Produto da Prescrição Padrão). */
+.admin-custom-change-form fieldset .form-row:not(table *),
+.admin-custom-change-form div.form-row {
+    padding: 18px 24px !important;
+    border-bottom: 1px solid var(--hairline-color, #f1f5f9) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+/* Inline tabular: mantém a tabela como tabela */
+.admin-custom-change-form .inline-group table tr.form-row,
+.admin-custom-change-form .inline-group table tr.form-row td {
+    display: revert !important;
+}
+
+/* A linha-prototipo do inline (clonada pelo "Adicionar outro") NUNCA deve
+   aparecer — o jazzmin já a oculta, mas a regra acima venceria. */
+.admin-custom-change-form .inline-group table tr.form-row.empty-form,
+.admin-custom-change-form .inline-group table tr.form-row.empty-form td {
+    display: none !important;
+}
+
+/* Inline tabular: widgets compactos (o padding de 12/16px dos campos grandes
+   estourava a largura fixa dos vTimeField/vDateField do Django). */
+.admin-custom-change-form .inline-group table td input,
+.admin-custom-change-form .inline-group table td select,
+.admin-custom-change-form .inline-group table td .vTextField,
+.admin-custom-change-form .inline-group table td .vDateField,
+.admin-custom-change-form .inline-group table td .vTimeField,
+.admin-custom-change-form .inline-group table td .vIntegerField {
+    height: 34px !important;
+    min-height: 34px !important;
+    padding: 4px 6px !important;
+    font-size: 0.85rem !important;
+    border-radius: 6px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+/* A tabela do inline precisa caber no grupo (antes ficava com ~2000px e a
+   coluna INTERVALO era cortada pelo overflow:hidden do jazzmin). */
+.admin-custom-change-form .inline-group table {
+    table-layout: fixed !important;
+    width: 100% !important;
+}
+
+.admin-custom-change-form .inline-group table td,
+.admin-custom-change-form .inline-group table th {
+    min-width: 0 !important;
+    padding: 6px 4px !important;
+    vertical-align: middle !important;
+}
+
+/* Larguras explícitas (somam 100%) — com table-layout:fixed o navegador
+   distribui o restante igualmente, o que desalinhava th e td. */
+.admin-custom-change-form .inline-group table th.column-produto,
+.admin-custom-change-form .inline-group table td.field-produto {
+    width: 26% !important;
+}
+
+.admin-custom-change-form .inline-group table th.column-intervalo_horas,
+.admin-custom-change-form .inline-group table td.field-intervalo_horas,
+.admin-custom-change-form .inline-group table th.column-hora_inicio_produto,
+.admin-custom-change-form .inline-group table td.field-hora_inicio_produto {
+    width: 16% !important;
+    white-space: nowrap !important;
+}
+
+.admin-custom-change-form .inline-group table th.column-se_necessario,
+.admin-custom-change-form .inline-group table td.field-se_necessario,
+.admin-custom-change-form .inline-group table th.column-dose_unica,
+.admin-custom-change-form .inline-group table td.field-dose_unica {
+    width: 9% !important;
+    text-align: center !important;
+}
+
+.admin-custom-change-form .inline-group table th.column-observacao,
+.admin-custom-change-form .inline-group table td.field-observacao {
+    width: 16% !important;
+}
+
+.admin-custom-change-form .inline-group table th.column-ordem,
+.admin-custom-change-form .inline-group table td.field-ordem {
+    width: 8% !important;
+}
+
+/* Select2 dentro do inline: precisa encolher (o min-width:220px global
+   transbordava a tabela). */
+.admin-custom-change-form .inline-group .related-widget-wrapper {
+    width: 100% !important;
+    min-width: 0 !important;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 2px !important;
+    overflow: visible !important;
+}
+
+.admin-custom-change-form .inline-group .related-widget-wrapper .select2-container {
+    flex: 1 1 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+}
+
+/* Coluna `status` fica oculta (Default oculto) — declarada com largura 0 no
+   thead mas o <td> com input hidden ainda ocupava ~24px, causando a barra
+   de rolagem horizontal e escondendo a coluna Status/Ordem. */
+.admin-custom-change-form .inline-group table th.column-status,
+.admin-custom-change-form .inline-group table tr.form-row td.field-status {
+    display: none !important;
+    width: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+}
+
+/* Coluna "Apagar?" também oculta: exclusão é feita pela tela do item. */
+.admin-custom-change-form .inline-group table th.column-DELETE,
+.admin-custom-change-form .inline-group table tr.form-row td.delete {
+    display: none !important;
+    width: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+}
+
+/* No inline TABULAR os 4 ícones (+, lápis, x, olho) roubavam toda a largura
+   da célula, deixando o select2 com ~4px. As ações continuam disponíveis pela
+   lista do admin e pela tela do item.
+   LIMITADO ao inline tabular (`table`): no inline STACKED (ex.: Perfil do
+   usuário, StackedInline) o botão verde "+" DEVE aparecer — é a forma de
+   cadastrar Pessoa/Estabelecimento sem sair da tela. */
+.admin-custom-change-form .inline-group table .related-widget-wrapper-link,
+.admin-custom-change-form .inline-group table .related-widget-wrapper > a,
+.admin-custom-change-form .inline-group table .select2-hidden-accessible ~ a {
+    display: none !important;
+}
+
+/* A primeira coluna (sem título) mostra o __str__ do item — só ocupava
+   espaço (241px) e desalinhava o mapeamento th→td.
+   Precisa de `.form-row` para vencer `tr.form-row td { display: revert }`. */
+.admin-custom-change-form .inline-group table th.original,
+.admin-custom-change-form .inline-group table tr.form-row td.original {
+    display: none !important;
+    width: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+}
+
+.admin-custom-change-form .inline-group table tr.form-row td.original p {
+    display: none !important;
+}
+
+.admin-custom-change-form .form-row:last-child {
+    border-bottom: none !important;
+}
+
+/* RÓTULOS (LABELS) NO TOPO DO CAMPO
+   No inline tabular o Django já exibe os nomes das colunas no <thead>, então as
+   labels de cada célula são ocultas (before ficavam sobrepostas ao valor). */
+.admin-custom-change-form fieldset .form-row > label,
+.admin-custom-change-form .aligned label {
+    font-size: 0.95rem !important;
+    font-weight: 700 !important;
+    color: var(--body-fg, #0f172a) !important;
+    padding: 0 !important;
+    margin: 0 0 4px 0 !important;
+    float: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    line-height: 1.3 !important;
+}
+
+.admin-custom-change-form .inline-group table td label {
+    display: none !important;
+}
+
+.admin-custom-change-form .form-row label.required::after {
+    content: "* (Obrigatório)" !important;
+    color: #ef4444 !important;
+    font-size: 0.78rem !important;
+    font-weight: 700 !important;
+}
+
+/* CONTAINER DO INPUT */
+.admin-custom-change-form .form-row > div:not(.help) {
+    width: 100% !important;
+    max-width: 100% !important;
+    display: block !important;
+}
+
+/* O Django envolve o widget em dois containers:
+   .form-row > div.flex-container > div.related-widget-wrapper > .select2-container
+   Ambos precisam ocupar 100% da linha, senão o select2 fica com ~300px. */
+.admin-custom-change-form .form-row > div.flex-container,
+.admin-custom-change-form .form-row .related-widget-wrapper {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    flex: 1 1 100% !important;
+}
+
+.admin-custom-change-form .form-row .related-widget-wrapper {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 6px !important;
+}
+
+/* O select2 ocupa todo o espaço restante; os links de ação ficam compactos */
+.admin-custom-change-form .related-widget-wrapper .select2-container {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    /* o select2 grava `width: NNNpx` inline — !important vence o inline */
+    width: calc(100% - 96px) !important;
+    max-width: calc(100% - 96px) !important;
+}
+
+/* O <select> original fica oculto pelo select2, mas continua participando do
+   flex e "roubava" metade da largura do wrapper (400px de 800px). */
+.admin-custom-change-form .related-widget-wrapper > select.select2-hidden-accessible {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    clip: rect(0 0 0 0) !important;
+    flex: 0 0 0 !important;
+}
+
+.admin-custom-change-form .related-widget-wrapper .related-widget-wrapper-link {
+    flex: 0 0 auto !important;
+}
+
+/* BOTÃO “+” DOS CAMPOS FK DO PERFIL (Usuário) — widget próprio
+   (contas/templates/contas/widgets/select_add.html): fica ao lado do
+   select, verde, e abre o popup de cadastro do modelo relacionado. */
+.perfil-add-wrap {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    width: 100% !important;
+}
+.perfil-add-wrap select {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    width: auto !important;
+}
+.perfil-add-btn {
+    flex: 0 0 auto !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 28px !important;
+    height: 28px !important;
+    min-width: 28px;
+    border-radius: 6px;
+    background: #198754 !important;
+    color: #fff !important;
+    font-weight: 700;
+    font-size: 1.15rem;
+    line-height: 1;
+    text-decoration: none !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,.2);
+}
+.perfil-add-btn:hover {
+    background: #146c43 !important;
+    color: #fff !important;
+}
+
+/* BOTÃO “+” NOS WIDGETS RELACIONADOS DO INLINE PERFIL (Usuário):
+   a regra de campos grandes dá `width: 100%` ao <select>, e o wrapper tem
+   `overflow: hidden` (widgets.css do Django) — os links +/lápis ficavam
+   FORA da área visível, cortados. Aqui o select encolhe para abrir espaço
+   aos links e o wrapper deixa de cortar. */
+.admin-custom-change-form .inline-group .related-widget-wrapper {
+    overflow: visible !important;
+}
+.admin-custom-change-form .inline-group .related-widget-wrapper > select {
+    width: auto !important;
+    max-width: 100% !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+}
+/* M2M com FilteredSelectMultiple (Estabelecimentos): o painel duplo também
+   ocupava 100% e empurrava o “+” para fora do wrapper. */
+.admin-custom-change-form .inline-group .related-widget-wrapper > .selector {
+    width: calc(100% - 34px) !important;
+    max-width: calc(100% - 34px) !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+}
+.admin-custom-change-form .inline-group .related-widget-wrapper > a.related-widget-wrapper-link {
+    flex: 0 0 auto !important;
+    display: inline-block !important;
+    opacity: 1 !important;
+}
+
+/* SELECT2 (autocomplete) — o plugin calcula `width` inline antes deste CSS
+   carregar, e o container ficava com ~100px enquanto o <select> tinha 100%.
+   O `:not(.select2-container)` evita que esta regra atinja o próprio widget. */
+.admin-custom-change-form .related-widget-wrapper .select2-container,
+.admin-custom-change-form .form-row .select2-container,
+.admin-custom-change-form .inline-group .select2-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 220px !important;
+    box-sizing: border-box !important;
+}
+
+.admin-custom-change-form .select2-container--admin-autocomplete .select2-selection--single {
+    height: 48px !important;
+    min-height: 48px !important;
+    border-radius: 8px !important;
+    border: 1.5px solid var(--border-color, #cbd5e1) !important;
+    background: var(--body-bg, #ffffff) !important;
+    display: block !important;
+    position: relative !important;
+}
+
+.admin-custom-change-form .select2-container--admin-autocomplete .select2-selection--single .select2-selection__rendered {
+    display: block !important;
+    flex: none !important;
+    width: 100% !important;
+    height: 46px !important;
+    line-height: 46px !important;
+    padding: 0 30px 0 12px !important;
+    margin: 0 !important;
+    color: var(--body-fg, #0f172a) !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    box-sizing: border-box !important;
+}
+
+.admin-custom-change-form .select2-container--admin-autocomplete .select2-selection--single .select2-selection__arrow {
+    height: 46px !important;
+    width: 26px !important;
+    top: 0 !important;
+    right: 0 !important;
+    position: absolute !important;
+}
+
+/* Placeholder visível (o Django deixa vazio quando não há valor) */
+.admin-custom-change-form .select2-container--admin-autocomplete .select2-selection--single .select2-selection__placeholder {
+    color: #94a3b8 !important;
+    display: block !important;
+}
+
+/* No inline tabular o widget fica compacto, mas ainda com largura útil */
+.admin-custom-change-form .inline-group .select2-container {
+    min-width: 120px !important;
+}
+
+.admin-custom-change-form .inline-group .select2-container--admin-autocomplete .select2-selection--single {
+    height: 34px !important;
+    min-height: 34px !important;
+    border-radius: 6px !important;
+}
+
+.admin-custom-change-form .inline-group .select2-container--admin-autocomplete .select2-selection--single .select2-selection__rendered {
+    height: 32px !important;
+    line-height: 32px !important;
+    padding: 0 24px 0 6px !important;
+    font-size: 0.85rem !important;
+}
+
+.admin-custom-change-form .inline-group .select2-container--admin-autocomplete .select2-selection--single .select2-selection__arrow {
+    height: 32px !important;
+    width: 20px !important;
+}
+
+/* 7. CAMPOS GRANDES, CONFORTÁVEIS E 100% PADRONIZADOS
+   `:not(.select2-hidden-accessible)` evita estilizar o <select> interno do
+   select2 (ele já é oculto pelo plugin; padding/altura nele quebravam o texto). */
+.admin-custom-change-form input[type="text"],
+.admin-custom-change-form input[type="password"],
+.admin-custom-change-form input[type="email"],
+.admin-custom-change-form input[type="url"],
+.admin-custom-change-form input[type="number"],
+.admin-custom-change-form input[type="tel"],
+.admin-custom-change-form select:not(.select2-hidden-accessible),
+.admin-custom-change-form .vTextField,
+.admin-custom-change-form .vLargeTextField {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 48px !important;
+    min-height: 48px !important;
+    padding: 12px 16px !important;
+    font-size: 1rem !important;
+    border-radius: 8px !important;
+    border: 1.5px solid var(--border-color, #cbd5e1) !important;
+    background: var(--body-bg, #ffffff) !important;
+    color: var(--body-fg, #0f172a) !important;
+    transition: all 0.15s ease-in-out !important;
+    box-sizing: border-box !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* Foco moderno com anel azul luminoso */
+.admin-custom-change-form input[type="text"]:focus,
+.admin-custom-change-form input[type="password"]:focus,
+.admin-custom-change-form input[type="email"]:focus,
+.admin-custom-change-form input[type="number"]:focus,
+.admin-custom-change-form input[type="tel"]:focus,
+.admin-custom-change-form select:focus,
+.admin-custom-change-form textarea:focus {
+    border-color: #0d6efd !important;
+    box-shadow: 0 0 0 4px rgba(13, 110, 253, 0.18) !important;
+    outline: none !important;
+}
+
+/* Campos de Data e Hora Maiores */
+.admin-custom-change-form .vDateField,
+.admin-custom-change-form .vTimeField,
+.admin-custom-change-form input[type="date"],
+.admin-custom-change-form input[type="datetime-local"] {
+    height: 48px !important;
+    min-height: 48px !important;
+    padding: 12px 16px !important;
+    font-size: 1rem !important;
+    border-radius: 8px !important;
+    border: 1.5px solid var(--border-color, #cbd5e1) !important;
+    background: var(--body-bg, #ffffff) !important;
+    color: var(--body-fg, #0f172a) !important;
+    width: 220px !important;
+    display: inline-block !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+}
+
+.admin-custom-change-form .datetimeshortcuts {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    margin-left: 10px !important;
+    font-size: 0.85rem !important;
+    color: var(--body-quiet-color, #64748b) !important;
+}
+
+.admin-custom-change-form .datetimeshortcuts a {
+    padding: 7px 12px !important;
+    border-radius: 6px !important;
+    background: var(--darkened-bg, #f1f5f9) !important;
+    border: 1px solid var(--border-color, #cbd5e1) !important;
+    color: var(--primary, #0d6efd) !important;
+    text-decoration: none !important;
+    font-weight: 600 !important;
+    font-size: 0.84rem !important;
+    transition: all 0.15s ease !important;
+}
+
+.admin-custom-change-form .datetimeshortcuts a:hover {
+    background: rgba(13, 110, 253, 0.12) !important;
+    border-color: var(--primary, #0d6efd) !important;
+}
+
+/* SELECT2 AUTOCOMPLETE CONTAINER (100% DE LARGURA E 48PX DE ALTURA) */
+.admin-custom-change-form .select2-container {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+.admin-custom-change-form .select2-container .select2-selection--single {
+    height: 48px !important;
+    min-height: 48px !important;
+    border-radius: 8px !important;
+    border: 1.5px solid var(--border-color, #cbd5e1) !important;
+    padding: 8px 16px !important;
+    box-sizing: border-box !important;
+    display: flex !important;
+    align-items: center !important;
+    background: var(--body-bg, #ffffff) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+}
+
+.admin-custom-change-form .select2-container--admin-autocomplete .select2-selection--single .select2-selection__rendered {
+    color: var(--body-fg, #0f172a) !important;
+    font-size: 1rem !important;
+    line-height: normal !important;
+    padding-left: 0 !important;
+}
+
+.admin-custom-change-form .select2-container .select2-selection__arrow {
+    height: 46px !important;
+    right: 12px !important;
+}
+
+/* SELECT2 MÚLTIPLO (autocomplete_fields em M2M, ex.: força Cliente(s) do Convênio)
+   As regras acima só preveem `.select2-selection--single`; no múltiplo o
+   container ficava com min-height:30px, desalinhado dos demais campos de 48px. */
+.admin-custom-change-form .form-row .select2-container--admin-autocomplete .select2-selection--multiple {
+    min-height: 48px !important;
+    border-radius: 8px !important;
+    border: 1.5px solid var(--border-color, #cbd5e1) !important;
+    background: var(--body-bg, #ffffff) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+    padding: 4px 6px !important;
+    box-sizing: border-box !important;
+}
+
+/* Foco azul coerente com os demais campos (`:focus`/`:open`). */
+.admin-custom-change-form .form-row .select2-container--admin-autocomplete.select2-container--focus .select2-selection--multiple,
+.admin-custom-change-form .form-row .select2-container--admin-autocomplete.select2-container--open .select2-selection--multiple {
+    border-color: #0d6efd !important;
+    box-shadow: 0 0 0 4px rgba(13, 110, 253, 0.18) !important;
+}
+
+.admin-custom-change-form .form-row .select2-container--admin-autocomplete .select2-selection--multiple .select2-selection__rendered {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 4px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    min-height: 0 !important;
+}
+
+.admin-custom-change-form .form-row .select2-container--admin-autocomplete .select2-selection--multiple .select2-search--inline {
+    flex: 0 0 auto !important;
+    margin: 0 !important;
+}
+
+.admin-custom-change-form .form-row .select2-container--admin-autocomplete .select2-selection--multiple .select2-selection__choice {
+    background: rgba(13, 110, 253, 0.10) !important;
+    border: 1px solid rgba(13, 110, 253, 0.35) !important;
+    color: var(--body-fg, #0f172a) !important;
+    border-radius: 6px !important;
+    margin: 2px 4px 2px 0 !important;
+    padding: 2px 8px !important;
+    font-size: 0.9rem !important;
+    float: none !important;
+    line-height: 1.5 !important;
+}
+
+.admin-custom-change-form .form-row .select2-container--admin-autocomplete .select2-selection--multiple .select2-selection__choice__remove {
+    color: #dc2626 !important;
+    margin-right: 6px !important;
+}
+
+/* 8. TEXTAREAS GIGANTES E CONFORTÁVEIS PARA EVOLUÇÕES E PRONTUÁRIOS */
+.admin-custom-change-form textarea {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 240px !important;
+    padding: 14px 18px !important;
+    font-size: 1.02rem !important;
+    line-height: 1.6 !important;
+    border-radius: 8px !important;
+    border: 1.5px solid var(--border-color, #cbd5e1) !important;
+    background: var(--body-bg, #ffffff) !important;
+    color: var(--body-fg, #0f172a) !important;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04) !important;
+    box-sizing: border-box !important;
+    font-family: inherit !important;
+}
+
+/* 9. CHECKBOXES GRANDES */
+.admin-custom-change-form .form-row.checkbox-row,
+.admin-custom-change-form .form-row div.checkbox-row {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 12px !important;
+}
+
+.admin-custom-change-form .form-row.checkbox-row label,
+.admin-custom-change-form .form-row div.checkbox-row label {
+    margin: 0 !important;
+    width: auto !important;
+    cursor: pointer !important;
+}
+
+.admin-custom-change-form input[type="checkbox"] {
+    width: 22px !important;
+    height: 22px !important;
+    accent-color: #0d6efd !important;
+    cursor: pointer !important;
+    margin: 0 !important;
+    border-radius: 4px !important;
+}
+
+/* 10. UPLOAD DE ARQUIVOS (FILE UPLOAD) */
+.admin-custom-change-form .file-upload {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    font-size: 0.92rem !important;
+    color: var(--body-fg, #334155) !important;
+    background: var(--darkened-bg, #f8fafc) !important;
+    border: 1.5px dashed var(--border-color, #cbd5e1) !important;
+    border-radius: 8px !important;
+    padding: 16px 20px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+.admin-custom-change-form .file-upload a {
+    color: var(--primary, #0d6efd) !important;
+    font-weight: 600 !important;
+    text-decoration: underline !important;
+}
+
+.admin-custom-change-form input[type="file"] {
+    font-size: 0.92rem !important;
+    padding: 8px 0 !important;
+}
+
+/* 11. SELECTOR M2M (DISPONÍVEIS E ESCOLHIDOS - 100% DE LARGURA) */
+.admin-custom-change-form .selector {
+    width: 100% !important;
+    max-width: 100% !important;
+    display: flex !important;
+    gap: 16px !important;
+    align-items: center !important;
+}
+
+.admin-custom-change-form .selector-available,
+.admin-custom-change-form .selector-chosen {
+    flex: 1 !important;
+    width: 48% !important;
+}
+
+.admin-custom-change-form .selector-available h2,
+.admin-custom-change-form .selector-chosen h2 {
+    padding: 10px 14px !important;
+    font-size: 0.9rem !important;
+    border-radius: 8px 8px 0 0 !important;
+}
+
+.admin-custom-change-form .selector select {
+    width: 100% !important;
+    height: 220px !important;
+    min-height: 220px !important;
+    border-radius: 0 0 8px 8px !important;
+}
+
+/* 12. TEXTOS DE AJUDA (HELP TEXT) */
+.admin-custom-change-form .help {
+    font-size: 0.82rem !important;
+    color: var(--body-quiet-color, #64748b) !important;
+    margin-top: 6px !important;
+    display: block !important;
+    line-height: 1.45 !important;
+}
+
+/* 13. ALERTA DE ERROS */
+.admin-form-errornote {
+    background: #fef2f2 !important;
+    border: 1px solid #fecaca !important;
+    border-left: 5px solid #ef4444 !important;
+    border-radius: 8px !important;
+    padding: 16px 22px !important;
+    margin: 16px 24px 0 24px !important;
+    color: #991b1b !important;
+}
+
+.errornote-header {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    font-size: 0.95rem !important;
+    margin-bottom: 4px !important;
+}
+
+.admin-custom-change-form ul.errorlist {
+    margin: 6px 0 0 0 !important;
+    padding: 0 !important;
+    list-style: none !important;
+}
+
+.admin-custom-change-form ul.errorlist li {
+    font-size: 0.84rem !important;
+    color: #dc2626 !important;
+    font-weight: 600 !important;
+}
+
+/* 14. INLINE GROUPS (FORMSETS RELACIONADOS - AMPLOS) */
+.admin-custom-change-form .inline-group {
+    background: var(--body-bg, #ffffff) !important;
+    border: 1px solid var(--border-color, #e2e8f0) !important;
+    border-radius: 10px !important;
+    margin: 24px 24px !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02) !important;
+    overflow: hidden !important;
+}
+
+.admin-custom-change-form .inline-group > h2 {
+    background: var(--darkened-bg, #f1f5f9) !important;
+    color: var(--body-fg, #0f172a) !important;
+    font-size: 1rem !important;
+    font-weight: 700 !important;
+    padding: 14px 22px !important;
+    margin: 0 !important;
+    border-bottom: 1px solid var(--border-color, #e2e8f0) !important;
+    border-left: 5px solid #10b981 !important;
+}
+
+.admin-custom-change-form .inline-related {
+    border-bottom: 1px solid var(--hairline-color, #e2e8f0) !important;
+}
+
+/* 15. BARRA DE SALVAMENTO (SUBMIT ROW) */
+.admin-submit-row-wrapper {
+    margin-top: 28px !important;
+    width: 100% !important;
+}
+
+.admin-custom-change-form .submit-row {
+    background: var(--darkened-bg, #f8fafc) !important;
+    border-top: 1px solid var(--border-color, #e2e8f0) !important;
+    padding: 20px 28px !important;
+    display: flex !important;
+    justify-content: flex-end !important;
+    align-items: center !important;
+    gap: 12px !important;
+    margin: 0 !important;
+    border-radius: 0 0 12px 12px !important;
+    box-sizing: border-box !important;
+}
+
+.admin-custom-change-form .submit-row input[type="submit"] {
+    border-radius: 8px !important;
+    padding: 12px 24px !important;
+    font-size: 0.92rem !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+    border: 1px solid var(--border-color, #cbd5e1) !important;
+    background: var(--body-bg, #fff) !important;
+    color: var(--body-fg, #334155) !important;
+    height: 48px !important;
+}
+
+.admin-custom-change-form .submit-row input[type="submit"]:hover {
+    background: var(--darkened-bg, #f1f5f9) !important;
+    border-color: #94a3b8 !important;
+}
+
+.admin-custom-change-form .submit-row input[type="submit"].default {
+    background: #0d6efd !important;
+    color: #ffffff !important;
+    border-color: #0d6efd !important;
+    box-shadow: 0 3px 12px rgba(13, 110, 253, 0.35) !important;
+}
+
+.admin-custom-change-form .submit-row input[type="submit"].default:hover {
+    background: #0b5ed7 !important;
+    border-color: #0a58ca !important;
+}
+
+.admin-custom-change-form .submit-row a.deletelink {
+    background: transparent !important;
+    color: #ef4444 !important;
+    border: 1px solid rgba(239, 68, 68, 0.3) !important;
+    border-radius: 8px !important;
+    padding: 11px 20px !important;
+    font-size: 0.88rem !important;
+    font-weight: 600 !important;
+    margin-right: auto !important;
+    text-decoration: none !important;
+    transition: all 0.15s ease !important;
+}
+
+.admin-custom-change-form .submit-row a.deletelink:hover {
+    background: #ef4444 !important;
+    color: #ffffff !important;
+    border-color: #ef4444 !important;
+}
+
+/* 15.1 EDITORES RICOS (TinyMCE) OCUPANDO TODA A LARGURA DO CAMPO */
+.admin-custom-change-form .form-row .flex-container:has(.tox-tinymce) {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+.admin-custom-change-form .form-row .tox.tox-tinymce {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
+    box-sizing: border-box !important;
+}
+
+.admin-custom-change-form .form-row .tox .tox-editor-container,
+.admin-custom-change-form .form-row .tox .tox-edit-area {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+.admin-custom-change-form .form-row .tox .tox-toolbar,
+.admin-custom-change-form .form-row .tox .tox-toolbar__overflow,
+.admin-custom-change-form .form-row .tox .tox-toolbar__primary {
+    flex-wrap: wrap !important;
+}
+
+/* 16. RESPONSIVIDADE (MOBILE) */
+@media (max-width: 768px) {
+    .admin-form-shell {
+        border-radius: 0 !important;
+        border-left: none !important;
+        border-right: none !important;
+    }
+
+    .admin-form-shell-header {
+        padding: 16px 18px !important;
+    }
+
+    .admin-custom-change-form fieldset.module {
+        margin: 14px 10px !important;
+    }
+
+    .admin-custom-change-form .form-row {
+        padding: 14px 16px !important;
+    }
+
+    .admin-custom-change-form .submit-row {
+        flex-direction: column-reverse !important;
+        align-items: stretch !important;
+        gap: 10px !important;
+        padding: 16px 18px !important;
+    }
+
+    .admin-custom-change-form .submit-row a.deletelink {
+        margin-right: 0 !important;
+        text-align: center !important;
+    }
+}

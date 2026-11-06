@@ -204,6 +204,9 @@ MIDDLEWARE = [
     'managerontec.middlewares.RegistroAcessoMiddleware',
     'administracao_sistema.middleware.ConfiguracaoSessaoMiddleware',
     'managerontec.middlewares.LimitUserLoginsMiddleware',
+    # O aviso amarelo de "sem estabelecimento na sessão" NÃO é mais mensagem
+    # (duplicava na primeira tela e sumia nas demais): agora é um banner
+    # renderizado em templates/admin/base_site.html → aviso_sem_estabelecimento.html.
 ]
 
 
@@ -305,6 +308,9 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                # Banner "sem estabelecimento na sessão" do admin
+                # (templates/admin/base_site.html).
+                'managerontec.middlewares.aviso_sem',
             ],
         },
     },

@@ -104,8 +104,11 @@ class AtendimentoFilter(filters.FilterSet):
         field_name='acordo_faturamento__acordo_faturamento',
         queryset=AcordoFaturamento.objects.all(), label="Acordo de Faturamento",)
 
-    dt_alta = django_filters.BooleanFilter(method='filter_by_dt_alta', widget=forms.CheckboxInput(
-        attrs={'checked': False, 'class': 'mt-2'}), label='Listar as altas?')
+    dt_alta = django_filters.BooleanFilter(
+        method='filter_by_dt_alta',
+        widget=forms.CheckboxInput(
+            attrs={'class': 'form-check-input filter-toggle-input'}),
+        label='Listar as altas?')
 
     dt_atendimento = DateFromToRangeFilter(
         widget=RangeWidget(attrs={'type': 'date', 'class': 'datepicker rounded p-3', 'style': 'width: 100%; height: 42px'}), label='Dt.Atendimento De/Até')

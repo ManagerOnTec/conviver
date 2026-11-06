@@ -31,8 +31,10 @@ class ParametrosPsicoterapiaAdmin(admin.ModelAdmin):
 
         # Verifica se a solicitação veio de um campo de autocomplete
         if 'HTTP_REFERER' in request.META:
-            referer_path = request.META['HTTP_REFERER'].split(
-                request.META['HTTP_HOST'])[1]
+            # HTTP_HOST pode estar ausente (ex.: alguns clientes ajax) — não
+            # pode derrubar a busca; deriva o path direto do referer.
+            from urllib.parse import urlparse
+            referer_path = urlparse(request.META['HTTP_REFERER']).path
             if '/add/' in referer_path or '/change/' in referer_path:
                 # Se a solicitação veio de um campo de autocomplete, filtra os objetos inativos
                 print('DEBUG: The request came from an autocomplete field')

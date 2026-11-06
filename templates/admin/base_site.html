@@ -42,6 +42,17 @@
 
 {% block nav-global %}{% endblock %}
 
+{% block messages %}
+  {% if aviso_sem_estab %}
+    <div class="aviso-sem-estabelecimento" role="alert"
+         style="background:#fff8e1;border:1px solid #e0a800;color:#664d03;
+                padding:10px 14px;margin:0 0 12px;border-radius:4px;">
+      {{ aviso_sem_estab|safe }}
+    </div>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}
+
 {% block nav-breadcrumbs %}
 <div class="admin-subnav-container">
   <div class="admin-breadcrumbs-area">

@@ -25,7 +25,27 @@
         </div>
 
         <div class="item-left">
-            {{ filter.form|crispy }}
+            {% for field in filter.form %}
+                {% if field.field.widget.input_type == 'checkbox' %}
+                    <div class="filter-toggle-row">
+                        <label class="filter-toggle-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        <span class="filter-toggle-control">
+                            <input type="checkbox"
+                                   name="{{ field.html_name }}"
+                                   id="{{ field.id_for_label }}"
+                                   class="filter-toggle-input"
+                                   {% if field.value %}checked{% endif %}
+                                   {% if field.field.disabled %}disabled{% endif %}
+                                   aria-label="{{ field.label }}">
+                            <span class="filter-toggle-track" aria-hidden="true"></span>
+                        </span>
+                    </div>
+                    {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors }}</div>{% endif %}
+                    {% if field.help_text %}<small class="form-text text-light">{{ field.help_text }}</small>{% endif %}
+                {% else %}
+                    {{ field|as_crispy_field }}
+                {% endif %}
+            {% endfor %}
         </div>
 
 

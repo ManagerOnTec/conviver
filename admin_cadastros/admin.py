@@ -40,8 +40,10 @@ class EstadoAdmin(ExportToXLSMixin, admin.ModelAdmin):
 
         # Verifica se a solicitação veio de um campo de autocomplete
         if 'HTTP_REFERER' in request.META:
-            referer_path = request.META['HTTP_REFERER'].split(
-                request.META['HTTP_HOST'])[1]
+            # HTTP_HOST pode estar ausente (ex.: alguns clientes ajax) — não
+            # pode derrubar a busca; deriva o path direto do referer.
+            from urllib.parse import urlparse
+            referer_path = urlparse(request.META['HTTP_REFERER']).path
             if '/add/' in referer_path or '/change/' in referer_path:
                 # Se a solicitação veio de um campo de autocomplete, filtra os objetos inativos
                 queryset = queryset.filter(status='A')
@@ -83,8 +85,10 @@ class CidadeAdmin(ExportToXLSMixin, admin.ModelAdmin):
 
         # Verifica se a solicitação veio de um campo de autocomplete
         if 'HTTP_REFERER' in request.META:
-            referer_path = request.META['HTTP_REFERER'].split(
-                request.META['HTTP_HOST'])[1]
+            # HTTP_HOST pode estar ausente (ex.: alguns clientes ajax) — não
+            # pode derrubar a busca; deriva o path direto do referer.
+            from urllib.parse import urlparse
+            referer_path = urlparse(request.META['HTTP_REFERER']).path
             if '/add/' in referer_path or '/change/' in referer_path:
                 # Se a solicitação veio de um campo de autocomplete, filtra os objetos inativos
                 queryset = queryset.filter(status='A')
@@ -124,8 +128,10 @@ class PaisAdmin(ExportToXLSMixin, admin.ModelAdmin):
 
         # Verifica se a solicitação veio de um campo de autocomplete
         if 'HTTP_REFERER' in request.META:
-            referer_path = request.META['HTTP_REFERER'].split(
-                request.META['HTTP_HOST'])[1]
+            # HTTP_HOST pode estar ausente (ex.: alguns clientes ajax) — não
+            # pode derrubar a busca; deriva o path direto do referer.
+            from urllib.parse import urlparse
+            referer_path = urlparse(request.META['HTTP_REFERER']).path
             if '/add/' in referer_path or '/change/' in referer_path:
                 # Se a solicitação veio de um campo de autocomplete, filtra os objetos inativos
                 queryset = queryset.filter(status='A')
@@ -159,8 +165,10 @@ class GeneroAdmin(admin.ModelAdmin):
 
         # Verifica se a solicitação veio de um campo de autocomplete
         if 'HTTP_REFERER' in request.META:
-            referer_path = request.META['HTTP_REFERER'].split(
-                request.META['HTTP_HOST'])[1]
+            # HTTP_HOST pode estar ausente (ex.: alguns clientes ajax) — não
+            # pode derrubar a busca; deriva o path direto do referer.
+            from urllib.parse import urlparse
+            referer_path = urlparse(request.META['HTTP_REFERER']).path
             if '/add/' in referer_path or '/change/' in referer_path:
                 # Se a solicitação veio de um campo de autocomplete, filtra os objetos inativos
                 queryset = queryset.filter(status='A')
@@ -727,8 +735,10 @@ class PessoaAdmin(AdminDashboardAndTopFilterMixin, ExportToXLSMixin,
         queryset, use_distinct = super().get_search_results(request, queryset, search_term)
 
         if 'HTTP_REFERER' in request.META:
-            referer_path = request.META['HTTP_REFERER'].split(
-                request.META['HTTP_HOST'])[1]
+            # HTTP_HOST pode estar ausente (ex.: alguns clientes ajax) — não
+            # pode derrubar a busca; deriva o path direto do referer.
+            from urllib.parse import urlparse
+            referer_path = urlparse(request.META['HTTP_REFERER']).path
             if '/add/' in referer_path or '/change/' in referer_path:
                 queryset = queryset.filter(status='A')
 
@@ -952,8 +962,10 @@ class EmpresaAdmin(AdminDashboardAndTopFilterMixin, ExportToXLSMixin,
 
         # Verifica se a solicitação veio de um campo de autocomplete
         if 'HTTP_REFERER' in request.META:
-            referer_path = request.META['HTTP_REFERER'].split(
-                request.META['HTTP_HOST'])[1]
+            # HTTP_HOST pode estar ausente (ex.: alguns clientes ajax) — não
+            # pode derrubar a busca; deriva o path direto do referer.
+            from urllib.parse import urlparse
+            referer_path = urlparse(request.META['HTTP_REFERER']).path
             if '/add/' in referer_path or '/change/' in referer_path:
                 # Se a solicitação veio de um campo de autocomplete, filtra os objetos inativos
                 queryset = queryset.filter(status='A')
@@ -994,8 +1006,10 @@ class EstabelecimentoAdmin(admin.ModelAdmin):
 
         # Verifica se a solicitação veio de um campo de autocomplete
         if 'HTTP_REFERER' in request.META:
-            referer_path = request.META['HTTP_REFERER'].split(
-                request.META['HTTP_HOST'])[1]
+            # HTTP_HOST pode estar ausente (ex.: alguns clientes ajax) — não
+            # pode derrubar a busca; deriva o path direto do referer.
+            from urllib.parse import urlparse
+            referer_path = urlparse(request.META['HTTP_REFERER']).path
             if '/add/' in referer_path or '/change/' in referer_path:
                 # Se a solicitação veio de um campo de autocomplete, filtra os objetos inativos
                 queryset = queryset.filter(status='A')
@@ -1034,8 +1048,10 @@ class TipoAtendimentoAdmin(admin.ModelAdmin):
 
         # Verifica se a solicitação veio de um campo de autocomplete
         if 'HTTP_REFERER' in request.META:
-            referer_path = request.META['HTTP_REFERER'].split(
-                request.META['HTTP_HOST'])[1]
+            # HTTP_HOST pode estar ausente (ex.: alguns clientes ajax) — não
+            # pode derrubar a busca; deriva o path direto do referer.
+            from urllib.parse import urlparse
+            referer_path = urlparse(request.META['HTTP_REFERER']).path
             if '/add/' in referer_path or '/change/' in referer_path:
                 # Se a solicitação veio de um campo de autocomplete, filtra os objetos inativos
                 queryset = queryset.filter(status='A')

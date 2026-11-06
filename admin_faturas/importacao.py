@@ -181,12 +181,141 @@ def extrair_empenho(descricao):
     return m.group(1).strip().rstrip('.')
 
 
-def extrair_diaria(descricao):
-    """'Diária de R$ 375,84' → Decimal('375.84')."""
-    m = RE_DIARIA.search(descricao or '')
-    if not m:
+RE_DIARIA_ROTULO = re.compile(r'di[aá]ria', re.IGNORECASE)
+
+
+def extrair_diaria(texto):
+    """Diária ROTULADA no texto: 'Diária de R$ 375,84' / 'Diária R$ 415,00'.
+
+    Só aceita quando o texto **tem a palavra “diária”** — é o sinal seguro.
+    Célula que é só um número (ex.: Joinville, com `8348.28` na coluna J)
+    NÃO é diária: ali o número pode ser o total da competência.
+    """
+    bruto = str(texto or '')
+    if not RE_DIARIA_ROTULO.search(bruto):
         return None
-    return _decimal('R$ ' + m.group(1).strip())
+    m = RE_DIARIA.search(bruto)
+    if m:
+        return _decimal('R$ ' + m.group(1).strip())
+    return None
+
+
+RE_VALOR_TEXTO = re.compile(
+    r'R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*,[0-9]{2}|[0-9]+(?:[.,][0-9]{2})?)',
+    re.IGNORECASE)
+
+
+def extrair_diaria_coluna(celula_j, texto_k, valor_h):
+    """Diária POR CLIENTE — decide entre a coluna J e a K.
+
+    A planilha registra a diária de três formas (todas reais):
+
+    | Origem | Exemplo | Significa |
+    |---|---|---|
+    | K com “Diária R$” | `Diária R$ 375,84` | diária por cliente |
+    | K com “R$ x” na 2ª linha | `9 Pacientes` / `R$ 415,00` | diária por cliente |
+    | J só com o número | `277.52` | diária por cliente |
+
+    E uma armadilha: em **Joinville** a coluna J repete o TOTAL da nota
+    (`8348.28`) e a observação NÃO traz valor — ali J **não** é diária.
+
+    Regra (nesta ordem):
+
+    1. A observação (K) tem `Diária R$ …` → **é** a diária;
+    2. A observação (K) tem `R$ …` (ex.: `415,00`) → **é** a diária. Esse
+       é o sinal mais confiável: quem escreve o valor na nota está
+       declarando o preço unitário;
+    3. Sem valor em K, o número da coluna J só vale se **NÃO** for o
+       total da linha (H) nem o valor por cliente calculado de H. Joinville
+       cai aqui e é descartado; Navegantes (K sem `R$`) é aceito.
+    """
+    bruto_j = str(celula_j or '').strip()
+    texto_k = str(texto_k or '')
+
+    # 1) “Diária R$ …” em qualquer uma das colunas. Se a palavra “diária”
+    #    aparece mas SEM valor colado (`62 diárias a 277,52 dia`), o
+    #    `extrair_diaria` devolve None — então seguimos para o próximo
+    #    sinal em vez de abortar (era o bug de Navegantes).
+    if RE_DIARIA_ROTULO.search(texto_k) or RE_DIARIA_ROTULO.search(bruto_j):
+        rotulada = extrair_diaria(texto_k) or extrair_diaria(bruto_j)
+        if rotulada:
+            return rotulada
+
+    # 1.b) “<valor> dia” / “a <valor> dia” sem a palavra “diária”:
+    #      `62 diárias a  277,52  dia` → 277,52.
+    m_dia = re.search(
+        r'(?:a\s+)?([0-9]{1,3}(?:\.[0-9]{3})*,[0-9]{2}|[0-9]+(?:\.[0-9]+)?)'
+        r'\s*(?:reais\s*)?(?:/|por\s+)?dia\b', texto_k, re.IGNORECASE)
+    if m_dia:
+        valor = _decimal(m_dia.group(1))
+        if valor and not (valor_h is not None and valor == valor_h):
+            return valor
+
+    # 2) “R$ …” na observação = valor unitário declarado na nota.
+    m_valor_k = RE_VALOR_TEXTO.search(texto_k)
+    if m_valor_k:
+        valor = _decimal(m_valor_k.group(1))
+        # Igual ao TOTAL da nota? então é o total, não a diária.
+        if valor and not (valor_h is not None and valor == valor_h):
+            return valor
+
+    # 3) Coluna J só com o número (contrato sem valor na nota).
+    if not bruto_j:
+        return None
+    m_num = re.fullmatch(r'R?\$?\s*([0-9]{1,3}(?:\.[0-9]{3})*,[0-9]{2}'
+                         r'|[0-9]+(?:[.,][0-9]+)?)\s*', bruto_j)
+    if not m_num:
+        return None            # texto livre (ofício, reajuste…)
+    numero = _decimal(m_num.group(1))
+    if numero is None or numero <= 0:
+        return None
+    if valor_h is not None and numero >= valor_h:
+        return None
+    return numero
+
+
+def refinar_diaria_do_grupo(diarias_por_linha):
+    """Descarta a “diária” que é, na verdade, o TOTAL repetido da nota.
+
+    Joinville lança `8348.28` na coluna J **em todas as competências**, sem
+    valor na observação e sem total (H). Nenhuma regra de linha consegue
+    provar que é diária — mas o PADRÃO do grupo prova que NÃO é: uma diária
+    variaria com os dias do mês (31, 30, 28…), e um valor IGUAL em 3+ meses
+    seguidos não varia.
+
+    **O que distingue uma diária de um total repetido?**
+
+    | Grupo | Coluna J | Diagnóstico |
+    |---|---|---|
+    | Itajaí (9 cli.) | `415` em todas | DIÁRIA — é pequena, cabe em 1 dia |
+    | Joinville (12 cli.) | `8348.28` em todas | TOTAL — não é preço de 1 dia |
+
+    O número igual em todos os meses **não** basta para decidir: uma diária
+    de contrato também é fixa. O discriminador é a **ordem de grandeza**:
+    se o valor por cliente é da magnitude de um dia de atendimento (até
+    R$ 1.000), é diária; acima disso, é o total da nota repetido.
+
+    Quando o grupo trazia `H` (total) nas linhas, esse teste nem chega
+    aqui — a coluna J já foi descartada na leitura da linha.
+
+    `diarias_por_linha` é a lista de diárias (uma por linha do grupo,
+    já como `Decimal` ou None).
+    """
+    valores = [d for d in diarias_por_linha if d]
+    if not valores:
+        return None
+    # Todos iguais: só é diária se couber em um dia de atendimento.
+    if len(set(valores)) == 1:
+        unico = valores[0]
+        if len(diarias_por_linha) >= 3 and unico > Decimal('1000'):
+            return None
+        return unico
+    # Oscilou entre competências → é a diária (multiplicada pelos dias).
+    # Usa a mais frequente, que é a “diária da casa”.
+    contagem = {}
+    for d in valores:
+        contagem[d] = contagem.get(d, 0) + 1
+    return max(contagem, key=contagem.get)
 
 
 RE_FORMULA_DIARIA = re.compile(
@@ -235,13 +364,61 @@ algum (ex.: o `12` de uma referência) e tratar o acordo como diária.
     return numeros[0]
 
 
+def extrair_quantidade(texto):
+    """Nº de clientes declarado na observação: '9 Pacientes' → 9.
+
+    A coluna E ("QTD NF") pode vir vazia; a observação (K) sempre traz
+    `<n> Paciente(s)`. Serve para CONFERIR o que foi lido da coluna D e
+    avisar quando divergir.
+    """
+    m = re.search(r'(\d{1,4})\s*(?:pacientes?|acolhidos?|clientes?)\b',
+                  str(texto or ''), re.IGNORECASE)
+    return int(m.group(1)) if m else None
+
+
+def _partes_clientes(texto):
+    """Divide a célula da coluna D em NOMES, qualquer que seja o separador.
+
+    Os três formatos convivem na mesma planilha:
+
+        Valci Maria Lucindo - 31-08-26      (quebra de linha)
+        Amarildo Forbici; Joao da Silva     (ponto e vírgula)
+        Ester Amaral Batista, Laura ...     (vírgula)
+
+    **Uma única função** para dividir e para CONTAR: se a contagem usasse
+    outra regra, o divisor do valor por cliente divergiria da quantidade
+    de nomes efetivamente criados.
+    """
+    bruto = str(texto or '').replace(';', '\n')
+    partes = []
+    for ln in bruto.splitlines():
+        # Vírgula separa nomes só quando há `palavra, palavra` — evita
+        # quebrar um nome com vírgula interna no meio de uma linha única.
+        if ',' in ln and re.search(r'\w\s*,\s*\w', ln):
+            partes.extend(ln.split(','))
+        else:
+            partes.append(ln)
+    return [p.strip().strip(',;') for p in partes if p.strip().strip(',;')]
+
+
+def contar_clientes_texto(texto):
+    """Nº de nomes da coluna D (aceita `;`, `,` ou quebra de linha)."""
+    return len(_partes_clientes(texto))
+
+
 def extrair_clientes(texto):
     """Acolhidos da coluna D → lista de `(nome, data_nascimento)`.
 
-    Cada acolhido vem em UMA linha da célula:
+    Os acolhidos vêm separados por **quebra de linha**, **`;`** ou
+    **vírgula** (os três formatos aparecem na planilha):
 
         Valci Maria Lucindo - 31-08-26
-        Marli Moreira de Sa - 16-05-26
+        Amarildo Forbici; Joao da Silva
+        Ester Amaral Batista, Laura Batista Tavares, Kleber...
+
+    ATENÇÃO: a vírgula só separa nomes quando a célula é uma lista corrida
+    (`A, B, C`) — se o nome traz vírgula no próprio texto (raro), a divisão
+    geraria dois. Como a planilha usa o padrão `Nome, Nome,`, dividimos.
 
     A data depois do último hífen é a data de nascimento (dd-mm-aa). Nome
     é tudo o que vem antes. Linhas sem nome são descartadas.
@@ -250,10 +427,7 @@ def extrair_clientes(texto):
 
     clientes = []
     vistos = set()
-    for bruto in str(texto or '').splitlines():
-        linha = bruto.strip()
-        if not linha:
-            continue
+    for linha in _partes_clientes(texto):
         nome = linha
         nascimento = None
         m = re.search(
@@ -282,14 +456,20 @@ def extrair_clientes(texto):
 # ----------------------------------------------------------------------
 # Leitura da planilha
 # ----------------------------------------------------------------------
+# ÍNDICES 0-based (openpyxl é 1-based: `COLUNAS[x] + 1`).
+#
+#   A DATA | B CIDADE | C CNPJ | D ACOLHIDOS | E NF | F EMITIDO EM
+#   G MÊS REFERÊNCIA | H VALOR DA NF | I VALOR RECEBIDO | J EMPENHO
+#   K DESCRIÇÃO DA NOTA
 COLUNAS = {
-    'acolhidos': 3,
-    'quantidade': 4,
-    'emitido': 5,
-    'referencia': 6,
-    'valor': 7,
-    'descricao': 10,
-    'observacao': 11,
+    'acolhidos': 3,       # D — nomes dos clientes
+    'quantidade': 4,      # E — NF / QTD (pode vir vazia)
+    'emitido': 5,         # F — EMITIDO EM (dia de envio + competência)
+    'referencia': 6,      # G — MÊS REFERÊNCIA
+    'valor': 7,           # H — VALOR DA NF (total do grupo/competência)
+    'recebido': 8,        # I — VALOR RECEBIDO
+    'descricao': 9,       # J — EMPENHO (o rótulo da coluna confunde)
+    'observacao': 10,     # K — DESCRIÇÃO DA NOTA (diária, contrato...)
 }
 
 
@@ -377,16 +557,28 @@ def ler_planilha(caminho_arquivo):
         observacao = str(cel('observacao') or '')
         formula_valor = ws_formulas.cell(
             row=num_linha, column=COLUNAS['valor'] + 1).value
-        contrato = extrair_contrato(descricao)
-        empenho = extrair_empenho(descricao)
-        # A DIÁRIA pode estar em TRÊS lugares:
-        #   1. na descrição (coluna J): "Diária de R$ 375,84";
-        #   2. na observação (coluna K);
-        #   3. na FÓRMULA do valor: `=425*9*O$1` → diária 425.
-        diaria = (extrair_diaria(descricao)
-                  or extrair_diaria(observacao)
-                  or extrair_diaria_formula(formula_valor))
+        # Contrato/empenho aparecem tanto na coluna J quanto na K.
+        contrato = (extrair_contrato(descricao)
+                    or extrair_contrato(observacao))
+        empenho = (extrair_empenho(descricao)
+                   or extrair_empenho(observacao))
         valor = _decimal(cel('valor'))
+        # A DIÁRIA POR CLIENTE, nesta ordem:
+        #   1. valor declarado na nota (K: “Diária R$ …” ou “R$ …”) e, na
+        #      falta dele, número puro da coluna J — ver
+        #      `extrair_diaria_coluna`;
+        #   2. FÓRMULA do valor: `=425*9*O$1` → diária 425.
+        diaria = (extrair_diaria_coluna(descricao, observacao, valor)
+                  or extrair_diaria_formula(formula_valor))
+        clientes_da_linha = extrair_clientes(cel('acolhidos'))
+        qtd_observacao = extrair_quantidade(observacao)
+        if (qtd_observacao is not None and clientes_da_linha
+                and qtd_observacao != len(clientes_da_linha)):
+            avisos.append(
+                ('alerta',
+                 f'Linha {num_linha}: a observação diz {qtd_observacao} '
+                 f'paciente(s), mas a coluna D lista '
+                 f'{len(clientes_da_linha)}. Confira os nomes.'))
 
         cidade = limpar_cidade(cidade_bruta)
         chave = (normalizar_texto(cidade), cnpj, contrato or '')
@@ -399,6 +591,9 @@ def ler_planilha(caminho_arquivo):
                 'nr_contrato': contrato or '',
                 'empenho_global': empenho or '',
                 'valor_diaria': diaria or Decimal('0.00'),
+                # Diárias LINHA a LINHA: o grupo decide no final se aquele
+                # número é diária ou o total repetido (Joinville).
+                '_diarias': [],
                 'competencias': [],
                 'valores': [],
                 'clientes': [],
@@ -413,36 +608,80 @@ def ler_planilha(caminho_arquivo):
             grupo['empenho_global'] = empenho
 
         grupo['competencias'].append(emitido)
-        grupo['valores'].append(valor)
         grupo['linhas'].append(num_linha)
-        # CLIENTES da coluna D (um acolhido por linha da célula, com data de
-        # nascimento). São acumulados no grupo, sem repetir.
-        for nome, nascimento in extrair_clientes(cel('acolhidos')):
+        grupo['_diarias'].append(diaria)   # refinado ao fechar o grupo
+        # CLIENTES da coluna D (um acolhido por linha/quebra da célula, com
+        # data de nascimento). Acumulados no grupo, sem repetir — o mesmo
+        # cliente aparece em TODAS as competências do grupo.
+        for nome, nascimento in clientes_da_linha:
             chave_cliente = (normalizar_texto(nome), nascimento)
             if chave_cliente in grupo['_clientes_vistos']:
                 continue
             grupo['_clientes_vistos'].add(chave_cliente)
             grupo['clientes'].append(
                 {'nome': nome, 'nascimento': nascimento})
+        # O VALOR da planilha é por COMPETÊNCIA do grupo — NÃO por cliente.
+        # Guardamos (valor_da_linha, nº de clientes DA LINHA) para dividir
+        # depois. A coluna E pode vir vazia: aí o divisor é a própria
+        # coluna D.
+        qtd_linha = (extrair_quantidade(observacao)
+                     or len(clientes_da_linha))
+        grupo['valores'].append((valor, qtd_linha if qtd_linha else None))
 
     acordos = []
     for grupo in grupos.values():
-        competencias = sorted(grupo['competencias'])
-        valores = [v for v in grupo['valores'] if v is not None]
-        # Acordo POR DIÁRIA: valor_mensal = 0 (o valor real é diária × dias).
+        # COMPETÊNCIAS: dias de emissão distintos. O acordo é UM por grupo,
+        # então a mesma data repetida em linhas diferentes não é uma nova
+        # competência. As linhas VERMELHAS já saíram antes daqui.
+        competencias = sorted(set(grupo['competencias']))
+        n_clientes = len(grupo['clientes'])
+
+        # DIÁRIA do grupo: o mesmo número repetido em TODAS as linhas é o
+        # TOTAL da nota, não uma diária (ver `refinar_diaria_do_grupo`).
+        diaria_grupo = refinar_diaria_do_grupo(grupo['_diarias'])
+        grupo['valor_diaria'] = diaria_grupo or Decimal('0.00')
+        pares = [(v, q) for v, q in grupo['valores'] if v is not None]
+        valor_mensal = Decimal('0.00')
+        valor_total_competencia = Decimal('0.00')
+
+        # ---- REGRA: o VALOR É SEMPRE POR CLIENTE (individual) ----------
+        # A planilha lança, por competência, o total do grupo. O sistema
+        # fatura por cliente (`valor_mensal` × nº de clientes), então o
+        # valor do acordo é o total DIVIDIDO pelo nº de clientes da linha.
         if grupo['valor_diaria']:
+            # Por DIÁRIA: o valor real é diária × dias × clientes; o
+            # `valor_mensal` do acordo fica 0 (não é mensal). O “total da
+            # competência” exibido é a diária × clientes (o que a nota
+            # cobraria em 1 dia) — não o valor fixo da coluna H.
             valor_mensal = Decimal('0.00')
-        elif valores:
-            valor_mensal = valores[0]
-            if len(set(valores)) > 1:
-                avisos.append(
-                    ('alerta',
-                     f'{grupo["cidade"]} / CNPJ {grupo["cnpj"]} / CT '
-                     f'{grupo["nr_contrato"] or "-"}: valores diferentes no '
-                     f'grupo ({", ".join(str(v) for v in sorted(set(valores)))})'
-                     ' — usando o primeiro. Confira antes de confirmar.'))
-        else:
-            valor_mensal = Decimal('0.00')
+            valor_total_competencia = (
+                grupo['valor_diaria'] * Decimal(n_clientes or 1))
+        elif pares:
+            # H = MENSALIDADE POR CLIENTE → usa DIRETO, sem dividir.
+            valor_mensal = pares[0][0]
+            valor_total_competencia = valor_mensal * Decimal(n_clientes or 1)
+            # Competências com TOTAIS diferentes podem significar valor por
+            # cliente diferente (reajuste) ou grupo de clientes diferente.
+            # O valor já É por cliente (não divide): deve ser o mesmo em
+            # todas as competências do grupo.
+            unitarios = sorted({v for v, _ in pares})
+            if len(unitarios) > 1:
+                if len(unitarios) > 1:
+                    avisos.append(
+                        ('alerta',
+                         f'{grupo["cidade"]} / CNPJ {grupo["cnpj"]} / CT '
+                         f'{grupo["nr_contrato"] or "-"}: o valor POR '
+                         f'CLIENTE muda entre competências '
+                         f'({", ".join(str(u) for u in sorted(unitarios))})'
+                         ' — possível reajuste. Usando o primeiro; confira '
+                         'antes de confirmar.'))
+                else:
+                    avisos.append(
+                        ('alerta',
+                         f'{grupo["cidade"]} / CNPJ {grupo["cnpj"]} / CT '
+                         f'{grupo["nr_contrato"] or "-"}: totais diferentes '
+                         'entre competências, mas o valor POR CLIENTE é o '
+                         'mesmo — o nº de clientes deve ter variado.'))
 
         acordos.append({
             'cidade': grupo['cidade'],
@@ -455,6 +694,8 @@ def ler_planilha(caminho_arquivo):
                 + (f' / CT {grupo["nr_contrato"]}'
                    if grupo['nr_contrato'] else '')),
             'valor_mensal': valor_mensal,
+            'valor_total_competencia': valor_total_competencia,
+            'qtd_clientes': n_clientes,
             'valor_diaria': grupo['valor_diaria'],
             'inicio_vigencia': competencias[0],
             'final_vigencia': competencias[-1],
@@ -519,7 +760,7 @@ def importar(acordos, user, estabelecimento):
     - A CIDADE é criada em SC se não existir;
     - Os CLIENTES da coluna D viram `Pessoa` (classificação 'paciente') e
       são VINCULADOS ao acordo;
-    - O ACORDO é criado com `modo_fatura='CL'` (um cliente por linha).
+    - O ACORDO importado é criado com `modo_fatura='CO'` (fatura consolidada).
     """
     from admin_cadastros.models import Empresa, Pessoa
     from admin_faturas.models import AcordoFaturamento
@@ -591,7 +832,8 @@ def importar(acordos, user, estabelecimento):
         acordo = AcordoFaturamento.objects.create(
             acordo_faturamento=dados['acordo_faturamento'][:255],
             pagador_pj=empresa,
-            modo_fatura='CL',
+            # Planilha de convênios importa acordos consolidados por padrão.
+            modo_fatura='CO',
             modalidade_contrato='CO',
             nr_contrato=(dados['nr_contrato'] or '')[:30],
             empenho_global=(dados['empenho_global'] or '')[:30],

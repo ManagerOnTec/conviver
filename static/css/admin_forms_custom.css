@@ -273,12 +273,15 @@
     border: 0 !important;
 }
 
-/* No inline tabular os 4 ícones (+, lápis, x, olho) roubavam toda a largura da
-   célula, deixando o select2 com ~4px. As ações continuam disponíveis pela
-   lista do admin e pela tela do item. */
-.admin-custom-change-form .inline-group .related-widget-wrapper-link,
-.admin-custom-change-form .inline-group .related-widget-wrapper > a,
-.admin-custom-change-form .inline-group .related-widget-wrapper .select2-hidden-accessible ~ a {
+/* No inline TABULAR os 4 ícones (+, lápis, x, olho) roubavam toda a largura
+   da célula, deixando o select2 com ~4px. As ações continuam disponíveis pela
+   lista do admin e pela tela do item.
+   LIMITADO ao inline tabular (`table`): no inline STACKED (ex.: Perfil do
+   usuário, StackedInline) o botão verde "+" DEVE aparecer — é a forma de
+   cadastrar Pessoa/Estabelecimento sem sair da tela. */
+.admin-custom-change-form .inline-group table .related-widget-wrapper-link,
+.admin-custom-change-form .inline-group table .related-widget-wrapper > a,
+.admin-custom-change-form .inline-group table .select2-hidden-accessible ~ a {
     display: none !important;
 }
 
@@ -379,6 +382,100 @@
 
 .admin-custom-change-form .related-widget-wrapper .related-widget-wrapper-link {
     flex: 0 0 auto !important;
+}
+
+/* BOTÃO “+” DOS CAMPOS FK DO PERFIL (Usuário) — widget próprio
+   (contas/templates/contas/widgets/select_add.html): fica ao lado do
+   select, verde, e abre o popup de cadastro do modelo relacionado. */
+.perfil-add-wrap {
+    display: flex !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+    width: 100% !important;
+}
+/* select simples (FK): mesma altura dos demais campos do form */
+.perfil-add-wrap > select:not([multiple]) {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    height: 48px !important;
+    min-height: 48px !important;
+    padding: 12px 16px !important;
+    font-size: 1rem !important;
+    border-radius: 8px !important;
+    border: 1.5px solid var(--border-color, #cbd5e1) !important;
+    background: var(--body-bg, #ffffff) !important;
+    color: var(--body-fg, #0f172a) !important;
+    box-sizing: border-box !important;
+}
+/* select MÚLTIPLO (estabelecimentos): lista vertical confortável em vez de
+   a caixa de 2 linhas estranha; selecionar com Ctrl/clique ou arrastar */
+.perfil-add-wrap > select[multiple] {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    height: 130px !important;
+    padding: 8px 12px !important;
+    font-size: 0.95rem !important;
+    border-radius: 8px !important;
+    border: 1.5px solid var(--border-color, #cbd5e1) !important;
+    background: var(--body-bg, #ffffff) !important;
+    color: var(--body-fg, #0f172a) !important;
+    box-sizing: border-box !important;
+}
+.perfil-add-wrap > select[multiple] option {
+    padding: 6px 8px !important;
+    border-radius: 4px;
+}
+.perfil-add-btn {
+    flex: 0 0 auto !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 28px !important;
+    height: 28px !important;
+    min-width: 28px;
+    margin-top: 10px;
+    border-radius: 6px;
+    background: #198754 !important;
+    color: #fff !important;
+    font-weight: 700;
+    font-size: 1.15rem;
+    line-height: 1;
+    text-decoration: none !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,.2);
+}
+.perfil-add-btn:hover {
+    background: #146c43 !important;
+    color: #fff !important;
+}
+
+/* BOTÃO “+” NOS WIDGETS RELACIONADOS DO INLINE PERFIL (Usuário):
+   a regra de campos grandes dá `width: 100%` ao <select>, e o wrapper tem
+   `overflow: hidden` (widgets.css do Django) — os links +/lápis ficavam
+   FORA da área visível, cortados. Aqui o select encolhe para abrir espaço
+   aos links e o wrapper deixa de cortar. */
+.admin-custom-change-form .inline-group .related-widget-wrapper {
+    overflow: visible !important;
+}
+.admin-custom-change-form .inline-group .related-widget-wrapper > select {
+    width: auto !important;
+    max-width: 100% !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+}
+/* M2M com FilteredSelectMultiple (Estabelecimentos): o painel duplo também
+   ocupava 100% e empurrava o “+” para fora do wrapper. */
+.admin-custom-change-form .inline-group .related-widget-wrapper > .selector {
+    width: calc(100% - 34px) !important;
+    max-width: calc(100% - 34px) !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+}
+.admin-custom-change-form .inline-group .related-widget-wrapper > a.related-widget-wrapper-link {
+    flex: 0 0 auto !important;
+    display: inline-block !important;
+    opacity: 1 !important;
 }
 
 /* SELECT2 (autocomplete) — o plugin calcula `width` inline antes deste CSS

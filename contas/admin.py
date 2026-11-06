@@ -10,7 +10,8 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DefaultUserAdmin
 from django.contrib.auth.models import User
 from .models import Pessoa, Estabelecimento, Perfil
-from .forms import CustomUserChangeForm, CustomUserCreationForm, PerfilForm
+from .forms import (CustomUserChangeForm, CustomUserCreationForm,
+                    PerfilForm, PerfilInlineForm)
 from django.core.exceptions import ValidationError
 from admin_cadastros.models import Pessoa
 
@@ -39,17 +40,20 @@ class PerfilInlineFormSet(BaseInlineFormSet):
 
 class PerfilInline(admin.StackedInline):
     model = Perfil
-    form = PerfilForm
+    # Form próprio do inline: autocomplete nativo + “+” nos FKs
+    form = PerfilInlineForm
     formset = PerfilInlineFormSet
     can_delete = False
     verbose_name = 'Perfil'
     verbose_name_plural = 'Perfis'
     ordering = ['-pk',]
-
-    def has_delete_permission(self, request, obj=None):
-        return False
+    # Autocomplete nativo: o admin valida o field_name contra ESTE admin
+    # (fonte) no endpoint ajax e monta os widgets com o remote_field certo.
+    autocomplete_fields = ('pessoa', 'estabelecimento', 'estabelecimento_padrao')
 
     # 🔒 FILTRA SOMENTE FUNCIONÁRIOS NO PERFIL
+    # (o botão “+” nos campos funcionário/estabelecimentos é aplicado no
+    # `PerfilForm.__init__`, em forms.py — RelatedFieldWidgetWrapper.)
     def get_formset(self, request, obj=None, **kwargs):
         formset = super().get_formset(request, obj, **kwargs)
 
@@ -157,3 +161,37 @@ admin.site.unregister(User)
 admin.site.register(User, UserAdmin)
 User._meta.verbose_name_plural = "2. Usuários"
 Group._meta.verbose_name_plural = "1. Grupos"
+
+
+@admin.register(Perfil)
+class PerfilAdmin(admin.ModelAdmin):
+    """REGISTRADO apenas para o AUTOCOMPLETE funcionar.
+
+    O endpoint /admin/autocomplete/ do Django valida que o campo
+    (field_name) existe no ModelAdmin do modelo de ORIGEM. O Perfil é um
+    inline do Usuário (não tem tela própria), mas os widgets de
+    estabelecimento/estabelecimento_padrao do inline fazem autocomplete
+    com field_name='perfil' — sem este registro o endpoint responde 403
+    e o select2 mostra "Os resultados não puderam ser carregados".
+
+    has_module_permission=False: não aparece no menu/índice do admin.
+    """
+    # Inclui M2M de estabelecimentos: o endpoint /admin/autocomplete/ valida
+    # que o campo de origem consta nesta lista; sem isso retorna 403 no inline.
+    autocomplete_fields = ('pessoa', 'estabelecimento', 'estabelecimento_padrao')
+    search_fields = ('pessoa__nome',)
+    # O endpoint ajax executa get_search_results no admin do modelo destino
+    # (PessoaAdmin). O Select2AdminModelAdminMixin deste admin consulta este
+    # recorte de origem para que o autocomplete de Perfil retorne funcionários
+    # ativos בלבד, não pacientes nem funcionários inativos.
+    select2_querysets = {
+        'pessoa': Pessoa.objects.filter(
+            classificacao_pessoa='funcionario', status='A'),
+    }
+
+    def has_module_permission(self, request):
+        return False
+
+    def has_view_permission(self, request, obj=None):
+        # só o necessário para o autocomplete funcionar
+        return True
