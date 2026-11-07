@@ -10,6 +10,7 @@
 
 ## Menu e telas
 - `/atendimentos/atendimento_listar/` — listagem e filtros de atendimentos.
+- Cadastro, edição e detalhe renderizam o campo `Atendimento.acordo_faturamento` usando `form.acordo_faturamento`; não existe `form.convenio`.
 
 ## Validações
 - `dt_alta` continua filtrando registros com/sem alta conforme os valores BooleanFilter.

@@ -21,6 +21,28 @@
     }
 
     /* ---------------- EDITOR ---------------- */
+    function textoPadraoParaHtmlEditor(conteudo) {
+        var texto = String(conteudo || '');
+        // Texto já formatado pelo TinyMCE deve chegar intacto ao editor.
+        if (/<\/?[a-z][^>]*>/i.test(texto)) return texto;
+        // Texto puro legado: converte explicitamente espaços e quebras para
+        // que o HTML do navegador não colapse nem comprima sua apresentação.
+        return texto
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
+            .replace(/ {2,}/g, function (run) { return '&nbsp;'.repeat(run.length); })
+            .replace(/\r\n|\r|\n/g, '<br />');
+    }
+
+    function htmlToPlainTextPreservingBlocks(html) {
+        var doc = new DOMParser().parseFromString(String(html || ''), 'text/html');
+        doc.querySelectorAll('br').forEach(function (br) { br.replaceWith('\n'); });
+        doc.querySelectorAll('p,div,li,h1,h2,h3,h4,h5,h6,blockquote,pre,tr').forEach(function (el) {
+            el.append('\n');
+        });
+        return (doc.body.textContent || '').replace(/\n{3,}/g, '\n\n');
+    }
+
     function getEditor() {
         if (typeof tinymce === 'undefined') return null;
         var ids = ['id_ata', 'ata', 'id_oficio', 'oficio', 'id_orcamento', 'orcamento'];
@@ -40,27 +62,29 @@
     }
 
     function inserirTexto(html) {
-        var parsed = String(html || '').trim();
-        if (!parsed) return false;
+        // Preserva o HTML rico original; texto puro legado vira um fragmento
+        // HTML que mantém explicitamente seus espaços e quebras.
+        var richHtml = textoPadraoParaHtmlEditor(html);
+        if (!richHtml.trim()) return false;
 
         var editor = getEditor();
         if (editor) {
             editor.focus();
-            editor.execCommand('mceInsertContent', false, parsed);
+            editor.execCommand('mceInsertContent', false, richHtml);
             editor.save();
             return true;
         }
 
         var ta = getTextarea();
         if (ta) {
-            var tmp = document.createElement('div');
-            tmp.innerHTML = parsed;
-            var texto = (tmp.textContent || '').trim();
+            var texto = htmlToPlainTextPreservingBlocks(richHtml);
             var pos = (typeof ta.selectionStart === 'number') ? ta.selectionStart : ta.value.length;
             var antes = ta.value.slice(0, pos);
             var depois = ta.value.slice(pos);
-            ta.value = antes + (antes && !/\n$/.test(antes) ? '\n' : '') + texto + depois;
+            var separador = antes && !/\n$/.test(antes) ? '\n' : '';
+            ta.value = antes + separador + texto + depois;
             ta.focus();
+            ta.dispatchEvent(new Event('input', { bubbles: true }));
             return true;
         }
         return false;

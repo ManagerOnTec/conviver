@@ -101,7 +101,9 @@ tz %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
                 {{ form.pessoa_docentrega|as_crispy_field }}
               </div>
 
-              <div class="col-md-6">{{ form.convenio|as_crispy_field }}</div>
+              <div class="col-md-6">
+                {{ form.acordo_faturamento|as_crispy_field }}
+              </div>
 
               <div class="col-md-6">{{ form.status|as_crispy_field }}</div>
 

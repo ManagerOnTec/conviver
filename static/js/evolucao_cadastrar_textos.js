@@ -6,14 +6,68 @@
  * além de inserção de diagnósticos (CID) com feedback e usabilidade aprimorada.
  */
 
-function decodeHtmlEntities(value) {
-    const parser = new DOMParser();
-    return parser.parseFromString(value ?? '', 'text/html').documentElement.textContent || '';
+function textoPadraoParaHtmlEditor(conteudo) {
+    const texto = String(conteudo ?? '');
+    // Texto salvo pelo TinyMCE já contém HTML estruturado: passe-o intacto.
+    if (/<\/?[a-z][^>]*>/i.test(texto)) return texto;
+
+    // Planilhas/importações antigas podem conter texto puro com espaços e
+    // quebras. Transforme-o em HTML explícito para o browser não colapsar
+    // espaços consecutivos nem juntar linhas ao inserir no TinyMCE.
+    return texto
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
+        .replace(/ {2,}/g, function (run) {
+            return '&nbsp;'.repeat(run.length);
+        })
+        .replace(/\r\n|\r|\n/g, '<br />');
 }
 
-function normalizeEditorHtml(html) {
-    return (html || '').replace(/<p><\/p>/g, '');
+function normalizarHtmlEvolucaoParaRelatorio(html) {
+    const doc = new DOMParser().parseFromString(String(html ?? ''), 'text/html');
+    const body = doc.body;
+    const blocos = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'PRE']);
+
+    // O relatório percorre blocos no nível superior. Normaliza wrappers DIV
+    // legados/colados do Word, preservando os blocos internos como siblings.
+    // DIVs que contêm só texto inline viram parágrafo, sem perder os estilos.
+    function normalizarDiv(div) {
+        Array.from(div.children).filter(child => child.tagName === 'DIV')
+            .forEach(normalizarDiv);
+        const temBlocoInterno = Array.from(div.children).some(child => blocos.has(child.tagName));
+        const temTextoDireto = Array.from(div.childNodes).some(node =>
+            node.nodeType === Node.TEXT_NODE && node.textContent.trim());
+
+        if (!temBlocoInterno && (temTextoDireto || !div.children.length)) {
+            const p = doc.createElement('p');
+            while (div.firstChild) p.appendChild(div.firstChild);
+            div.replaceWith(p);
+            return;
+        }
+        div.replaceWith(...Array.from(div.childNodes));
+    }
+
+    Array.from(body.querySelectorAll('div')).filter(div => !div.parentElement.closest('div'))
+        .forEach(normalizarDiv);
+
+    // O gerador de relatório processa cada LI como um flowable; transformar
+    // blocos internos em parágrafos evita que toda a lista vire um só bloco.
+    body.querySelectorAll('li').forEach(function (li) {
+        const filhosBloco = Array.from(li.children).filter(child => blocos.has(child.tagName));
+        filhosBloco.forEach(function (bloco, index) {
+            if (index > 0) li.insertBefore(doc.createElement('br'), bloco);
+            if (bloco.tagName === 'DIV') {
+                const p = doc.createElement('p');
+                while (bloco.firstChild) p.appendChild(bloco.firstChild);
+                bloco.replaceWith(p);
+            }
+        });
+    });
+
+    return body.innerHTML;
 }
+
+
 
 function getEvolutionEditor() {
     return (typeof tinymce !== 'undefined') ? (tinymce.get('id_evolucao') || tinymce.get('evolucao')) : null;
@@ -22,36 +76,50 @@ function getEvolutionEditor() {
 function insertHtmlIntoEvolution(html, options) {
     options = options || {};
     const prepend = options.prepend || false;
+    // Resolver o fragmento uma vez e preservá-lo também no fallback: o valor
+    // do textarea é o que o formulário persiste e o que o gerador de PDF lê.
+    const richHtml = normalizarHtmlEvolucaoParaRelatorio(
+        textoPadraoParaHtmlEditor(html));
+    if (!richHtml.trim()) return;
+
     const editor = getEvolutionEditor();
-
     if (!editor) {
-        // Fallback para textarea normal se TinyMCE não estiver ativo
-        const textarea = document.getElementById('id_evolucao') || document.getElementById('evolucao');
-        if (textarea) {
-            const cleanText = decodeHtmlEntities(html).replace(/<[^>]+>/g, '');
-            if (prepend) {
-                textarea.value = cleanText + '\n\n' + textarea.value;
-            } else {
-                textarea.value += (textarea.value ? '\n' : '') + cleanText;
-            }
-        }
-        return;
-    }
+    const textarea = document.getElementById('id_evolucao') || document.getElementById('evolucao');
+    if (!textarea) return;
 
-    const sanitizedHtml = normalizeEditorHtml(decodeHtmlEntities(html));
-    if (!sanitizedHtml) {
-        return;
+    // O fallback anterior extraía textContent e salvava apenas texto plano.
+    // Isso podia parecer aceitável na tela, mas removia <p>/<br>/<strong>
+    // do campo persistido e fazia o PDF juntar blocos. Guarde o mesmo HTML
+    // rico no textarea; TinyMCE/form/PDF recebem então o conteúdo original.
+    const separator = textarea.value ? '<p></p>' : '';
+    if (prepend) {
+            textarea.value = richHtml + separator + textarea.value;
+    } else {
+            const start = typeof textarea.selectionStart === 'number'
+                ? textarea.selectionStart : textarea.value.length;
+            const end = typeof textarea.selectionEnd === 'number'
+                ? textarea.selectionEnd : start;
+            textarea.value = textarea.value.slice(0, start)
+                + (start > 0 ? separator : '') + richHtml
+                + textarea.value.slice(end);
+    }
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    textarea.dispatchEvent(new Event('change', { bubbles: true }));
+    textarea.focus();
+    return;
     }
 
     if (prepend) {
-        const currentContent = editor.getContent();
-        const separator = currentContent ? '<br>' : '';
-        editor.setContent(`${sanitizedHtml}${separator}${currentContent}`);
-        return;
+    const currentContent = editor.getContent();
+    const separator = currentContent ? '<p></p>' : '';
+    editor.setContent(`${richHtml}${separator}${currentContent}`);
+    editor.save();
+    return;
     }
 
     editor.focus();
-    editor.execCommand('mceInsertContent', false, sanitizedHtml);
+    editor.execCommand('mceInsertContent', false, richHtml);
+    editor.save();
 }
 
 /**

@@ -176,6 +176,32 @@ class EvolucaoValidationAndPdfTests(TestCase):
 
         self.assertTrue(form.is_valid(), form.errors.as_json())
 
+    def test_rich_text_from_template_field_is_persisted_verbatim_for_report(self):
+        rich_text = (
+            '<p><strong>Primeiro bloco</strong></p>'
+            '<p>Segundo bloco com <em>ênfase</em> e&nbsp;&nbsp;espaços.</p>'
+            '<ul><li>Item um</li><li>Item dois</li></ul>'
+        )
+        form = EvolucaoCreateForm(
+            data={
+                'tipo_evolucao': self.tipo_evolucao.pk,
+                'evolucao': rich_text,
+                'status': 'A',
+            },
+            user=self.user,
+            estabelecimento=self.estabelecimento,
+        )
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+        evolucao = form.save(commit=False)
+        evolucao.atendimento = self.atendimento
+        evolucao.estabelecimento = self.estabelecimento
+        evolucao.us_registro = self.user
+        evolucao.save()
+        evolucao.refresh_from_db()
+        self.assertEqual(evolucao.evolucao, rich_text)
+        self.assertIn('</p><p>', evolucao.evolucao)
+        self.assertIn('<ul><li>Item um</li><li>Item dois</li></ul>', evolucao.evolucao)
+
     def test_create_view_does_not_report_false_signed_success_when_pdf_is_unsigned(self):
         request = RequestFactory().post(
             '/',

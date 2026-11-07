@@ -6,13 +6,30 @@
  * além de inserção de diagnósticos (CID) com feedback e usabilidade aprimorada.
  */
 
-function decodeHtmlEntities(value) {
-    const parser = new DOMParser();
-    return parser.parseFromString(value ?? '', 'text/html').documentElement.textContent || '';
+function textoPadraoParaHtmlEditor(conteudo) {
+    const texto = String(conteudo ?? '');
+    // Texto salvo pelo TinyMCE já contém HTML estruturado: passe-o intacto.
+    if (/<\/?[a-z][^>]*>/i.test(texto)) return texto;
+
+    // Planilhas/importações antigas podem conter texto puro com espaços e
+    // quebras. Transforme-o em HTML explícito para o browser não colapsar
+    // espaços consecutivos nem juntar linhas ao inserir no TinyMCE.
+    return texto
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
+        .replace(/ {2,}/g, function (run) {
+            return '&nbsp;'.repeat(run.length);
+        })
+        .replace(/\r\n|\r|\n/g, '<br />');
 }
 
-function normalizeEditorHtml(html) {
-    return (html || '').replace(/<p><\/p>/g, '');
+function htmlToPlainTextPreservingBlocks(html) {
+    const doc = new DOMParser().parseFromString(String(html ?? ''), 'text/html');
+    doc.querySelectorAll('br').forEach(function (br) { br.replaceWith('\n'); });
+    doc.querySelectorAll('p,div,li,h1,h2,h3,h4,h5,h6,blockquote,pre,tr').forEach(function (el) {
+        el.append('\n');
+    });
+    return (doc.body.textContent || '').replace(/\n{3,}/g, '\n\n');
 }
 
 function getEvolutionEditor() {
@@ -25,33 +42,40 @@ function insertHtmlIntoEvolution(html, options) {
     const editor = getEvolutionEditor();
 
     if (!editor) {
-        // Fallback para textarea normal se TinyMCE não estiver ativo
-        const textarea = document.getElementById('id_evolucao') || document.getElementById('evolucao');
-        if (textarea) {
-            const cleanText = decodeHtmlEntities(html).replace(/<[^>]+>/g, '');
+    // Fallback para textarea: mantém separação entre parágrafos/blocos.
+    // Com TinyMCE ativo, a inserção usa o HTML original logo abaixo.
+    const textarea = document.getElementById('id_evolucao') || document.getElementById('evolucao');
+    if (textarea) {
+            const plainText = htmlToPlainTextPreservingBlocks(html);
             if (prepend) {
-                textarea.value = cleanText + '\n\n' + textarea.value;
+                textarea.value = plainText + '\n\n' + textarea.value;
             } else {
-                textarea.value += (textarea.value ? '\n' : '') + cleanText;
+                const separator = textarea.value && !/\n$/.test(textarea.value) ? '\n' : '';
+                textarea.value += separator + plainText;
             }
-        }
-        return;
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    return;
     }
 
-    const sanitizedHtml = normalizeEditorHtml(decodeHtmlEntities(html));
-    if (!sanitizedHtml) {
-        return;
+    // Não converter HTML rico para textContent: isso achatava parágrafos e
+    // removia formatação. Conteúdo legado em texto puro ganha quebras/escapes.
+    const richHtml = textoPadraoParaHtmlEditor(html);
+    if (!richHtml.trim()) {
+    return;
     }
 
     if (prepend) {
-        const currentContent = editor.getContent();
-        const separator = currentContent ? '<br>' : '';
-        editor.setContent(`${sanitizedHtml}${separator}${currentContent}`);
-        return;
+    const currentContent = editor.getContent();
+    const separator = currentContent ? '<p></p>' : '';
+    editor.setContent(`${richHtml}${separator}${currentContent}`);
+    editor.save();
+    return;
     }
 
     editor.focus();
-    editor.execCommand('mceInsertContent', false, sanitizedHtml);
+    editor.execCommand('mceInsertContent', false, richHtml);
+    editor.save();
 }
 
 /**

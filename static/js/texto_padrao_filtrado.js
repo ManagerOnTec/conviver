@@ -21,6 +21,79 @@
     }
 
     /* ---------------- EDITOR ---------------- */
+    function textoPadraoParaHtmlEditor(conteudo) {
+        var texto = String(conteudo || '');
+        // Texto já formatado pelo TinyMCE deve chegar intacto ao editor.
+        if (/<\/?[a-z][^>]*>/i.test(texto)) return texto;
+        // Texto puro legado: converte explicitamente espaços e quebras para
+        // que o HTML do navegador não colapse nem comprima sua apresentação.
+        return texto
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
+            .replace(/ {2,}/g, function (run) { return '&nbsp;'.repeat(run.length); })
+            .replace(/\r\n|\r|\n/g, '<br />');
+    }
+
+    function normalizarHtmlDocumentoParaRelatorio(html) {
+        var doc = new DOMParser().parseFromString(String(html || ''), 'text/html');
+        var body = doc.body;
+        var blocos = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'PRE']);
+
+        // Alguns modelos (sobretudo textos colados do Word) têm DIVs aninhadas.
+        // O gerador de relatório interpreta blocos no nível superior; promover
+        // os filhos preserva parágrafos, títulos, listas e ênfases sem mudar PDF.
+        function normalizarDiv(div) {
+            Array.from(div.children).filter(function (child) {
+                return child.tagName === 'DIV';
+            }).forEach(normalizarDiv);
+
+            var temBlocoInterno = Array.from(div.children).some(function (child) {
+                return blocos.has(child.tagName);
+            });
+            var temTextoDireto = Array.from(div.childNodes).some(function (node) {
+                return node.nodeType === Node.TEXT_NODE && node.textContent.trim();
+            });
+
+            if (!temBlocoInterno && (temTextoDireto || !div.children.length)) {
+                var p = doc.createElement('p');
+                while (div.firstChild) p.appendChild(div.firstChild);
+                div.replaceWith(p);
+                return;
+            }
+            div.replaceWith.apply(div, Array.from(div.childNodes));
+        }
+
+        Array.from(body.querySelectorAll('div')).filter(function (div) {
+            return !div.parentElement.closest('div');
+        }).forEach(normalizarDiv);
+
+        // A montagem do relatório trata cada LI como bloco, e não percorre
+        // parágrafos dentro do LI. Promove-os separando com <br>.
+        body.querySelectorAll('li').forEach(function (li) {
+            var filhos = Array.from(li.children).filter(function (child) {
+                return blocos.has(child.tagName);
+            });
+            filhos.forEach(function (bloco, index) {
+                if (index > 0) li.insertBefore(doc.createElement('br'), bloco);
+                if (bloco.tagName === 'DIV') {
+                    var p = doc.createElement('p');
+                    while (bloco.firstChild) p.appendChild(bloco.firstChild);
+                    bloco.replaceWith(p);
+                }
+            });
+        });
+        return body.innerHTML;
+    }
+
+    function htmlToPlainTextPreservingBlocks(html) {
+        var doc = new DOMParser().parseFromString(String(html || ''), 'text/html');
+        doc.querySelectorAll('br').forEach(function (br) { br.replaceWith('\n'); });
+        doc.querySelectorAll('p,div,li,h1,h2,h3,h4,h5,h6,blockquote,pre,tr').forEach(function (el) {
+            el.append('\n');
+        });
+        return (doc.body.textContent || '').replace(/\n{3,}/g, '\n\n');
+    }
+
     function getEditor() {
         if (typeof tinymce === 'undefined') return null;
         var ids = ['id_ata', 'ata', 'id_oficio', 'oficio', 'id_orcamento', 'orcamento'];
@@ -40,27 +113,30 @@
     }
 
     function inserirTexto(html) {
-        var parsed = String(html || '').trim();
-        if (!parsed) return false;
+        // Preserva o HTML rico original; texto puro legado vira um fragmento
+        // HTML que mantém explicitamente seus espaços e quebras.
+        var richHtml = normalizarHtmlDocumentoParaRelatorio(
+            textoPadraoParaHtmlEditor(html));
+        if (!richHtml.trim()) return false;
 
         var editor = getEditor();
         if (editor) {
             editor.focus();
-            editor.execCommand('mceInsertContent', false, parsed);
+            editor.execCommand('mceInsertContent', false, richHtml);
             editor.save();
             return true;
         }
 
         var ta = getTextarea();
         if (ta) {
-            var tmp = document.createElement('div');
-            tmp.innerHTML = parsed;
-            var texto = (tmp.textContent || '').trim();
+            var texto = htmlToPlainTextPreservingBlocks(richHtml);
             var pos = (typeof ta.selectionStart === 'number') ? ta.selectionStart : ta.value.length;
             var antes = ta.value.slice(0, pos);
             var depois = ta.value.slice(pos);
-            ta.value = antes + (antes && !/\n$/.test(antes) ? '\n' : '') + texto + depois;
+            var separador = antes && !/\n$/.test(antes) ? '\n' : '';
+            ta.value = antes + separador + texto + depois;
             ta.focus();
+            ta.dispatchEvent(new Event('input', { bubbles: true }));
             return true;
         }
         return false;
