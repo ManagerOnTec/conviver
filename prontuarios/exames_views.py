@@ -11,7 +11,6 @@ from django.contrib.auth import get_user_model
 import django_filters
 from datetime import datetime
 from dominios.choices import status_choices
-from django.forms import inlineformset_factory
 from django.conf import settings
 from django.http import FileResponse, Http404
 from django.views import View
@@ -33,6 +32,7 @@ from admin_exames.models import ParametrosExames
 from atendimentos.models import Atendimento
 from dominios.utils import CustomPermissionRequiredMixin, FilterObjectsByEstabelecimentoMixin, ParametrosProntuariosMixin, UserIsCreatorMixin, calcular_idade
 from .forms_exames import ExameCreateForm, ExameUpdateForm, ResultadoExameForm
+from .exames import ResultadoExameFormSet, salvar_resultados_exame
 from .models import Exame, ResultadoExame
 from .utils import salvar_pdf_prontuario
 
@@ -581,11 +581,26 @@ class ExameUpdateView(LoginRequiredMixin, UserIsCreatorMixin, CustomPermissionRe
     form_class = ExameUpdateForm
     template_name = 'prontuarios/exame_editar.html'
 
+    def get_resultados_formset(self):
+        if not hasattr(self, '_resultados_formset'):
+            kwargs = {
+                'instance': self.object,
+                'prefix': 'resultados',
+            }
+            if self.request.method == 'POST':
+                kwargs.update({
+                    'data': self.request.POST,
+                    'files': self.request.FILES,
+                })
+            self._resultados_formset = ResultadoExameFormSet(**kwargs)
+        return self._resultados_formset
+
     def get_success_url(self):
         return reverse_lazy('exame_listar', kwargs={'atendimento_id': self.object.atendimento_id})
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        context['resultado_formset'] = self.get_resultados_formset()
         atendimento = self.object.atendimento
         pessoa = atendimento.pessoa if atendimento else None
 
@@ -602,6 +617,10 @@ class ExameUpdateView(LoginRequiredMixin, UserIsCreatorMixin, CustomPermissionRe
         
         return context
     def form_valid(self, form):
+        resultado_formset = self.get_resultados_formset()
+        if not resultado_formset.is_valid():
+            return self.form_invalid(form)
+
         try:
             with transaction.atomic():
                 self.object = form.save(commit=False)
@@ -609,6 +628,12 @@ class ExameUpdateView(LoginRequiredMixin, UserIsCreatorMixin, CustomPermissionRe
                 self.object.dt_atualizacao = timezone.now()
                 self.object.full_clean()
                 self.object.save()
+                salvar_resultados_exame(
+                    self.object, resultado_formset, self.request.user)
+                from agenda_pacientes.models import AgendaPaciente
+                for agenda in AgendaPaciente.objects.filter(
+                        exame=self.object, status='A'):
+                    agenda.sincronizar_execucao()
                 from admin_relatorios.models import Relatorio
                 from django.contrib.contenttypes.models import ContentType
                 Relatorio.objects.filter(content_type=ContentType.objects.get_for_model(self.object), object_id=self.object.pk, status='A').update(status='I')

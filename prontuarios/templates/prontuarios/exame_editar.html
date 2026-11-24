@@ -69,6 +69,7 @@
     <form id="form-exame-editar" method="post" enctype="multipart/form-data" class="form-control mt-2">
         {% csrf_token %}
         {{ form.media }}
+        {{ resultado_formset.management_form }}
         <div class="row">
             <div class="col-lg-9 col-md-9 col-sm-9 col-xs-9">
                 {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
@@ -76,6 +77,48 @@
                 {{ form.tipo_exame|as_crispy_field }}
                 {{ form.solicitacao|as_crispy_field }}
                 {{ form.assinar|as_crispy_field }}
+                {{ form.status|as_crispy_field }}
+
+                <h4 class="mt-4">Resultados do exame</h4>
+                {{ resultado_formset.non_form_errors }}
+                {% for resultado_form in resultado_formset %}
+                <section class="border rounded p-3 mb-3 bg-white">
+                    <h5>
+                        {% if resultado_form.instance.pk %}
+                        Resultado {{ forloop.counter }}
+                        {% else %}
+                        Novo resultado
+                        {% endif %}
+                    </h5>
+                    {% for hidden in resultado_form.hidden_fields %}{{ hidden }}{% endfor %}
+                    {{ resultado_form.non_field_errors }}
+                    {% if resultado_form.instance.pk %}
+                    {% if resultado_form.instance.anexo_1 or resultado_form.instance.anexo_2 or resultado_form.instance.anexo_3 %}
+                    <div class="mb-3">
+                        <strong>Anexos atuais:</strong>
+                        {% if resultado_form.instance.anexo_1 %}
+                        <a href="{% url 'resultado_exame_anexo' pk=object.pk resultado_pk=resultado_form.instance.pk numero=1 %}"
+                           target="_blank" rel="noopener" class="custom-link me-2">Anexo 1</a>
+                        {% endif %}
+                        {% if resultado_form.instance.anexo_2 %}
+                        <a href="{% url 'resultado_exame_anexo' pk=object.pk resultado_pk=resultado_form.instance.pk numero=2 %}"
+                           target="_blank" rel="noopener" class="custom-link me-2">Anexo 2</a>
+                        {% endif %}
+                        {% if resultado_form.instance.anexo_3 %}
+                        <a href="{% url 'resultado_exame_anexo' pk=object.pk resultado_pk=resultado_form.instance.pk numero=3 %}"
+                           target="_blank" rel="noopener" class="custom-link me-2">Anexo 3</a>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    {% endif %}
+                    {{ resultado_form.data_resultado|as_crispy_field }}
+                    {{ resultado_form.anotacoes|as_crispy_field }}
+                    {{ resultado_form.anexo_1|as_crispy_field }}
+                    {{ resultado_form.anexo_2|as_crispy_field }}
+                    {{ resultado_form.anexo_3|as_crispy_field }}
+                    {{ resultado_form.status|as_crispy_field }}
+                </section>
+                {% endfor %}
             </div>
             <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
                 {% include 'parciais/_workflow_submit_sidebar.html' with button_id='btn-exame-editar' submit_label='Salvar' status_title='Salvando...' status_spinner_class='text-success' status_text_class='text-success' %}

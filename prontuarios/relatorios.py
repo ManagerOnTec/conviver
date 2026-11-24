@@ -85,6 +85,24 @@ def _resolve_report_image_path(obj, nome_modelo):
         return None
 
 
+def _montar_texto_exame(vardin):
+    tipo_exame = str(vardin.tipo_exame)
+    partes = [f'Tipo de exame: {tipo_exame}', html.unescape(vardin.solicitacao or '')]
+
+    for resultado in vardin.resultados.filter(status='A').order_by('data_resultado'):
+        partes.extend([
+            f'Resultado em {resultado.data_resultado:%d/%m/%Y}',
+            html.unescape(resultado.anotacoes or ''),
+            'Anexos: ' + ', '.join(
+                arquivo.name for arquivo in
+                (resultado.anexo_1, resultado.anexo_2, resultado.anexo_3)
+                if arquivo and arquivo.name),
+        ])
+
+    return '\n'.join(parte.replace('\r\n', '\n').replace('\r', '\n')
+                     for parte in partes if parte)
+
+
 def gerar_pdf_prontuario(obj, user, assinar=False, assinatura_texto=None):
     # buffer e nao pdf
     buffer = BytesIO()
@@ -143,18 +161,7 @@ def gerar_pdf_prontuario(obj, user, assinar=False, assinatura_texto=None):
     if nome_modelo == 'exame':
         iniciais = vardin.tipo_exame.iniciais_nome
         tipo_exame = str(vardin.tipo_exame)
-        resultados = vardin.resultados.filter(status='A').order_by('data_resultado')
-        partes = [f'Tipo de exame: {tipo_exame}', html.unescape(vardin.solicitacao or '')]
-        for resultado in resultados:
-            partes.extend([
-                f'Resultado em {resultado.data_resultado:%d/%m/%Y}',
-                html.unescape(resultado.anotacoes or ''),
-                'Anexos: ' + ', '.join(
-                    arquivo.name for arquivo in
-                    (resultado.anexo_1, resultado.anexo_2, resultado.anexo_3)
-                    if arquivo and arquivo.name),
-            ])
-        texto_parag = '\\n'.join(parte for parte in partes if parte)
+        texto_parag = _montar_texto_exame(vardin)
         gerenciador_personalizado = GerenciadorRelatorioPersonalizado.objects.filter(
             relatorio='exame', estabelecimento_id=estabelecimento_id,
             tipo_exame_id=vardin.tipo_exame_id, status='A').first() or gerenciador_personalizado

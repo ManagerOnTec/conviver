@@ -357,6 +357,7 @@ relatorios_choices = (
     ('orcamentos', 'Orçamento'),
     ('atas', 'Ata'),
     ('documentos_legais', 'Documentos Legais'),
+    ('agenda_pacientes', 'Agenda de Pacientes'),
 )
 
 

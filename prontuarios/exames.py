@@ -1,11 +1,11 @@
 from django.core.exceptions import ValidationError
 from django.forms import inlineformset_factory
 from django.utils import timezone
-from .forms_exames import ResultadoExameForm
+from .forms_exames import ResultadoExameEdicaoForm
 from .models import Exame, ResultadoExame
 ResultadoExameFormSet = inlineformset_factory(
-    Exame, ResultadoExame, form=ResultadoExameForm,
-    extra=3, can_delete=True,
+    Exame, ResultadoExame, form=ResultadoExameEdicaoForm,
+    extra=3, can_delete=False,
 )
 
 

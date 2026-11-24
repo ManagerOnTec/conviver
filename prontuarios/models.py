@@ -142,7 +142,12 @@ class Evolucao(models.Model, RelatorioMixin):
 class Exame(models.Model, RelatorioMixin):
     atendimento = models.ForeignKey(Atendimento, on_delete=models.PROTECT)
     tipo_exame = models.ForeignKey(TipoExame, on_delete=models.PROTECT, verbose_name='Tipo de Exame')
-    solicitacao = models.TextField(blank=True, verbose_name='Solicitação / Indicação')
+    solicitacao = models.TextField(
+        verbose_name='Solicitação / Indicação',
+        error_messages={
+            'blank': 'Informe a solicitação ou indicação do exame.',
+        },
+    )
     anexo_exame = models.FileField(
         upload_to='anexos/exames/%Y/%m/', blank=True, null=True,
         validators=[FileExtensionValidator(['pdf', 'png', 'jpg', 'jpeg']), validate_anexo_file],
@@ -172,6 +177,14 @@ class Exame(models.Model, RelatorioMixin):
 
     def __str__(self):
         return f'{self.tipo_exame} - Atendimento {self.atendimento_id}'
+
+    def clean(self):
+        super().clean()
+        if self.solicitacao and not self.solicitacao.strip():
+            raise ValidationError({
+                'solicitacao':
+                    'Informe a solicitação ou indicação do exame.',
+            })
 
     def save(self, *args, **kwargs):
         self.full_clean()

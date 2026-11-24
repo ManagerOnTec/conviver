@@ -21,8 +21,17 @@ class ExameForm(forms.ModelForm):
 
 class ExameCreateForm(ExameForm):
     pass
+
+
 class ExameUpdateForm(ExameForm):
-    pass
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['status'].widget = forms.Select(
+            choices=self.fields['status'].choices,
+            attrs={'class': 'form-control'},
+        )
+
+
 class ResultadoExameForm(forms.ModelForm):
     class Meta:
         model = ResultadoExame
@@ -30,10 +39,15 @@ class ResultadoExameForm(forms.ModelForm):
         widgets = {
             'data_resultado': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
             'anotacoes': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
+            'anexo_1': forms.FileInput(),
+            'anexo_2': forms.FileInput(),
+            'anexo_3': forms.FileInput(),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['data_resultado'].required = True
+        self.fields['anotacoes'].required = True
         validators = (FileExtensionValidator(['pdf', 'png', 'jpg', 'jpeg']), validate_anexo_file)
         for field_name in ('anexo_1', 'anexo_2', 'anexo_3'):
             self.fields[field_name].validators.extend(validators)
@@ -46,3 +60,14 @@ class ResultadoExameForm(forms.ModelForm):
         if len(names) != len(set(names)):
             raise ValidationError('Não anexe o mesmo arquivo mais de uma vez ao resultado.')
         return cleaned_data
+
+
+class ResultadoExameEdicaoForm(ResultadoExameForm):
+    class Meta(ResultadoExameForm.Meta):
+        fields = ResultadoExameForm.Meta.fields + ('status',)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['data_resultado'].required = False
+        self.fields['anotacoes'].required = False
+        self.fields['status'].required = False

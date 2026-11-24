@@ -78,6 +78,43 @@ class TipoAgendamentoForm(forms.ModelForm):
         return descricao
 
 
+class AgendaPacienteFiltroForm(forms.Form):
+    q = forms.CharField(
+        label='Busca',
+        required=False,
+        widget=forms.TextInput(attrs={
+            'placeholder': 'Paciente, CPF, local, tipo...',
+        }),
+    )
+    tipo = forms.ModelChoiceField(
+        label='Tipo',
+        required=False,
+        queryset=TipoAgendamento.objects.none(),
+        empty_label='Todos',
+    )
+    efetuado = forms.ChoiceField(
+        label='Efetuado',
+        required=False,
+        choices=(('', 'Todos'), ('S', 'Sim'), ('N', 'Não')),
+        initial='N',
+    )
+    data_inicio = forms.DateField(
+        label='Data inicial',
+        required=False,
+        widget=forms.DateInput(attrs={'type': 'date'}),
+    )
+    data_fim = forms.DateField(
+        label='Data final',
+        required=False,
+        widget=forms.DateInput(attrs={'type': 'date'}),
+    )
+
+    def __init__(self, *args, tipos_agendamento=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if tipos_agendamento is not None:
+            self.fields['tipo'].queryset = tipos_agendamento
+
+
 class AgendaPacienteForm(forms.ModelForm):
     """Agendamento POR ATENDIMENTO (sem campo pessoa).
 
@@ -93,6 +130,17 @@ class AgendaPacienteForm(forms.ModelForm):
             'link_whatsapp', 'efetuado', 'dt_efetuado',
             'observacao_execucao', 'status',
         ]
+        error_messages = {
+            'data_hora': {
+                'required': 'Informe a data e hora do agendamento.',
+            },
+            'observacao': {
+                'required': 'Informe a anotação da agenda.',
+            },
+            'local': {
+                'required': 'Selecione o local do agendamento.',
+            },
+        }
         widgets = {
             'data_hora': forms.DateTimeInput(
                 attrs={'type': 'datetime-local'}, format='%Y-%m-%dT%H:%M'),
@@ -109,7 +157,13 @@ class AgendaPacienteForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         estabelecimento_id = kwargs.pop('estabelecimento_id', None)
+        ocultar_campos_execucao = kwargs.pop(
+            'ocultar_campos_execucao', False)
         super().__init__(*args, **kwargs)
+        if ocultar_campos_execucao:
+            for campo in ('efetuado', 'dt_efetuado', 'observacao_execucao'):
+                self.fields.pop(campo, None)
+
         estabelecimento_id = estabelecimento_id or \
             self.instance.estabelecimento_id or \
             self.initial.get('estabelecimento_id')
@@ -239,6 +293,11 @@ class AgendaExameModalForm(forms.ModelForm):
             'tipo', 'data_hora', 'local', 'observacao',
             'link_videochamada', 'link_whatsapp',
         )
+        error_messages = {
+            'observacao': {
+                'required': 'Informe a anotação da agenda.',
+            },
+        }
         widgets = {
             'data_hora': forms.DateTimeInput(
                 attrs={'type': 'datetime-local'},
@@ -273,11 +332,20 @@ class AgendaExameModalForm(forms.ModelForm):
             estabelecimento_id,
             externo=tipo.externo if tipo else None)
         self.fields['data_hora'].input_formats = ['%Y-%m-%dT%H:%M']
+        self.fields['data_hora'].required = True
+        self.fields['data_hora'].error_messages['required'] = (
+            'Informe a data e hora do agendamento.')
+        self.fields['local'].required = True
+        self.fields['local'].error_messages['required'] = (
+            'Selecione o local do agendamento.')
 
     def clean(self):
         dados = super().clean()
         tipo = dados.get('tipo')
         exame = self.instance.exame
+        if not dados.get('local'):
+            self.add_error(
+                'local', 'Selecione o local do agendamento.')
         if tipo and not tipo.exige_exame_solicitado:
             self.add_error(
                 'tipo',

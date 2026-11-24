@@ -1,5 +1,6 @@
-import csv
 import datetime
+from io import BytesIO
+from xml.sax.saxutils import escape
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -15,7 +16,19 @@ from django.views import View
 from django.views.generic.detail import SingleObjectMixin
 from django.views.generic import DetailView, ListView
 from django.views.generic.edit import CreateView, UpdateView
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.platypus import (
+    LongTable, Paragraph, SimpleDocTemplate, Spacer, TableStyle,
+)
 
+from admin_relatorios.models import (
+    GerenciadorRelatorioGeral, GerenciadorRelatorioPersonalizado,
+)
+from admin_relatorios.rel_footer import genFooterRel
+from admin_relatorios.rel_header import genHeaderRel
 from admin_cadastros.forms import PessoaDetailForm
 from admin_cadastros.models import Estabelecimento, Local
 from atendimentos.models import Atendimento
@@ -25,7 +38,7 @@ from dominios.utils import (
     calcular_idade,
 )
 
-from .forms import AgendaPacienteForm
+from .forms import AgendaPacienteFiltroForm, AgendaPacienteForm
 from .models import AgendaPaciente, ParametrosAgenda, TipoAgendamento
 
 
@@ -107,7 +120,8 @@ def _querystring_filtros(filtros):
     from urllib.parse import urlencode
 
     return urlencode({
-        campo: valor for campo, valor in (filtros or {}).items() if valor
+        campo: valor for campo, valor in (filtros or {}).items()
+        if valor or (campo == 'efetuado' and campo in filtros)
     })
 
 
@@ -117,10 +131,18 @@ def _dados_filtros_lista(request):
     dados = request.GET
     if 'limpar' in dados:
         request.session.pop('agenda_filters', None)
-        return {}
-    if not any(dados.get(campo) for campo in campos):
-        return request.session.get('agenda_filters') or {}
-    return dados
+        filtros = {}
+    elif any(campo in dados for campo in campos):
+        filtros = dados
+    else:
+        filtros = request.session.get('agenda_filters') or {}
+
+    filtros = filtros.copy()
+    if not _data(filtros.get('data_inicio')):
+        filtros['data_inicio'] = timezone.localdate().isoformat()
+    if filtros.get('efetuado') not in ('', 'S', 'N'):
+        filtros['efetuado'] = 'N'
+    return filtros
 
 
 def _data(valor):
@@ -146,6 +168,8 @@ def _aplicar_filtros(queryset, dados):
     if efetuado in ('S', 'N'):
         queryset = queryset.filter(efetuado=efetuado)
         filtros['efetuado'] = efetuado
+    elif 'efetuado' in dados and efetuado == '':
+        filtros['efetuado'] = ''
 
     data_inicio = _data(dados.get('data_inicio'))
     data_fim = _data(dados.get('data_fim'))
@@ -202,12 +226,26 @@ class AgendaPacienteListView(
             self.request, 'Agenda de Pacientes', 'Agenda de Pacientes'))
         context['tipos_agendamento'] = TipoAgendamento.objects.filter(
             status='A').order_by('descricao')
+        context['filter_form'] = AgendaPacienteFiltroForm(
+            initial=self.filtros_sessao,
+            tipos_agendamento=context['tipos_agendamento'],
+        )
+        context['tipos_agendamento_exame'] = TipoAgendamento.objects.filter(
+            status='A', exige_exame_solicitado=True,
+        ).order_by('descricao')
+        context['pode_agendar_exames_pendentes'] = (
+            context['pode_editar']
+            and self.request.user.has_perm(
+                'agenda_pacientes.add_agendapaciente')
+            and context['tipos_agendamento_exame'].exists()
+        )
+        context['agenda_opcoes_url'] = reverse('agendapaciente_opcoes')
+        context['exames_pendentes_url'] = reverse(
+            'agendapaciente_exames_pendentes')
         context['agenda_filters'] = self.filtros_sessao
         context['filter'] = self.filtros_sessao
         context['querystring'] = _querystring_filtros(self.filtros_sessao)
-        context['is_paginated'] = (
-            context.get('paginator') is not None
-            and context['paginator'].num_pages > 1)
+        context['is_paginated'] = True
         context['today'] = timezone.localdate()
         return context
 
@@ -249,6 +287,7 @@ class AgendaPacienteCreateView(
         kwargs = super().get_form_kwargs()
         kwargs['estabelecimento_id'] = self.request.session.get(
             'estabelecimento_id')
+        kwargs['ocultar_campos_execucao'] = True
         return kwargs
 
     def form_valid(self, form):
@@ -370,6 +409,51 @@ class AgendaOpcoesView(LoginRequiredMixin, View):
         })
 
 
+class AgendaExamesPendentesView(LoginRequiredMixin, View):
+    """Lista exames ativos sem resultado ou agendamento para a unidade."""
+
+    def get(self, request):
+        tem_permissao = request.user.has_perm(
+            'agenda_pacientes.add_agendapaciente')
+        if not tem_permissao or not _liberacao(request, 'editar'):
+            return JsonResponse(
+                {'erro': 'Você não está liberado para agendar neste '
+                         'estabelecimento.'},
+                status=403)
+
+        estabelecimento_id = request.session.get('estabelecimento_id')
+        if not estabelecimento_id:
+            return JsonResponse(
+                {'erro': 'Selecione um estabelecimento antes de continuar.'},
+                status=400)
+
+        from prontuarios.models import Exame
+
+        exames = Exame.objects.filter(
+            estabelecimento_id=estabelecimento_id,
+            status='A',
+            resultados__isnull=True,
+        ).exclude(
+            agendamentos__status='A',
+        ).select_related(
+            'atendimento__pessoa', 'tipo_exame',
+        ).order_by('-dt_registro', '-pk')
+        dados = [{
+            'id': exame.pk,
+            'atendimento_id': exame.atendimento_id,
+            'paciente': exame.atendimento.pessoa.nome,
+            'tipo_exame': str(exame.tipo_exame),
+            'solicitacao': exame.solicitacao or '',
+            'data_solicitacao': (
+                timezone.localtime(exame.dt_registro).strftime('%d/%m/%Y')
+                if exame.dt_registro else ''
+            ),
+            'agendar_url': reverse(
+                'exame_agendar_modal', kwargs={'pk': exame.pk}),
+        } for exame in exames]
+        return JsonResponse({'exames': dados})
+
+
 class AgendaPacienteUpdateView(
         LoginRequiredMixin, CustomPermissionRequiredMixin,
         FilterObjectsByEstabelecimentoMixin, LiberacaoAgendaMixin, UpdateView):
@@ -421,6 +505,7 @@ class AgendaPacienteUpdateView(
             self.request, 'Agenda de Pacientes', 'Editar Agendamento'))
         context['objeto'] = self.object
         context['pode_editar'] = True
+        context['exibir_campos_execucao'] = True
         return context
 
 
@@ -497,19 +582,29 @@ class AgendaPacienteEfetuarView(
         'estabelecimento. Solicite a liberação em Admin > Parâmetros da '
         'Agenda.')
 
-    def get(self, request, pk):
-        return self.post(request, pk)
-
     def post(self, request, pk):
         agenda = get_object_or_404(
             AgendaPaciente,
             pk=pk,
             estabelecimento_id=request.session.get('estabelecimento_id'),
         )
-        desfazer = agenda.efetuado == 'S'
+        if agenda.efetuado == 'S':
+            messages.info(
+                request,
+                'Este agendamento já está marcado como efetuado. Para '
+                'corrigi-lo ou reabri-lo, use a opção Editar.',
+            )
+            return redirect(request.META.get('HTTP_REFERER')
+                            or reverse('agendapaciente_listar'))
+
+        observacao_execucao = (
+            request.POST.get('observacao_execucao') or '').strip()
         try:
             with transaction.atomic():
-                agenda.efetuar(usuario=request.user, desfazer=desfazer)
+                agenda.efetuar(
+                    usuario=request.user,
+                    observacao_execucao=observacao_execucao,
+                )
         except ValidationError as erro:
             messages.warning(
                 request,
@@ -524,14 +619,11 @@ class AgendaPacienteEfetuarView(
                 'um resultado ou agendamento ativo vinculado ao exame.')
             return redirect(request.META.get('HTTP_REFERER')
                             or reverse('agendapaciente_listar'))
-        if desfazer:
-            messages.warning(request, 'Agendamento reaberto (não efetuado).'
-                             + (' Execução do exame também desfeita.'
-                                if agenda.exame_id else ''))
-        else:
-            messages.success(request, 'Agendamento marcado como efetuado.'
-                             + (' Exame marcado como executado.'
-                                if agenda.exame_id else ''))
+        messages.success(
+            request,
+            'Agendamento marcado como efetuado.'
+            + (' Exame marcado como executado.' if agenda.exame_id else ''),
+        )
         return redirect(request.META.get('HTTP_REFERER')
                         or reverse('agendapaciente_listar'))
 
@@ -539,7 +631,7 @@ class AgendaPacienteEfetuarView(
 class AgendaPacienteRelatorioView(
         LoginRequiredMixin, CustomPermissionRequiredMixin,
         FilterObjectsByEstabelecimentoMixin, LiberacaoAgendaMixin, View):
-    """Baixa em CSV todos os agendamentos correspondentes aos filtros."""
+    """Gera PDF em paisagem com os agendamentos correspondentes aos filtros."""
 
     permission_required = 'agenda_pacientes.view_agendapaciente'
     acao_agenda = 'ver'
@@ -551,37 +643,152 @@ class AgendaPacienteRelatorioView(
             'tipo', 'local', 'responsavel', 'atendimento',
             'atendimento__pessoa', 'exame', 'exame__tipo_exame')
         dados = _dados_filtros_lista(request)
-        queryset, _ = _aplicar_filtros(queryset, dados)
+        queryset, filtros = _aplicar_filtros(queryset, dados)
         queryset = queryset.order_by('data_hora', 'pk')
-        response = HttpResponse(content_type='text/csv; charset=utf-8')
-        response['Content-Disposition'] = (
-            'attachment; filename="agenda_pacientes.csv"')
-        response.write('\ufeff')
-        writer = csv.writer(response, delimiter=';')
-        writer.writerow([
-            'ID', 'Data/Hora', 'Paciente', 'Tipo', 'Exame', 'Local',
-            'Atendimento', 'Responsável', 'Efetuado', 'Dt. Efetuado',
-            'Anotação', 'Status', 'Dt. Registro', 'Us. Registro',
-        ])
-        for agenda in queryset:
-            writer.writerow([
-                agenda.pk,
+        agendas = list(queryset)
+        buffer = BytesIO()
+        page_width, page_height = landscape(A4)
+        margem = 10 * mm
+        titulo = 'Relatório de Agendas de Pacientes'
+        gerenciador_personalizado = GerenciadorRelatorioPersonalizado.objects.filter(
+            relatorio='agenda_pacientes',
+            estabelecimento_id=estabelecimento_id,
+            status='A',
+        ).first()
+        gerenciador_geral = GerenciadorRelatorioGeral.objects.filter(
+            estabelecimento_id=estabelecimento_id,
+            status='A',
+        ).first()
+        gerenciador = gerenciador_personalizado or gerenciador_geral
+        logo_path = (
+            gerenciador.logo_header.path
+            if gerenciador and gerenciador.logo_header else None
+        )
+        footer_data = gerenciador.dados_footer if gerenciador else None
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=landscape(A4),
+            rightMargin=margem,
+            leftMargin=margem,
+            topMargin=30 * mm,
+            bottomMargin=20 * mm,
+            title=titulo,
+        )
+
+        styles = getSampleStyleSheet()
+        info_style = ParagraphStyle(
+            'AgendaReportInfo',
+            parent=styles['Normal'],
+            fontSize=8,
+            leading=10,
+            spaceAfter=3,
+        )
+        cell_style = ParagraphStyle(
+            'AgendaReportCell',
+            parent=styles['Normal'],
+            fontName='Helvetica',
+            fontSize=6.5,
+            leading=8,
+            wordWrap='CJK',
+        )
+        header_style = ParagraphStyle(
+            'AgendaReportHeader',
+            parent=cell_style,
+            fontName='Helvetica-Bold',
+            textColor=colors.white,
+        )
+
+        def paragraph(value, style=cell_style):
+            texto = escape(str(value or '-'))
+            texto = texto.replace('\r\n', '\n').replace('\r', '\n')
+            return Paragraph(texto.replace('\n', '<br/>'), style)
+
+        headers = [
+            'Data/Hora', 'Paciente', 'Tipo', 'Exame', 'Local', 'Responsável',
+        ]
+        linhas = [[paragraph(cabecalho, header_style) for cabecalho in headers]]
+        for agenda in agendas:
+            linhas.append([
                 timezone.localtime(agenda.data_hora).strftime('%d/%m/%Y %H:%M'),
-                agenda.atendimento.pessoa,
-                agenda.tipo,
-                agenda.exame or '',
-                agenda.local or '',
-                agenda.atendimento_id,
-                agenda.responsavel or '',
-                'Sim' if agenda.efetuado == 'S' else 'Não',
-                timezone.localtime(agenda.dt_efetuado).strftime('%d/%m/%Y %H:%M')
-                if agenda.dt_efetuado else '',
-                agenda.observacao or '',
-                agenda.get_status_display(),
-                timezone.localtime(agenda.dt_registro).strftime('%d/%m/%Y %H:%M')
-                if agenda.dt_registro else '',
-                agenda.us_registro or '',
+                str(agenda.atendimento.pessoa),
+                str(agenda.tipo),
+                str(agenda.exame) if agenda.exame else '-',
+                str(agenda.local) if agenda.local else '-',
+                str(agenda.responsavel) if agenda.responsavel else '-',
             ])
+
+        filtros_legenda = []
+        if filtros.get('tipo'):
+            tipo = TipoAgendamento.objects.filter(
+                pk=filtros['tipo']).values_list('descricao', flat=True).first()
+            filtros_legenda.append(f'Tipo: {tipo or filtros["tipo"]}')
+        if filtros.get('efetuado'):
+            filtros_legenda.append(
+                f'Efetuado: {"Sim" if filtros["efetuado"] == "S" else "Não"}')
+        if filtros.get('data_inicio'):
+            filtros_legenda.append(f'Data inicial: {filtros["data_inicio"]}')
+        if filtros.get('data_fim'):
+            filtros_legenda.append(f'Data final: {filtros["data_fim"]}')
+        if filtros.get('q'):
+            filtros_legenda.append(f'Busca: {filtros["q"]}')
+
+        story = [
+            Paragraph(
+                f'Gerado em {timezone.localtime().strftime("%d/%m/%Y %H:%M")} '
+                f'— {len(agendas)} agendamento(s).',
+                info_style,
+            ),
+            Paragraph(
+                'Filtros: ' + escape('; '.join(filtros_legenda) or 'Nenhum'),
+                info_style,
+            ),
+            Spacer(1, 4 * mm),
+        ]
+        larguras_base = [85, 180, 120, 190, 115, 130]
+        largura_util = page_width - 2 * margem
+        fator = largura_util / sum(larguras_base)
+        tabela = LongTable(
+            linhas,
+            colWidths=[largura * fator for largura in larguras_base],
+            repeatRows=1,
+        )
+        estilo_tabela = [
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0d6efd')),
+            ('GRID', (0, 0), (-1, -1), 0.25, colors.HexColor('#adb5bd')),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 3),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ]
+        if agendas:
+            estilo_tabela.append((
+                'ROWBACKGROUNDS', (0, 1), (-1, -1),
+                [colors.white, colors.HexColor('#f2f6fc')],
+            ))
+        tabela.setStyle(TableStyle(estilo_tabela))
+        story.append(tabela)
+
+        def rodape(canvas, documento):
+            canvas.saveState()
+            header = genHeaderRel(
+                logo_path, titulo, None, doc.width, 18 * mm)
+            _, header_height = header.wrap(doc.width, page_height)
+            header.drawOn(
+                canvas, margem, page_height - 7 * mm - header_height)
+            if footer_data:
+                footer = genFooterRel(footer_data, doc.width, 10 * mm)
+                footer.wrap(doc.width, page_height)
+                footer.drawOn(canvas, margem, 6 * mm)
+            canvas.setFont('Helvetica', 7)
+            canvas.drawRightString(
+                page_width - margem, 2 * mm, f'Página {documento.page}')
+            canvas.restoreState()
+
+        doc.build(story, onFirstPage=rodape, onLaterPages=rodape)
+        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+        response['Content-Disposition'] = (
+            'attachment; filename="agenda_pacientes.pdf"')
         return response
 
 

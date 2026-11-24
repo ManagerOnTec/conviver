@@ -110,13 +110,22 @@ class AgendaPaciente(models.Model):
         help_text='Obrigatório quando o tipo de agendamento for do tipo exame. '
                   'O exame deve pertencer ao atendimento e não pode ter sido '
                   'executado.')
-    local = models.ForeignKey(
-        Local, on_delete=models.PROTECT, blank=True, null=True,
-        verbose_name='Local')
+    local = models.ForeignKey(Local, on_delete=models.PROTECT, blank=False, null=False,
+        verbose_name='Local', error_messages={
+            'blank': 'Informe o local do agendamento.',
+            'null': 'Informe o local do agendamento.',
+        },
+        help_text='Obrigatório; local do agendamento (modal de agendamento do exame).'
+        )
     data_hora = models.DateTimeField(verbose_name='Data/Hora do Agendamento')
     observacao = models.TextField(
-        blank=True, null=True, verbose_name='Anotação',
-        help_text='Anotação do agendamento (modal de agendamento do exame).')
+        blank=False, null=False, verbose_name='Anotação',
+        error_messages={
+            'blank': 'Informe a anotação da agenda.',
+            'null': 'Informe a anotação da agenda.',
+        },
+        help_text='Obrigatória; anotação do agendamento (modal de '
+                  'agendamento do exame).')
     link_videochamada = models.CharField(
         max_length=300, blank=True, null=True, verbose_name='Link da Videochamada')
     link_whatsapp = models.CharField(
@@ -131,7 +140,8 @@ class AgendaPaciente(models.Model):
     data_execucao = models.DateTimeField(
         blank=True, null=True, verbose_name='Data da Execução')
     observacao_execucao = models.TextField(
-        blank=True, null=True, verbose_name='Anotação da Execução')
+        blank=True, null=False, verbose_name='Anotação da Execução',
+        help_text='Obrigatória quando o agendamento estiver efetuado.')
     estabelecimento = models.ForeignKey(
         Estabelecimento, on_delete=models.PROTECT, verbose_name='Estabelecimento')
     status = models.CharField(
@@ -197,6 +207,14 @@ class AgendaPaciente(models.Model):
         from prontuarios.models import ResultadoExame
 
         errors = {}
+        if self.observacao and not self.observacao.strip():
+            errors['observacao'] = 'Informe a anotação da agenda.'
+        if self.efetuado == 'S' and not (
+                self.observacao_execucao or '').strip():
+            errors['observacao_execucao'] = (
+                'Informe a anotação da execução.')
+        if not self.data_hora:
+            errors['data_hora'] = 'Informe a data e hora do agendamento.'
         if not self.tipo_id:
             errors['tipo'] = 'Informe o tipo de agendamento.'
         elif self.tipo.status != 'A':
@@ -248,10 +266,8 @@ class AgendaPaciente(models.Model):
                     'Este exame já possui um agendamento ativo. Consulte a '
                     'data e o local na lista de exames.')
 
-        if self.tipo_id and not self.local_id and not self.tipo.externo:
-            errors['local'] = (
-                'Selecione um local de uma Ala de internação para este '
-                'agendamento interno.')
+        if not self.local_id:
+            errors['local'] = 'Selecione o local do agendamento.'
 
         if self.local_id:
             local = self.local
@@ -294,7 +310,7 @@ class AgendaPaciente(models.Model):
     # ------------------------------------------------------------------
     # Execução espelhada: agenda ↔ exame
     # ------------------------------------------------------------------
-    def efetuar(self, usuario=None, desfazer=False):
+    def efetuar(self, usuario=None, desfazer=False, observacao_execucao=None):
         """Marca/desmarca a execução — e espelha no exame (ResultadoExame).
 
         O que faz em um reflete no outro: efetuar aqui cria/marca o resultado
@@ -305,12 +321,16 @@ class AgendaPaciente(models.Model):
         self.efetuado = 'N' if desfazer else 'S'
         self.dt_efetuado = None if desfazer else timezone.now()
         self.data_execucao = self.dt_efetuado
+        if desfazer:
+            self.observacao_execucao = ''
+        elif observacao_execucao is not None:
+            self.observacao_execucao = observacao_execucao.strip()
         if usuario is not None:
             self.us_atualizacao = usuario
             self.dt_atualizacao = timezone.now()
         self.save(update_fields=[
             'efetuado', 'dt_efetuado', 'data_execucao',
-            'us_atualizacao', 'dt_atualizacao'])
+            'observacao_execucao', 'us_atualizacao', 'dt_atualizacao'])
 
         if self.exame_id:
             if desfazer:

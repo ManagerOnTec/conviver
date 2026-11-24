@@ -141,39 +141,6 @@ body.modal-open .modal#modal-registrar-resultado,
                        title="Relatório">
                         <i class="fas fa-print"></i>
                     </a>
-                    {% if pode_agendar_exame and not exame.tem_agendamento %}
-                    <button type="button" class="btn btn-outline-primary btn-sm"
-                            data-bs-toggle="modal" data-bs-target="#modal-agendar-exame"
-                            data-url="{% url 'exame_agendar_modal' pk=exame.pk %}"
-                            data-exame="{{ exame.pk }}"
-                            data-atendimento="{{ atendimento_id }}"
-                            data-paciente="{{ atendimento.pessoa.nome }}"
-                            data-tipo-exame="{{ exame.tipo_exame }}"
-                            data-solicitacao="{{ exame.solicitacao }}"
-                            title="Agendar este exame">
-                        <i class="fas fa-calendar-plus"></i>
-                    </button>
-                    {% endif %}
-                    {% if exame.pode_registrar_resultado %}
-                    <button type="button" class="btn btn-outline-success btn-sm"
-                            data-bs-toggle="modal" data-bs-target="#modal-registrar-resultado"
-                            data-url="{% url 'exame_resultado_modal' pk=exame.pk %}"
-                            data-agenda-executada="true"
-                            data-exame="{{ exame.pk }}"
-                            data-paciente="{{ atendimento.pessoa.nome }}"
-                            data-tipo-exame="{{ exame.tipo_exame }}"
-                            data-solicitacao="{{ exame.solicitacao }}"
-                            title="Registrar resultado">
-                        <i class="fas fa-file-medical"></i>
-                    </button>
-                    {% elif pode_registrar_resultado %}
-                    <button type="button" class="btn btn-outline-success btn-sm"
-                            disabled
-                            title="Marque o agendamento deste exame como efetuado antes de registrar o resultado."
-                            aria-label="Resultado indisponível até a execução do agendamento">
-                        <i class="fas fa-file-medical"></i>
-                    </button>
-                    {% endif %}
                 </td>
                 <td>{{ exame.tipo_exame }}</td>
                 <td>
@@ -199,10 +166,26 @@ body.modal-open .modal#modal-registrar-resultado,
                         <span class="d-block small">{{ agenda.local|default:'Local não definido' }}</span>
                     </button>
                     {% empty %}
-                    {% if pode_ver_agenda_exame %}
-                    <span class="text-muted">Sem agendamento</span>
+                    {% if pode_agendar_exame %}
+                    <button type="button" class="btn btn-outline-primary btn-sm"
+                            data-bs-toggle="modal" data-bs-target="#modal-agendar-exame"
+                            data-url="{% url 'exame_agendar_modal' pk=exame.pk %}"
+                            data-exame="{{ exame.pk }}"
+                            data-atendimento="{{ atendimento_id }}"
+                            data-paciente="{{ atendimento.pessoa.nome }}"
+                            data-tipo-exame="{{ exame.tipo_exame }}"
+                            data-solicitacao="{{ exame.solicitacao }}"
+                            title="Agendar este exame"
+                            aria-label="Agendar este exame">
+                        <i class="fas fa-calendar-plus"></i>
+                    </button>
                     {% else %}
-                    <span class="text-muted">Agenda indisponível</span>
+                    <button type="button" class="btn btn-outline-primary btn-sm"
+                            disabled
+                            title="Agendamento indisponível"
+                            aria-label="Agendamento indisponível">
+                        <i class="fas fa-calendar-plus"></i>
+                    </button>
                     {% endif %}
                     {% endfor %}
                 </td>
@@ -225,7 +208,27 @@ body.modal-open .modal#modal-registrar-resultado,
                         {{ resultado.data_resultado|date:'d/m/Y' }}
                     </button>
                     {% empty %}
-                    <span class="text-muted">Sem resultado</span>
+                    {% if exame.pode_registrar_resultado %}
+                    <button type="button" class="btn btn-outline-success btn-sm"
+                            data-bs-toggle="modal" data-bs-target="#modal-registrar-resultado"
+                            data-url="{% url 'exame_resultado_modal' pk=exame.pk %}"
+                            data-agenda-executada="true"
+                            data-exame="{{ exame.pk }}"
+                            data-paciente="{{ atendimento.pessoa.nome }}"
+                            data-tipo-exame="{{ exame.tipo_exame }}"
+                            data-solicitacao="{{ exame.solicitacao }}"
+                            title="Registrar resultado"
+                            aria-label="Registrar resultado">
+                        <i class="fas fa-file-medical"></i>
+                    </button>
+                    {% else %}
+                    <button type="button" class="btn btn-outline-success btn-sm"
+                            disabled
+                            title="Resultado indisponível até a execução do agendamento"
+                            aria-label="Resultado indisponível até a execução do agendamento">
+                        <i class="fas fa-file-medical"></i>
+                    </button>
+                    {% endif %}
                     {% endfor %}
                 </td>
                 <td>
@@ -322,7 +325,7 @@ body.modal-open .modal#modal-registrar-resultado,
      aria-labelledby="modal-agendar-exame-titulo" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <form id="form-modal-agenda" method="post">
+            <form id="form-modal-agenda" method="post" novalidate>
                 {% csrf_token %}
                 <div class="modal-header">
                     <h5 class="modal-title" id="modal-agendar-exame-titulo">
@@ -366,7 +369,7 @@ body.modal-open .modal#modal-registrar-resultado,
                                 Local
                             </label>
                             <select class="form-select" id="agenda-modal-local"
-                                    name="local">
+                                    name="local" required>
                                 <option value="">Selecione</option>
                             </select>
                         </div>
@@ -388,10 +391,10 @@ body.modal-open .modal#modal-registrar-resultado,
                         </div>
                         <div class="col-12 mb-3">
                             <label for="agenda-modal-observacao" class="form-label">
-                                Anotação
+                                Anotação da agenda
                             </label>
                             <textarea class="form-control" id="agenda-modal-observacao"
-                                      name="observacao" rows="2"></textarea>
+                                      name="observacao" rows="2" required></textarea>
                         </div>
                     </div>
                 </div>
@@ -443,7 +446,7 @@ body.modal-open .modal#modal-registrar-resultado,
                             Anotações
                         </label>
                         <textarea class="form-control" id="resultado-modal-anotacoes"
-                                  name="anotacoes" rows="3"></textarea>
+                                  name="anotacoes" rows="3" required></textarea>
                     </div>
                     <div class="row">
                         {% for numero in "123" %}
@@ -584,6 +587,20 @@ document.addEventListener('DOMContentLoaded', function () {
         });
         agendaForm.addEventListener('submit', function (event) {
             event.preventDefault();
+            if (!document.getElementById('agenda-modal-data').value) {
+                showFeedback(
+                    agendaFeedback,
+                    'Informe a data e hora do agendamento.');
+                document.getElementById('agenda-modal-data').focus();
+                return;
+            }
+            if (!agendaLocal.value) {
+                showFeedback(
+                    agendaFeedback,
+                    'Selecione o local do agendamento.');
+                agendaLocal.focus();
+                return;
+            }
             enviarFormulario(agendaForm, agendaFeedback);
         });
     }

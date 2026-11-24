@@ -1,8 +1,10 @@
 import base64
+import json
 from datetime import datetime, timedelta
 from io import BytesIO
 import tempfile
 import zipfile
+from types import SimpleNamespace
 
 import PyPDF2
 from reportlab.lib.pagesizes import A4
@@ -14,6 +16,7 @@ from cryptography.x509.oid import NameOID
 from unittest.mock import patch
 
 from django.conf import settings
+from django import forms
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
@@ -33,7 +36,9 @@ from admin_estoques.models import (
     Grupo, Produto, TipoProduto, UnidadeMedida, ViaAdministracao,)
 from admin_evolucoes.models import TipoEvolucao
 from admin_exames.models import ParametrosExames, TipoExame
-from prontuarios.forms_exames import ResultadoExameForm
+from prontuarios.forms_exames import (
+    ResultadoExameEdicaoForm, ResultadoExameForm,
+)
 from prontuarios.models import Exame, ResultadoExame
 from agenda_pacientes.models import AgendaPaciente, TipoAgendamento
 from prontuarios.exames import ResultadoExameFormSet
@@ -1453,6 +1458,32 @@ class ProdutoPrescricaoPadraoAutocompleteTests(TestCase):
 
 class ExamesProntuarioTests(SimpleTestCase):
 
+    def test_texto_pdf_exame_separa_tipo_e_solicitacao_por_quebra_real(self):
+        from prontuarios.relatorios import _montar_texto_exame
+
+        class TipoExameTeste:
+            def __str__(self):
+                return 'Laboratório'
+
+        tipo_exame = TipoExameTeste()
+        exame = SimpleNamespace(
+            tipo_exame=tipo_exame,
+            solicitacao='Solicito exames de laboratório',
+            resultados=SimpleNamespace(
+                filter=lambda **kwargs: SimpleNamespace(
+                    order_by=lambda *fields: [],
+                ),
+            ),
+        )
+
+        texto = _montar_texto_exame(exame)
+
+        self.assertEqual(
+            texto,
+            'Tipo de exame: Laboratório\nSolicito exames de laboratório',
+        )
+        self.assertNotIn('\\n', texto)
+
     def test_resultado_exame_valida_extensao_e_tamanho_dos_anexos(self):
         form = ResultadoExameForm(data={
             'data_resultado': '2026-11-16',
@@ -1480,6 +1511,42 @@ class ExamesProntuarioTests(SimpleTestCase):
             {'anexo_1', 'anexo_2', 'anexo_3'},
         )
         self.assertEqual(ResultadoExameFormSet.extra, 3)
+
+    def test_resultado_tem_status_editavel_sem_exclusao_fisica(self):
+        self.assertNotIn('status', ResultadoExameForm.base_fields)
+        self.assertIn('status', ResultadoExameEdicaoForm.base_fields)
+        self.assertNotIn('DELETE', ResultadoExameFormSet.form.base_fields)
+
+    def test_resultado_da_listagem_exige_data_e_anotacoes(self):
+        form = ResultadoExameForm(data={'data_resultado': '', 'anotacoes': ''})
+        self.assertFalse(form.is_valid())
+        self.assertIn('data_resultado', form.errors)
+        self.assertIn('anotacoes', form.errors)
+
+    def test_resultado_na_edicao_tem_campos_opcionais(self):
+        form = ResultadoExameEdicaoForm(data={
+            'data_resultado': '',
+            'anotacoes': '',
+            'status': '',
+        })
+        self.assertFalse(form.fields['data_resultado'].required)
+        self.assertFalse(form.fields['anotacoes'].required)
+        self.assertFalse(form.fields['status'].required)
+
+    def test_exame_editar_exibe_status_visivel_para_inativar(self):
+        from prontuarios.forms_exames import ExameCreateForm, ExameUpdateForm
+
+        create_form = ExameCreateForm()
+        update_form = ExameUpdateForm()
+
+        self.assertIsInstance(
+            create_form.fields['status'].widget,
+            forms.HiddenInput,
+        )
+        self.assertIsInstance(
+            update_form.fields['status'].widget,
+            forms.Select,
+        )
 
     def test_listagem_de_exames_tem_rota_com_atendimento(self):
         self.assertEqual(
@@ -1604,6 +1671,7 @@ class ExameAgendaModalTests(TestCase):
                 'tipo': self.tipo_agendamento.pk,
                 'data_hora': '2026-11-24T11:00',
                 'local': self.local.pk,
+                'observacao': 'Agendamento criado pelo teste.',
             },
         )
         request.user = self.user
@@ -1625,6 +1693,20 @@ class ExameAgendaModalTests(TestCase):
         return ExameResultadoModalView.as_view()(
             request, pk=self.exame.pk)
 
+    def test_exame_exige_solicitacao_ou_indicacao_nao_vazia(self):
+        for solicitacao in ('', '   '):
+            with self.subTest(solicitacao=solicitacao):
+                with self.assertRaises(ValidationError) as erro:
+                    Exame.objects.create(
+                        atendimento=self.atendimento,
+                        tipo_exame=self.tipo_exame,
+                        solicitacao=solicitacao,
+                        estabelecimento=self.estabelecimento,
+                        us_registro=self.user,
+                        status='A',
+                    )
+                self.assertIn('solicitacao', erro.exception.message_dict)
+
     def test_exam_row_can_create_only_one_active_schedule(self):
         response = self._marcar_agendamento()
         self.assertEqual(response.status_code, 201)
@@ -1638,6 +1720,80 @@ class ExameAgendaModalTests(TestCase):
             AgendaPaciente.objects.filter(exame=self.exame, status='A').count(),
             1,
         )
+
+    def test_exam_modal_returns_friendly_error_when_local_is_missing(self):
+        from prontuarios.exames_views import ExameAgendaModalView
+
+        request = RequestFactory().post(
+            '/prontuarios/exame/agendar-modal/',
+            {
+                'tipo': self.tipo_agendamento.pk,
+                'data_hora': '2026-11-24T11:00',
+                'local': '',
+                'observacao': 'Agendamento criado pelo teste.',
+            },
+        )
+        request.user = self.user
+        request.session = {'estabelecimento_id': self.estabelecimento.pk}
+
+        response = ExameAgendaModalView.as_view()(request, pk=self.exame.pk)
+
+        self.assertEqual(response.status_code, 400)
+        dados = json.loads(response.content)
+        mensagem_local = dados['erros']['local'][0]['message']
+        self.assertEqual(
+            mensagem_local,
+            'Selecione o local do agendamento.',
+        )
+
+    def test_exam_modal_returns_friendly_error_when_date_is_missing(self):
+        from prontuarios.exames_views import ExameAgendaModalView
+
+        request = RequestFactory().post(
+            '/prontuarios/exame/agendar-modal/',
+            {
+                'tipo': self.tipo_agendamento.pk,
+                'data_hora': '',
+                'local': self.local.pk,
+                'observacao': 'Agendamento criado pelo teste.',
+            },
+        )
+        request.user = self.user
+        request.session = {'estabelecimento_id': self.estabelecimento.pk}
+
+        response = ExameAgendaModalView.as_view()(request, pk=self.exame.pk)
+
+        self.assertEqual(response.status_code, 400)
+        dados = json.loads(response.content)
+        mensagem_data = dados['erros']['data_hora'][0]['message']
+        self.assertEqual(
+            mensagem_data,
+            'Informe a data e hora do agendamento.',
+        )
+
+    def test_agenda_lists_only_exams_without_result_or_active_schedule(self):
+        response = self.client.get(
+            reverse('agendapaciente_exames_pendentes'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [exame['id'] for exame in response.json()['exames']],
+            [self.exame.pk],
+        )
+
+        self._marcar_agendamento()
+        response = self.client.get(
+            reverse('agendapaciente_exames_pendentes'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['exames'], [])
+
+    def test_agenda_list_renders_pending_exams_modal_for_authorized_user(self):
+        response = self.client.get(reverse('agendapaciente_listar'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Exames Pendentes')
+        self.assertContains(response, 'Exames Pendentes de Agendamento')
 
     def test_result_requires_an_executed_schedule(self):
         self._marcar_agendamento()
@@ -1658,7 +1814,10 @@ class ExameAgendaModalTests(TestCase):
     def test_result_registration_preserves_executed_schedule(self):
         self._marcar_agendamento()
         agenda = AgendaPaciente.objects.get(exame=self.exame, status='A')
-        agenda.efetuar(usuario=self.user)
+        agenda.efetuar(
+            usuario=self.user,
+            observacao_execucao='Execução registrada pelo teste.',
+        )
 
         lista = self.client.get(
             reverse('exame_listar', kwargs={
@@ -1722,10 +1881,40 @@ class ExameAgendaModalTests(TestCase):
         self.assertNotContains(response, 'Anotações / Anexos')
         self.assertNotContains(response, 'Editar agendamento')
 
+    def test_exam_list_shows_schedule_icon_without_text_when_unscheduled(self):
+        response = self.client.get(
+            reverse('exame_listar', kwargs={
+                'atendimento_id': self.atendimento.pk,
+            }))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Sem agendamento')
+        self.assertContains(response, 'fas fa-calendar-plus')
+        self.assertContains(
+            response, 'data-bs-target="#modal-agendar-exame"')
+
+    def test_exam_actions_keep_only_detail_edit_and_print_icons(self):
+        response = self.client.get(
+            reverse('exame_listar', kwargs={
+                'atendimento_id': self.atendimento.pk,
+            }))
+
+        html = response.content.decode()
+        tbody = html.split('<tbody', 1)[1].split('</tbody>', 1)[0]
+        first_row = tbody.split('<tr', 1)[1].split('</tr>', 1)[0]
+        actions = first_row.split('<td', 1)[1].split('</td>', 1)[0]
+
+        self.assertIn('fas fa-folder-open', actions)
+        self.assertIn('fas fa-edit', actions)
+        self.assertIn('fas fa-print', actions)
+        self.assertNotIn('fas fa-calendar-plus', actions)
+        self.assertNotIn('fas fa-file-medical', actions)
+
     def test_exam_list_shows_no_result_after_schedule_execution(self):
         self._marcar_agendamento()
         agenda = AgendaPaciente.objects.get(exame=self.exame, status='A')
         agenda.efetuado = 'S'
+        agenda.observacao_execucao = 'Execução registrada pelo teste.'
         agenda.save()
 
         response = self.client.get(
@@ -1734,7 +1923,8 @@ class ExameAgendaModalTests(TestCase):
             }))
 
         self.assertContains(response, 'Efetuado')
-        self.assertContains(response, 'Sem resultado')
+        self.assertNotContains(response, 'Sem resultado')
+        self.assertContains(response, 'fas fa-file-medical')
         self.assertContains(
             response, 'data-bs-target="#modal-registrar-resultado"')
 
@@ -1742,6 +1932,7 @@ class ExameAgendaModalTests(TestCase):
         self._marcar_agendamento()
         agenda = AgendaPaciente.objects.get(exame=self.exame, status='A')
         agenda.efetuado = 'S'
+        agenda.observacao_execucao = 'Execução registrada pelo teste.'
         agenda.save()
         conteudo_pdf = b'%PDF-1.4 teste'
         profissional_resultado = get_user_model().objects.create_user(

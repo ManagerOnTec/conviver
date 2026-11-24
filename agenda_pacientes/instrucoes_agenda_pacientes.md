@@ -17,6 +17,11 @@
   próprios** (`/agenda/agenda_listar/` etc.).
 
 ## Regras obrigatórias
+- A anotação da agenda é obrigatória em todo agendamento. A anotação de
+  execução é obrigatória quando o agendamento estiver efetuado.
+- Ao agendar um exame pelos modais da agenda ou da listagem de exames, o local
+  é obrigatório. Sem seleção, o sistema informa:
+  **"Selecione o local do agendamento."**
 - O tipo de agenda deve ser informado.
   - Mensagem: **"Informe o tipo de agendamento."**
   - Tipo inativo não pode ser usado: **"Este tipo de agendamento está inativo.
@@ -71,15 +76,31 @@
 - manter padrao, nav, menul, cabdados, tabela, paginacao, botoes de filtro, limpeza, salvar, menul com botoes padroes de voltar, listar, etc (semelhate ao app prontuarios e modelos relacionados em menul, quando tiver )
   - Listagem: menu lateral com **Novo**, filtros
     (busca/tipo/efetuado/data inicial/data final) + **Filtrar** e **Limpar**;
-    **Download** abaixo dos filtros exporta em CSV os mesmos registros
-    filtrados da listagem;
+    a data inicial começa em hoje por padrão e pode ser alterada; **Efetuado**
+    começa em **Não**, podendo ser alterado para **Sim** ou **Todos**;
+    **Exames Pendentes**, abaixo de Novo e acima de Gerar Relatório, abre um
+    modal com exames ativos sem resultado e sem agendamento ativo no
+    estabelecimento selecionado. É possível escolher um exame por vez e
+    iniciar o agendamento com atendimento e exame vinculados; o modal oferece
+    tipos ativos configurados para exigir exame solicitado;
+    **Gerar Relatório** fica abaixo de Exames Pendentes e exporta em paisagem
+    os mesmos registros filtrados, com as colunas Data/Hora, Paciente, Tipo, Exame, Local
+    e Responsável. A logo e o rodapé vêm do Gerenciador de Relatórios
+    personalizado de **Agenda de Pacientes**, com fallback para o gerenciador
+    geral do estabelecimento; o título permanece fixo;
     cabeçalho `parciais/_list_header.html`; tabela `listing-table` com
-    `listing-action-bar` (ver/editar/efetuar/excluir conforme liberação);
+    `listing-action-bar` (ver/editar/excluir conforme liberação); a coluna
+    **Efetuado** abre um modal para registrar a anotação ao efetuar e mostra
+    um modal informativo com a anotação após a execução;
     editar, detalhe e excluir são ações exclusivas da listagem; exclusão
     acontece por POST após confirmação JavaScript, sem tela intermediária;
     paginação preservando a querystring dos filtros.
   - Formulário: menu lateral voltar/lista, `crispy` nos campos e
-    `parciais/_workflow_submit_sidebar.html` para salvar.
+    `parciais/_workflow_submit_sidebar.html` para salvar. O cadastro inicial
+    não exibe os campos de execução (`efetuado`, data e anotação); a edição
+    permite corrigi-los/revertê-los. Na listagem, marcar como efetuado abre
+    o modal da anotação; depois a anotação registrada pode ser consultada em
+    modal informativo.
   - `/agenda/agenda_listar/?limpar=1` limpa os filtros (inclusive da sessão).
 
 ## Menu e telas

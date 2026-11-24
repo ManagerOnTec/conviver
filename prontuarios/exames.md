@@ -4,11 +4,14 @@ Implementar no prontuário um fluxo de solicitação e registro de resultados de
 
 ## Fluxo de negócio
 1. Um administrador cadastra os `TipoExame` e libera os tipos para um estabelecimento, profissão ou profissional em `ParametrosExames` (`admin_exames`).
-2. No atendimento, o profissional autorizado cria uma solicitação (`Exame`) com tipo, indicação, anexo/laudo opcional e opção de assinatura.
+2. No atendimento, o profissional autorizado cria uma solicitação (`Exame`) com tipo e solicitação/indicação obrigatória, anexo/laudo opcional e opção de assinatura.
 3. O exame pode ter vários registros de `ResultadoExame`, cada um com data, anotações e até três anexos.
-4. O sistema cria PDF pelo fluxo de prontuário (`salvar_pdf_prontuario`), respeitando o gerenciador personalizado por tipo de exame e, na ausência dele, o gerenciador geral do estabelecimento. A assinatura utiliza o certificado do perfil, como nos demais relatórios.
+4. O cadastro inicial não exibe campos de resultado; na edição, resultados existentes podem ser corrigidos e novos resultados registrados. A inativação do resultado é feita pelo campo de status, sem exclusão física pela tela pública.
+5. O sistema cria PDF pelo fluxo de prontuário (`salvar_pdf_prontuario`), respeitando o gerenciador personalizado por tipo de exame e, na ausência dele, o gerenciador geral do estabelecimento. A assinatura utiliza o certificado do perfil, como nos demais relatórios.
 
 ## Regras e decisões
+- Na edição do exame, o campo Status permite ativar ou inativar a solicitação.
+  O cadastro inicial mantém o status oculto com o padrão ativo.
 - O tipo selecionável no formulário é a interseção das liberações ativas do profissional (ou da profissão ativa) com o estabelecimento da sessão.
 - O tipo padrão da liberação é usado como seleção inicial quando pertence aos tipos liberados.
 - O exame usa o estabelecimento do atendimento; o formulário não permite trocar esse vínculo.
@@ -17,6 +20,10 @@ Implementar no prontuário um fluxo de solicitação e registro de resultados de
 - A lista de Exames tem filtros no menu lateral no padrão da Evolução: ID, tipo de exame, data de registro, data do resultado, usuário/data de criação e atualização e status. A data do resultado considera apenas resultados ativos; por padrão, a lista mostra exames ativos.
 - Os filtros aplicados são preservados na sessão do atendimento e o botão “Limpar” os remove e retorna ao status padrão (ativo).
 - Cada linha mostra data e local do agendamento ativo do exame; o detalhe da agenda abre em modal. “Agendar” abre um modal na própria linha com paciente, atendimento, exame e solicitação carregados. A lista não permite editar agendamento, e cada exame admite apenas um agendamento ativo.
+- A anotação da agenda é obrigatória no modal de agendamento.
+- Ao registrar resultado pela lista, data e anotação são obrigatórias. Na tela
+  de edição do exame, os formulários de resultado são opcionais; os resultados
+  existentes podem ser corrigidos e novos resultados podem ser adicionados.
 - A tabela apresenta, após as ações, tipo, solicitação/indicação em modal, profissional solicitante, data da solicitação, agendamento, status do agendamento (não agendado, não efetuado ou efetuado), resultado e profissional que registrou o resultado. Datas de resultados existentes abrem o modal com anotações e links protegidos para os anexos correspondentes.
 - O modal de resultado só fica disponível após o agendamento ativo ser
   marcado como efetuado. O servidor e o modelo também bloqueiam o registro sem

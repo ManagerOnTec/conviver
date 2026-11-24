@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load crispy_forms_tags %}
 {% block titulos %}{{title}}|{% endblock %}
 
 {% block menul %}
@@ -12,49 +13,24 @@
     </a>
     {% endif %}
 
+    {% if pode_agendar_exames_pendentes %}
+    <a href="#modal-exames-pendentes"
+       title="Exames pendentes de agendamento"
+       class="mt-2 list-group-item list-group-item-action custom-link rounded"
+       data-bs-toggle="modal" data-bs-target="#modal-exames-pendentes">
+        <i class="fas fa-calendar-plus me-2"></i>Exames Pendentes
+    </a>
+    {% endif %}
+
+    <a href="{% url 'agendapaciente_relatorio' %}{% if querystring %}?{{ querystring }}{% endif %}"
+       title="Relatórios filtrados"
+       class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-file-pdf me-2"></i>Gerar Relatório
+    </a>
+
     <form class="mt-3 text-white text-left" method="GET" action="{% url 'agendapaciente_listar' %}">
         <div class="item-left"><h5>Filtros</h5></div>
-
-        <div class="item-left mt-2">
-            <label for="filtro-q" class="form-label small">Busca</label>
-            <input type="text" name="q" id="filtro-q" class="form-control"
-                   placeholder="Paciente, CPF, local, tipo..."
-                   value="{{ agenda_filters.q|default:'' }}">
-        </div>
-
-        <div class="item-left mt-2">
-            <label for="filtro-tipo" class="form-label small">Tipo</label>
-            <select name="tipo" id="filtro-tipo" class="form-control">
-                <option value="">Todos</option>
-                {% for tipo in tipos_agendamento %}
-                <option value="{{ tipo.pk }}"
-                    {% if agenda_filters.tipo == tipo.pk|stringformat:'s' %}selected{% endif %}>
-                    {{ tipo.descricao }}
-                </option>
-                {% endfor %}
-            </select>
-        </div>
-
-        <div class="item-left mt-2">
-            <label for="filtro-efetuado" class="form-label small">Efetuado</label>
-            <select name="efetuado" id="filtro-efetuado" class="form-control">
-                <option value="">Todos</option>
-                <option value="S" {% if agenda_filters.efetuado == 'S' %}selected{% endif %}>Sim</option>
-                <option value="N" {% if agenda_filters.efetuado == 'N' %}selected{% endif %}>Não</option>
-            </select>
-        </div>
-
-        <div class="item-left mt-2">
-            <label for="filtro-inicio" class="form-label small">Data inicial</label>
-            <input type="date" name="data_inicio" id="filtro-inicio" class="form-control"
-                   value="{{ agenda_filters.data_inicio|default:'' }}">
-        </div>
-
-        <div class="item-left mt-2">
-            <label for="filtro-fim" class="form-label small">Data final</label>
-            <input type="date" name="data_fim" id="filtro-fim" class="form-control"
-                   value="{{ agenda_filters.data_fim|default:'' }}">
-        </div>
+        <div class="item-left">{{ filter_form|crispy }}</div>
 
         <div class="row mt-2">
             <div class="col-md-12">
@@ -68,7 +44,7 @@
             <div class="col-md-12">
                 <div class="justify-content-center mt-2">
                     <button class="col-md-12 btn btn-outline-danger justify-content-center"
-                            name="limpar" value="1" title="Limpar filtros">
+                            name="limpar" value="1" title="Limpar filtros" type="submit">
                         <i class="fas fa-times-circle"></i> Limpar
                     </button>
                 </div>
@@ -76,11 +52,6 @@
         </div>
     </form>
 
-    <a href="{% url 'agendapaciente_relatorio' %}{% if querystring %}?{{ querystring }}{% endif %}"
-       title="Baixar os agendamentos correspondentes aos filtros aplicados"
-       class="mt-2 list-group-item list-group-item-action custom-link rounded">
-        <i class="fas fa-download me-2"></i>Download
-    </a>
 </div>
 <!--FIM MENU LATERAL-->
 {% endblock %}
@@ -90,26 +61,60 @@
 {% endblock %}
 
 {% block lista %}
+<style>
+#table-container .agenda-list-table thead th {
+    padding: 0.85rem 0.75rem;
+    text-align: center;
+}
+
+#table-container .agenda-list-table thead th.col-efetuado {
+    background: #198754;
+}
+
+#table-container .agenda-list-table thead th.col-anotacao {
+    background: #9a5b13;
+}
+
+#table-container .agenda-list-table tbody td.col-efetuado {
+    background-color: #edf8f0;
+    min-width: 130px;
+    text-align: center;
+}
+
+#table-container .agenda-list-table tbody td.col-anotacao {
+    background-color: #fff8eb;
+    min-width: 250px;
+    white-space: normal;
+}
+
+.nota-execucao-conteudo {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+</style>
 <!--TABELA CONT DIREITA-->
 <div id="table-container" class="listing-table-shell">
-    <table class="table listing-table align-middle mb-0">
+    <table class="table listing-table agenda-list-table align-middle mb-0">
         <thead class="sticky-lista listing-table-head text-white">
             <tr>
-                <th>Opções</th>
-                <th>ID</th>
-                <th>Data/Hora</th>
-                <th>Paciente</th>
-                <th>Tipo</th>
-                <th>Exame</th>
-                <th>Local</th>
-                <th>Atendimento</th>
-                <th>Responsável</th>
-                <th>Efetuado</th>
-                <th>Dt.Efetuado</th>
-                <th>Anotação</th>
-                <th>Status</th>
-                <th>Dt.Registro</th>
-                <th>Us.Registro</th>
+                <th scope="col"><i class="fas fa-sliders-h me-1"></i>Ações</th>
+                <th scope="col">ID</th>
+                <th scope="col"><i class="fas fa-user me-1"></i>Paciente</th>
+                <th scope="col"><i class="far fa-clock me-1"></i>Data e hora</th>
+                <th scope="col">Tipo de agenda</th>
+                <th scope="col">Exame solicitado</th>
+                <th scope="col"><i class="fas fa-map-marker-alt me-1"></i>Local</th>
+                <th scope="col">Responsável</th>
+                <th scope="col" class="col-anotacao">
+                    <i class="fas fa-comment-alt me-1"></i>Obs Agenda
+                </th>
+                <th scope="col" class="col-efetuado">
+                    <i class="fas fa-calendar-check me-1"></i>Efetuado
+                </th>
+                <th scope="col"><i class="far fa-calendar-alt me-1"></i>Data da execução</th>
+                <th scope="col">Status da agenda</th>
+                <th scope="col">Registrado em</th>
+                <th scope="col">Registrado por</th>
             </tr>
         </thead>
         <tbody id="tableBody">
@@ -125,10 +130,6 @@
                         <a href="{% url 'agendapaciente_editar' pk=agenda.pk %}" title="Editar"
                            class="btn btn-outline-warning btn-sm listing-action-btn">
                             <i class="fas fa-edit"></i>
-                        </a>
-                        <a href="{% url 'agendapaciente_efetuar' pk=agenda.pk %}" title="Marcar/desmarcar efetuado"
-                           class="btn btn-outline-success btn-sm listing-action-btn">
-                            <i class="fas {% if agenda.efetuado == 'S' %}fa-check-square{% else %}fa-square{% endif %}"></i>
                         </a>
                         {% endif %}
                         {% if pode_excluir %}
@@ -146,34 +147,246 @@
                     </div>
                 </td>
                 <td>{{ agenda.pk }}</td>
-                <td>{{ agenda.data_hora|date:"d/m/Y H:i" }}</td>
+
                 <td>{{ agenda.atendimento.pessoa }}</td>
+                <td>{{ agenda.data_hora|date:"d/m/Y H:i" }}</td>
                 <td>{{ agenda.tipo }}</td>
                 <td>{{ agenda.exame|default:"-" }}</td>
                 <td>{{ agenda.local|default:"-" }}</td>
-                <td>{{ agenda.atendimento_id }}</td>
                 <td>{{ agenda.responsavel|default:"-" }}</td>
-                <td>
+                <td class="col-anotacao" title="{{ agenda.observacao }}">
+                    {{ agenda.observacao|truncatechars:100|default:"-" }}
+                </td>
+
+                <td class="col-efetuado">
                     {% if agenda.efetuado == 'S' %}
-                    <span class="badge bg-success">Sim</span>
+                    <div class="d-flex flex-column align-items-center gap-1">
+                        <span class="badge bg-success">Sim</span>
+                        {% if agenda.observacao_execucao %}
+                        <button type="button" class="btn btn-link btn-sm p-0"
+                                data-bs-toggle="modal"
+                                data-bs-target="#modal-ver-anotacao-execucao"
+                                data-paciente="{{ agenda.atendimento.pessoa }}"
+                                data-data="{{ agenda.dt_efetuado|date:'d/m/Y H:i'|default:'-' }}"
+                                data-observacao="{{ agenda.observacao_execucao }}"
+                                title="Ver anotação da execução">
+                            <i class="far fa-comment-alt me-1"></i>Ver anotação
+                        </button>
+                        {% else %}
+                        <small class="text-muted">Sem anotação</small>
+                        {% endif %}
+                    </div>
+                    {% elif pode_editar %}
+                    <button type="button"
+                            data-bs-toggle="modal"
+                            data-bs-target="#modal-efetuar-agenda"
+                            data-url="{% url 'agendapaciente_efetuar' pk=agenda.pk %}{% if querystring %}?{{ querystring }}{% endif %}"
+                            title="Marcar como efetuado"
+                            aria-label="Marcar agendamento como efetuado"
+                            class="btn btn-outline-success btn-sm">
+                        <i class="far fa-square me-1"></i>Efetuar
+                    </button>
                     {% else %}
                     <span class="badge bg-secondary">Não</span>
                     {% endif %}
                 </td>
                 <td>{{ agenda.dt_efetuado|date:"d/m/Y H:i"|default:"-" }}</td>
-                <td title="{{ agenda.observacao }}">{{ agenda.observacao|truncatechars:60|default:"-" }}</td>
                 <td>{{ agenda.get_status_display }}</td>
                 <td>{{ agenda.dt_registro|date:"d/m/Y H:i"|default:"-" }}</td>
                 <td>{{ agenda.us_registro|default:"-" }}</td>
             </tr>
             {% empty %}
             <tr>
-                <td colspan="14">Nenhum agendamento encontrado para os filtros informados.</td>
+                <td colspan="15">Nenhum agendamento encontrado para os filtros informados.</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
+{% if pode_editar %}
+<div class="modal fade" id="modal-efetuar-agenda" tabindex="-1"
+     aria-labelledby="modal-efetuar-agenda-titulo" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form id="form-efetuar-agenda" method="post">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modal-efetuar-agenda-titulo">
+                        Marcar agendamento como efetuado
+                    </h5>
+                    <button type="button" class="btn-close"
+                            data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <label for="anotacao-execucao-agenda" class="form-label">
+                        Anotação da execução
+                    </label>
+                    <textarea id="anotacao-execucao-agenda"
+                              name="observacao_execucao" class="form-control"
+                              rows="4" required></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary"
+                            data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-check me-1"></i>Confirmar execução
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+<div class="modal fade" id="modal-ver-anotacao-execucao" tabindex="-1"
+     aria-labelledby="modal-ver-anotacao-execucao-titulo" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title" id="modal-ver-anotacao-execucao-titulo">
+                        Anotação da execução
+                    </h5>
+                    <small class="text-muted" id="modal-ver-anotacao-execucao-meta"></small>
+                </div>
+                <button type="button" class="btn-close"
+                        data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="modal-ver-anotacao-execucao-texto"
+                     class="nota-execucao-conteudo p-3 bg-light border rounded"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary"
+                        data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% if pode_agendar_exames_pendentes %}
+<div class="modal fade" id="modal-exames-pendentes" tabindex="-1"
+     aria-labelledby="modal-exames-pendentes-titulo" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modal-exames-pendentes-titulo">
+                    Exames Pendentes de Agendamento
+                </h5>
+                <button type="button" class="btn-close"
+                        data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="exames-pendentes-feedback"
+                     class="alert alert-danger" role="alert" hidden></div>
+                <div id="exames-pendentes-carregando" class="text-center py-3"
+                     hidden>
+                    <span class="spinner-border spinner-border-sm me-2"
+                          aria-hidden="true"></span>
+                    Carregando exames pendentes...
+                </div>
+                <div id="exames-pendentes-lista" class="list-group"></div>
+                <div id="exames-pendentes-vazio" class="alert alert-info"
+                     hidden>
+                    Não há exames solicitados pendentes de agendamento.
+                </div>
+
+                <section id="agendamento-exame-pendente" hidden>
+                    <div class="alert alert-info">
+                        <strong id="agenda-pendente-paciente"></strong>
+                        <div id="agenda-pendente-exame"></div>
+                        <div id="agenda-pendente-solicitacao"
+                             class="small mt-1"></div>
+                    </div>
+                    {% if not tipos_agendamento_exame %}
+                    <div class="alert alert-warning">
+                        Não há tipos ativos configurados para agendamento de
+                        exames. Configure um tipo antes de continuar.
+                    </div>
+                    {% endif %}
+                    <div id="agenda-pendente-feedback"
+                         class="alert alert-warning" role="alert" hidden></div>
+                    <form id="form-agendar-exame-pendente" method="post" novalidate>
+                        {% csrf_token %}
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="agenda-pendente-tipo"
+                                       class="form-label">
+                                    Tipo de agendamento
+                                </label>
+                                <select class="form-select"
+                                        id="agenda-pendente-tipo" name="tipo"
+                                        required>
+                                    <option value="">Selecione</option>
+                                    {% for tipo_agendamento in tipos_agendamento_exame %}
+                                    <option value="{{ tipo_agendamento.pk }}">
+                                        {{ tipo_agendamento.descricao }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="agenda-pendente-data"
+                                       class="form-label">Data e hora</label>
+                                <input class="form-control" type="datetime-local"
+                                       id="agenda-pendente-data" name="data_hora"
+                                       required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="agenda-pendente-local"
+                                       class="form-label">Local</label>
+                                <select class="form-select"
+                                        id="agenda-pendente-local" name="local"
+                                        required>
+                                    <option value="">Selecione</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="agenda-pendente-video"
+                                       class="form-label">
+                                    Link da videochamada
+                                </label>
+                                <input class="form-control" type="url"
+                                       id="agenda-pendente-video"
+                                       name="link_videochamada" maxlength="300">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="agenda-pendente-whatsapp"
+                                       class="form-label">
+                                    Link do WhatsApp
+                                </label>
+                                <input class="form-control" type="url"
+                                       id="agenda-pendente-whatsapp"
+                                       name="link_whatsapp" maxlength="300">
+                            </div>
+                            <div class="col-12 mb-3">
+                                <label for="agenda-pendente-observacao"
+                                       class="form-label">
+                                    Anotação da agenda
+                                </label>
+                                <textarea class="form-control"
+                                          id="agenda-pendente-observacao"
+                                          name="observacao" rows="2"
+                                          required></textarea>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <button type="button" id="agenda-pendente-voltar"
+                                    class="btn btn-outline-secondary">
+                                <i class="fas fa-arrow-left me-1"></i>
+                                Voltar para exames pendentes
+                            </button>
+                            <button type="submit" class="btn btn-primary"
+                                    {% if not tipos_agendamento_exame %}disabled{% endif %}>
+                                <i class="fas fa-calendar-check me-1"></i>
+                                Agendar exame
+                            </button>
+                        </div>
+                    </form>
+                </section>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 <!--FIM TABELA CONT DIREITA-->
 {% endblock %}
 
@@ -222,4 +435,254 @@
 </div>
 {% endif %}
 <!--FIM PAGINACAO-->
+{% endblock %}
+
+{% block scriptcustom %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const efetuarModal = document.getElementById('modal-efetuar-agenda');
+    const efetuarForm = document.getElementById('form-efetuar-agenda');
+    const anotacaoInput = document.getElementById('anotacao-execucao-agenda');
+    if (efetuarModal && efetuarForm && anotacaoInput) {
+        document.body.appendChild(efetuarModal);
+        efetuarModal.addEventListener('show.bs.modal', function (event) {
+            const botao = event.relatedTarget;
+            efetuarForm.action = botao.dataset.url;
+            anotacaoInput.value = '';
+        });
+    }
+
+    const anotacaoModal =
+        document.getElementById('modal-ver-anotacao-execucao');
+    if (anotacaoModal) {
+        document.body.appendChild(anotacaoModal);
+        anotacaoModal.addEventListener('show.bs.modal', function (event) {
+            const botao = event.relatedTarget;
+            document.getElementById(
+                'modal-ver-anotacao-execucao-titulo').textContent =
+                'Anotação da execução';
+            document.getElementById(
+                'modal-ver-anotacao-execucao-meta').textContent =
+                [botao.dataset.paciente, botao.dataset.data]
+                    .filter(Boolean).join(' · ');
+            document.getElementById(
+                'modal-ver-anotacao-execucao-texto').textContent =
+                botao.dataset.observacao || 'Sem anotação registrada.';
+        });
+    }
+
+    const examesPendentesModal =
+        document.getElementById('modal-exames-pendentes');
+    if (examesPendentesModal) {
+        document.body.appendChild(examesPendentesModal);
+        const examesPendentesUrl = '{{ exames_pendentes_url|escapejs }}';
+        const opcoesUrl = '{{ agenda_opcoes_url|escapejs }}';
+        const carregando = document.getElementById(
+            'exames-pendentes-carregando');
+        const lista = document.getElementById('exames-pendentes-lista');
+        const vazio = document.getElementById('exames-pendentes-vazio');
+        const feedback = document.getElementById(
+            'exames-pendentes-feedback');
+        const painelAgendamento = document.getElementById(
+            'agendamento-exame-pendente');
+        const formulario = document.getElementById(
+            'form-agendar-exame-pendente');
+        const tipoSelect = document.getElementById('agenda-pendente-tipo');
+        const localSelect = document.getElementById('agenda-pendente-local');
+        const feedbackAgendamento = document.getElementById(
+            'agenda-pendente-feedback');
+
+        function exibirFeedback(elemento, mensagem, tipo) {
+            elemento.className = `alert alert-${tipo}`;
+            elemento.textContent = mensagem;
+            elemento.hidden = false;
+        }
+
+        function mensagemErro(dados) {
+            const mensagens = Object.values(dados.erros || {})
+                .flatMap(erros => erros.map(erro => erro.message));
+            return dados.erro || mensagens.join(' ') ||
+                'Não foi possível concluir o agendamento.';
+        }
+
+        function criarItemExame(exame) {
+            const item = document.createElement('div');
+            item.className =
+                'list-group-item d-flex justify-content-between align-items-start gap-3';
+
+            const detalhes = document.createElement('div');
+            const paciente = document.createElement('strong');
+            paciente.textContent = exame.paciente;
+            const identificacao = document.createElement('div');
+            identificacao.className = 'small text-muted';
+            identificacao.textContent =
+                `${exame.tipo_exame} · Atendimento ${exame.atendimento_id}` +
+                (exame.data_solicitacao
+                    ? ` · Solicitado em ${exame.data_solicitacao}` : '');
+            const solicitacao = document.createElement('div');
+            solicitacao.className = 'small mt-1';
+            solicitacao.textContent =
+                exame.solicitacao || 'Sem detalhes da solicitação.';
+            detalhes.append(paciente, identificacao, solicitacao);
+
+            const botao = document.createElement('button');
+            botao.type = 'button';
+            botao.className = 'btn btn-outline-primary btn-sm flex-shrink-0';
+            botao.innerHTML = '<i class="fas fa-calendar-plus me-1"></i>Agendar';
+            botao.addEventListener('click', function () {
+                selecionarExame(exame);
+            });
+            item.append(detalhes, botao);
+            return item;
+        }
+
+        async function carregarExamesPendentes() {
+            feedback.hidden = true;
+            carregando.hidden = false;
+            lista.replaceChildren();
+            lista.hidden = true;
+            vazio.hidden = true;
+            painelAgendamento.hidden = true;
+            try {
+                const resposta = await fetch(examesPendentesUrl, {
+                    headers: {'Accept': 'application/json'},
+                    credentials: 'same-origin'
+                });
+                const dados = await resposta.json();
+                if (!resposta.ok) {
+                    throw new Error(mensagemErro(dados));
+                }
+                if (dados.exames.length) {
+                    dados.exames.forEach(exame => {
+                        lista.appendChild(criarItemExame(exame));
+                    });
+                    lista.hidden = false;
+                } else {
+                    vazio.hidden = false;
+                }
+            } catch (erro) {
+                exibirFeedback(feedback, erro.message, 'danger');
+            } finally {
+                carregando.hidden = true;
+            }
+        }
+
+        async function carregarLocais() {
+            feedbackAgendamento.hidden = true;
+            localSelect.replaceChildren(new Option('Selecione', ''));
+            if (!tipoSelect.value) return;
+
+            const parametros = new URLSearchParams({
+                tipo: tipoSelect.value,
+                atendimento: formulario.dataset.atendimento
+            });
+            try {
+                const resposta = await fetch(`${opcoesUrl}?${parametros}`, {
+                    headers: {'Accept': 'application/json'},
+                    credentials: 'same-origin'
+                });
+                const dados = await resposta.json();
+                if (!resposta.ok) {
+                    throw new Error(mensagemErro(dados));
+                }
+                dados.locais.forEach(local => {
+                    localSelect.add(new Option(local.nome, local.id));
+                });
+                localSelect.required = dados.local_obrigatorio;
+                if (dados.local_padrao) {
+                    localSelect.value = String(dados.local_padrao);
+                }
+            } catch (erro) {
+                exibirFeedback(feedbackAgendamento, erro.message, 'danger');
+            }
+        }
+
+        function selecionarExame(exame) {
+            formulario.reset();
+            formulario.action = exame.agendar_url;
+            formulario.dataset.atendimento = exame.atendimento_id;
+            localSelect.replaceChildren(new Option('Selecione', ''));
+            localSelect.required = false;
+            feedbackAgendamento.hidden = true;
+            document.getElementById('agenda-pendente-paciente').textContent =
+                exame.paciente;
+            document.getElementById('agenda-pendente-exame').textContent =
+                exame.tipo_exame;
+            document.getElementById(
+                'agenda-pendente-solicitacao').textContent =
+                exame.solicitacao || 'Sem detalhes da solicitação.';
+            lista.hidden = true;
+            vazio.hidden = true;
+            painelAgendamento.hidden = false;
+            if (tipoSelect.options.length === 2) {
+                tipoSelect.value = tipoSelect.options[1].value;
+                carregarLocais();
+            }
+        }
+
+        examesPendentesModal.addEventListener(
+            'show.bs.modal', carregarExamesPendentes);
+        examesPendentesModal.addEventListener('hidden.bs.modal', function () {
+            formulario.reset();
+            formulario.removeAttribute('action');
+            painelAgendamento.hidden = true;
+            lista.hidden = false;
+            feedback.hidden = true;
+            feedbackAgendamento.hidden = true;
+        });
+        tipoSelect.addEventListener('change', carregarLocais);
+        document.getElementById('agenda-pendente-voltar')
+            .addEventListener('click', function () {
+                formulario.reset();
+                localSelect.replaceChildren(new Option('Selecione', ''));
+                feedbackAgendamento.hidden = true;
+                painelAgendamento.hidden = true;
+                lista.hidden = false;
+            });
+        formulario.addEventListener('submit', async function (event) {
+            event.preventDefault();
+            feedbackAgendamento.hidden = true;
+            const dataAgendamento =
+                document.getElementById('agenda-pendente-data');
+            if (!dataAgendamento.value) {
+                exibirFeedback(
+                    feedbackAgendamento,
+                    'Informe a data e hora do agendamento.',
+                    'warning');
+                dataAgendamento.focus();
+                return;
+            }
+            if (!localSelect.value) {
+                exibirFeedback(
+                    feedbackAgendamento,
+                    'Selecione o local do agendamento.',
+                    'warning');
+                localSelect.focus();
+                return;
+            }
+            try {
+                const resposta = await fetch(formulario.action, {
+                    method: 'POST',
+                    body: new FormData(formulario),
+                    headers: {'Accept': 'application/json'},
+                    credentials: 'same-origin'
+                });
+                const dados = await resposta.json();
+                if (!resposta.ok) {
+                    throw new Error(mensagemErro(dados));
+                }
+                exibirFeedback(
+                    feedbackAgendamento,
+                    'Agendamento cadastrado com sucesso. Atualizando a lista...',
+                    'success');
+                window.setTimeout(() => window.location.reload(), 800);
+            } catch (erro) {
+                exibirFeedback(
+                    feedbackAgendamento, erro.message, 'danger');
+            }
+        });
+    }
+});
+</script>
 {% endblock %}
