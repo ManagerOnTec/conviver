@@ -1,6 +1,7 @@
 import base64
 from datetime import datetime, timedelta
 from io import BytesIO
+import tempfile
 import zipfile
 
 import PyPDF2
@@ -21,14 +22,21 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.exceptions import ValidationError
-from django.test import RequestFactory, TestCase, override_settings
+from django.test import RequestFactory, TestCase, SimpleTestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from admin_cadastros.models import Estabelecimento, Pessoa, Empresa, TipoAtendimento
+from admin_cadastros.models import (
+    Ala, Empresa, Estabelecimento, Local, Pessoa, Setor, TipoAtendimento,
+)
 from admin_estoques.models import (
     Grupo, Produto, TipoProduto, UnidadeMedida, ViaAdministracao,)
 from admin_evolucoes.models import TipoEvolucao
+from admin_exames.models import ParametrosExames, TipoExame
+from prontuarios.forms_exames import ResultadoExameForm
+from prontuarios.models import Exame, ResultadoExame
+from agenda_pacientes.models import AgendaPaciente, TipoAgendamento
+from prontuarios.exames import ResultadoExameFormSet
 from admin_prescricoes.models import InicioPlanoTerapeutico, IntervaloHoras
 from admin_relatorios.models import GerenciadorRelatorioGeral
 from admin_relatorios.models import Relatorio
@@ -1441,3 +1449,343 @@ class ProdutoPrescricaoPadraoAutocompleteTests(TestCase):
         qs = self._search(
             'http://localhost/admin/admin_estoques/produto/1/change/', field_name='outro')
         self.assertIn('ProdutoNaoPrescritivel', set(qs.values_list('descricao', flat=True)))
+
+
+class ExamesProntuarioTests(SimpleTestCase):
+
+    def test_resultado_exame_valida_extensao_e_tamanho_dos_anexos(self):
+        form = ResultadoExameForm(data={
+            'data_resultado': '2026-11-16',
+            'anotacoes': 'Resultado normal',
+        }, files={
+            'anexo_1': SimpleUploadedFile('laudo.exe', b'conteudo'),
+        })
+        self.assertFalse(form.is_valid())
+        self.assertIn('anexo_1', form.errors)
+
+        form_valido = ResultadoExameForm(data={
+            'data_resultado': '2026-11-16',
+            'anotacoes': 'Resultado normal',
+        }, files={
+            'anexo_1': SimpleUploadedFile('laudo.pdf', b'%PDF-1.4 teste'),
+            'anexo_2': SimpleUploadedFile('imagem.jpeg', b'jpeg'),
+            'anexo_3': SimpleUploadedFile('grafico.png', b'png'),
+        })
+        self.assertTrue(form_valido.is_valid(), form_valido.errors.as_json())
+
+    def test_cada_resultado_tem_exatamente_tres_campos_de_anexo(self):
+        form = ResultadoExameForm()
+        self.assertEqual(
+            {name for name in form.fields if name.startswith('anexo_')},
+            {'anexo_1', 'anexo_2', 'anexo_3'},
+        )
+        self.assertEqual(ResultadoExameFormSet.extra, 3)
+
+    def test_listagem_de_exames_tem_rota_com_atendimento(self):
+        self.assertEqual(
+            reverse('exame_listar', kwargs={'atendimento_id': 25}),
+            '/prontuarios/exame_listar/25/',
+        )
+
+    def test_cadastro_de_exame_exige_estabelecimento_e_tipo(self):
+        from prontuarios.forms_exames import ExameCreateForm
+        form = ExameCreateForm(data={})
+        self.assertFalse(form.is_valid())
+        self.assertIn('tipo_exame', form.errors)
+
+    def test_filtro_de_exames_expoe_campos_clinicos_e_de_auditoria(self):
+        from prontuarios.exames_views import ExameFilter
+        self.assertEqual(
+            list(ExameFilter.Meta.fields),
+            ['id', 'tipo_exame', 'dt_registro', 'data_resultado',
+             'us_registro', 'dt_atualizacao', 'us_atualizacao', 'status'],
+        )
+        self.assertIn('data_resultado', ExameFilter.base_filters)
+        self.assertIn('tipo_exame', ExameFilter.base_filters)
+
+
+class ExameAgendaModalTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_superuser(
+            username='exames-admin',
+            email='exames-admin@example.com',
+            password='senha123',
+        )
+        self.empresa = Empresa.objects.create(
+            nacionalidade='b',
+            razao_social='Empresa dos Testes',
+            fantasia='Empresa dos Testes',
+            empresa='EMP TESTES',
+            status='A',
+        )
+        self.estabelecimento = Estabelecimento.objects.create(
+            estabelecimento='Unidade dos Testes',
+            tipo='H',
+            empresa=self.empresa,
+            status='A',
+        )
+        self.pessoa = Pessoa.objects.create(
+            nome='Paciente dos Testes',
+            classificacao_pessoa='P',
+            nacionalidade='b',
+            sexo='M',
+            dt_nascimento=None,
+            status='A',
+        )
+        self.tipo_atendimento = TipoAtendimento.objects.create(
+            tipo_atendimento='Consulta',
+            status='A',
+        )
+        self.atendimento = Atendimento.objects.create(
+            pessoa=self.pessoa,
+            tipo_atendimento=self.tipo_atendimento,
+            estabelecimento=self.estabelecimento,
+            carater_atendimento='E',
+            entidade_encaminhamento='N',
+            cert_nascimento=False,
+            rg=False,
+            cpf=False,
+            titulo_eleitor=False,
+            carteira_vacina=False,
+            cartao_sus=False,
+            cartao_banco=False,
+            carteira_trabalho=False,
+            foto=False,
+            outros=False,
+            status='A',
+        )
+        self.tipo_exame = TipoExame.objects.create(
+            descricao='Exame dos Testes',
+            status='A',
+        )
+        self.exame = Exame.objects.create(
+            atendimento=self.atendimento,
+            tipo_exame=self.tipo_exame,
+            solicitacao='Solicitação detalhada para o teste.',
+            estabelecimento=self.estabelecimento,
+            us_registro=self.user,
+            status='A',
+        )
+        self.ala = Ala.objects.create(
+            estabelecimento=self.estabelecimento,
+            nome='Ala Externa',
+            internacao=False,
+            status='A',
+        )
+        self.setor = Setor.objects.create(
+            estabelecimento=self.estabelecimento,
+            ala=self.ala,
+            nome='Laboratório',
+            status='A',
+        )
+        self.local = Local.objects.create(
+            setor=self.setor,
+            nome='Sala de coleta',
+            online='N',
+            status='A',
+        )
+        self.tipo_agendamento = TipoAgendamento.objects.create(
+            descricao='Exame solicitado',
+            externo=True,
+            exige_exame_solicitado=True,
+            status='A',
+        )
+        self.client.force_login(self.user)
+        session = self.client.session
+        session['estabelecimento_id'] = self.estabelecimento.pk
+        session.save()
+
+    def _marcar_agendamento(self):
+        from prontuarios.exames_views import ExameAgendaModalView
+
+        request = RequestFactory().post(
+            '/prontuarios/exame/agendar-modal/',
+            {
+                'tipo': self.tipo_agendamento.pk,
+                'data_hora': '2026-11-24T11:00',
+                'local': self.local.pk,
+            },
+        )
+        request.user = self.user
+        request.session = {'estabelecimento_id': self.estabelecimento.pk}
+        return ExameAgendaModalView.as_view()(request, pk=self.exame.pk)
+
+    def _registrar_resultado(self):
+        from prontuarios.exames_views import ExameResultadoModalView
+
+        request = RequestFactory().post(
+            '/prontuarios/exame/resultado-modal/',
+            {
+                'data_resultado': '2026-11-24',
+                'anotacoes': 'Resultado lançado pelo modal.',
+            },
+        )
+        request.user = self.user
+        request.session = {'estabelecimento_id': self.estabelecimento.pk}
+        return ExameResultadoModalView.as_view()(
+            request, pk=self.exame.pk)
+
+    def test_exam_row_can_create_only_one_active_schedule(self):
+        response = self._marcar_agendamento()
+        self.assertEqual(response.status_code, 201)
+        agenda = AgendaPaciente.objects.get(exame=self.exame, status='A')
+        self.assertEqual(agenda.atendimento_id, self.atendimento.pk)
+        self.assertEqual(agenda.local_id, self.local.pk)
+
+        response_repetido = self._marcar_agendamento()
+        self.assertEqual(response_repetido.status_code, 409)
+        self.assertEqual(
+            AgendaPaciente.objects.filter(exame=self.exame, status='A').count(),
+            1,
+        )
+
+    def test_result_requires_an_executed_schedule(self):
+        self._marcar_agendamento()
+        response = self._registrar_resultado()
+
+        self.assertEqual(response.status_code, 409)
+        self.assertIn(b'Marque o agendamento', response.content)
+        self.assertFalse(
+            ResultadoExame.objects.filter(
+                exame=self.exame, status='A').exists())
+        with self.assertRaises(ValidationError):
+            ResultadoExame.objects.create(
+                exame=self.exame,
+                data_resultado='2026-11-24',
+                us_registro=self.user,
+            )
+
+    def test_result_registration_preserves_executed_schedule(self):
+        self._marcar_agendamento()
+        agenda = AgendaPaciente.objects.get(exame=self.exame, status='A')
+        agenda.efetuar(usuario=self.user)
+
+        lista = self.client.get(
+            reverse('exame_listar', kwargs={
+                'atendimento_id': self.atendimento.pk,
+            }))
+        self.assertContains(lista, 'data-agenda-executada="true"')
+
+        response = self._registrar_resultado()
+
+        self.assertEqual(response.status_code, 201)
+        agenda.refresh_from_db()
+        self.assertEqual(agenda.efetuado, 'S')
+        self.assertTrue(
+            ResultadoExame.objects.filter(
+                exame=self.exame,
+                status='A',
+                anotacoes='Resultado lançado pelo modal.',
+            ).exists())
+
+    def test_exam_list_shows_the_schedule_date_and_location(self):
+        self._marcar_agendamento()
+
+        response = self.client.get(
+            reverse('exame_listar', kwargs={
+                'atendimento_id': self.atendimento.pk,
+            }))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Agendamento')
+        self.assertContains(response, '24/11/2026 11:00')
+        self.assertContains(response, 'Sala de coleta')
+        self.assertContains(response, 'Não efetuado')
+        self.assertContains(response, 'Solicitação / Indicação')
+        self.assertContains(response, 'Prof. solicitante')
+        self.assertContains(response, 'Dt. solicitação')
+        self.assertContains(response, 'Status agendamento')
+        self.assertContains(response, 'Resultado exame')
+        self.assertContains(response, 'Prof. resultado')
+        self.assertContains(
+            response, 'data-bs-target="#modal-solicitacao-exame"')
+        cabecalho = response.content.decode().split(
+            '<thead', 1)[1].split('</thead>', 1)[0]
+        colunas = [
+            'Tipo',
+            'Solicitação / Indicação',
+            'Prof. solicitante',
+            'Dt. solicitação',
+            'Agendamento',
+            'Status agendamento',
+            'Resultado exame',
+            'Prof. resultado',
+        ]
+        posicoes = [cabecalho.index(coluna) for coluna in colunas]
+        self.assertEqual(posicoes, sorted(posicoes))
+        self.assertContains(
+            response,
+            'Marque o agendamento deste exame como efetuado antes de registrar '
+            'o resultado.')
+        self.assertNotContains(
+            response, 'data-bs-target="#modal-registrar-resultado"')
+        self.assertNotContains(response, 'Anotações / Anexos')
+        self.assertNotContains(response, 'Editar agendamento')
+
+    def test_exam_list_shows_no_result_after_schedule_execution(self):
+        self._marcar_agendamento()
+        agenda = AgendaPaciente.objects.get(exame=self.exame, status='A')
+        agenda.efetuado = 'S'
+        agenda.save()
+
+        response = self.client.get(
+            reverse('exame_listar', kwargs={
+                'atendimento_id': self.atendimento.pk,
+            }))
+
+        self.assertContains(response, 'Efetuado')
+        self.assertContains(response, 'Sem resultado')
+        self.assertContains(
+            response, 'data-bs-target="#modal-registrar-resultado"')
+
+    def test_result_details_modal_loads_annotation_and_protected_attachment(self):
+        self._marcar_agendamento()
+        agenda = AgendaPaciente.objects.get(exame=self.exame, status='A')
+        agenda.efetuado = 'S'
+        agenda.save()
+        conteudo_pdf = b'%PDF-1.4 teste'
+        profissional_resultado = get_user_model().objects.create_user(
+            username='profissional-resultado',
+            first_name='Profissional',
+            last_name='Resultado',
+        )
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with self.settings(MEDIA_ROOT=media_root):
+                resultado = ResultadoExame.objects.create(
+                    exame=self.exame,
+                    data_resultado='2026-11-24',
+                    anotacoes='Resultado detalhado para o modal.',
+                    anexo_1=SimpleUploadedFile(
+                        'resultado.pdf', conteudo_pdf,
+                        content_type='application/pdf'),
+                    us_registro=profissional_resultado,
+                )
+                lista = self.client.get(
+                    reverse('exame_listar', kwargs={
+                        'atendimento_id': self.atendimento.pk,
+                    }))
+                self.assertContains(
+                    lista, 'data-bs-target="#modal-detalhe-resultado"')
+                self.assertContains(lista, '24/11/2026')
+                self.assertContains(lista, 'Profissional Resultado')
+                self.assertNotContains(
+                    lista, 'Resultado detalhado para o modal.')
+                self.assertNotContains(lista, 'resultado.pdf')
+
+                detalhe = self.client.get(reverse(
+                    'exame_resultado_detalhe_modal',
+                    kwargs={
+                        'pk': self.exame.pk,
+                        'resultado_pk': resultado.pk,
+                    }))
+                self.assertEqual(detalhe.status_code, 200)
+                dados = detalhe.json()
+                self.assertEqual(
+                    dados['anotacoes'], 'Resultado detalhado para o modal.')
+                self.assertEqual(dados['anexos'][0]['nome'], 'resultado.pdf')
+
+                anexo = self.client.get(dados['anexos'][0]['url'])
+                self.assertEqual(anexo.status_code, 200)
+                self.assertEqual(
+                    b''.join(anexo.streaming_content), conteudo_pdf)

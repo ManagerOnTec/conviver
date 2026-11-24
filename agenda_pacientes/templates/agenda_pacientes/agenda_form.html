@@ -1,0 +1,141 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+{% block titulos %}{{title}}|{% endblock %}
+
+{% block menul %}
+<div class="form-group text-left mt-2 m-3">
+    <a title="Voltar" href="{% url 'agendapaciente_listar' %}"
+       class="mt-2 list-group-item list-group-item-action voltar-link rounded">
+        <i class="fas fa-arrow-left me-2"></i>Voltar
+    </a>
+    <a href="{% url 'agendapaciente_listar' %}"
+       class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-list me-2"></i>Lista de Agendas
+    </a>
+</div>
+{% endblock %}
+
+{% block cabdados %}
+{% include 'parciais/_list_header.html' with icon_class='fas fa-calendar-plus' title=title subtitle='Informe o atendimento/paciente, o tipo de agenda e a data/hora do agendamento.' context_label='Estabelecimento' context_value=estabelecimento %}
+{% endblock %}
+
+{% block lista %}
+<div class="container">
+    <form id="form-agenda" method="post" class="form-control mt-2">
+        {% csrf_token %}
+        <div id="agenda-opcoes-feedback" class="alert alert-warning"
+             role="alert" hidden></div>
+
+        {% if form.non_field_errors %}
+        <div class="alert alert-warning" role="alert">
+            {% for erro in form.non_field_errors %}<div>{{ erro }}</div>{% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="row">
+            <div class="col-lg-9 col-md-9 col-sm-12">
+                <div class="container">
+                    <div class="row">
+                        <div class="col-md-6">{{ form.atendimento|as_crispy_field }}</div>
+                        <div class="col-md-6">{{ form.tipo|as_crispy_field }}</div>
+                        <div class="col-md-6">{{ form.exame|as_crispy_field }}</div>
+                        <div class="col-md-6">{{ form.local|as_crispy_field }}</div>
+                        <div class="col-md-6">{{ form.data_hora|as_crispy_field }}</div>
+                        <div class="col-md-6">{{ form.responsavel|as_crispy_field }}</div>
+
+                        <div class="col-md-6">{{ form.link_videochamada|as_crispy_field }}</div>
+                        <div class="col-md-6">{{ form.link_whatsapp|as_crispy_field }}</div>
+
+                        <div class="col-md-12">{{ form.observacao|as_crispy_field }}</div>
+
+                        <div class="col-md-4">{{ form.efetuado|as_crispy_field }}</div>
+                        <div class="col-md-4">{{ form.dt_efetuado|as_crispy_field }}</div>
+                        <div class="col-md-4">{{ form.status|as_crispy_field }}</div>
+
+                        <div class="col-md-12">{{ form.observacao_execucao|as_crispy_field }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-3 col-sm-12">
+                {% include 'parciais/_workflow_submit_sidebar.html' with button_id='btn-agenda-salvar' submit_label='Salvar' status_title='Salvando...' status_spinner_class='text-success' status_text_class='text-success' %}
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scriptcustom %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const tipo = document.getElementById('id_tipo');
+    const atendimento = document.getElementById('id_atendimento');
+    const exame = document.getElementById('id_exame');
+    const local = document.getElementById('id_local');
+    const exameContainer = exame && exame.closest('.col-md-6');
+    const feedback = document.getElementById('agenda-opcoes-feedback');
+    const endpoint = "{% url 'agendapaciente_opcoes' %}";
+
+    if (!tipo || !local) return;
+
+    async function atualizarOpcoes(limparExame) {
+        const parametros = new URLSearchParams();
+        if (tipo.value) parametros.set('tipo', tipo.value);
+        if (atendimento && atendimento.value) {
+            parametros.set('atendimento', atendimento.value);
+        }
+
+        try {
+            const resposta = await fetch(`${endpoint}?${parametros.toString()}`, {
+                headers: {'Accept': 'application/json'},
+                credentials: 'same-origin'
+            });
+            const dados = await resposta.json();
+            if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível carregar as opções.');
+
+            const localAtual = limparExame ? '' : local.value;
+            local.replaceChildren(new Option('---------', ''));
+            dados.locais.forEach(function (opcao) {
+                local.add(new Option(opcao.nome, opcao.id));
+            });
+            local.required = dados.local_obrigatorio;
+            if (localAtual && Array.from(local.options).some(
+                    opcao => opcao.value === localAtual)) {
+                local.value = localAtual;
+            } else if (dados.local_padrao && Array.from(local.options).some(
+                    opcao => opcao.value === String(dados.local_padrao))) {
+                local.value = String(dados.local_padrao);
+            }
+            local.dispatchEvent(new Event('change', {bubbles: true}));
+
+            if (exameContainer) {
+                exameContainer.hidden = !dados.exige_exame_solicitado;
+            }
+            if (exame) {
+                exame.required = dados.exige_exame_solicitado;
+                if (limparExame || !dados.exige_exame_solicitado) {
+                    exame.value = '';
+                    exame.dispatchEvent(new Event('change', {bubbles: true}));
+                }
+            }
+            feedback.hidden = true;
+            feedback.textContent = '';
+        } catch (erro) {
+            feedback.textContent = erro.message;
+            feedback.hidden = false;
+        }
+    }
+
+    tipo.addEventListener('change', function () {
+        atualizarOpcoes(true);
+    });
+    if (atendimento) {
+        atendimento.addEventListener('change', function () {
+            atualizarOpcoes(true);
+        });
+    }
+    atualizarOpcoes(false);
+});
+</script>
+{% endblock %}

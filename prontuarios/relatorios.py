@@ -37,6 +37,7 @@ from django.db.models import Q
 INLINE_REPORT_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png'}
 REPORT_IMAGE_FIELDS = {
     'evolucao': 'anexo_evolucao',
+    'exame': 'anexo_exame',
     'atas': 'anexo',
     'oficios': 'anexo',
     'orcamentos': 'anexo',
@@ -139,6 +140,24 @@ def gerar_pdf_prontuario(obj, user, assinar=False, assinatura_texto=None):
 
     #####################################################################
     # Objeto evolucao - de acordo com o tipo de evolucao e configuração do gerenciador pode obter apenas as iniciais
+    if nome_modelo == 'exame':
+        iniciais = vardin.tipo_exame.iniciais_nome
+        tipo_exame = str(vardin.tipo_exame)
+        resultados = vardin.resultados.filter(status='A').order_by('data_resultado')
+        partes = [f'Tipo de exame: {tipo_exame}', html.unescape(vardin.solicitacao or '')]
+        for resultado in resultados:
+            partes.extend([
+                f'Resultado em {resultado.data_resultado:%d/%m/%Y}',
+                html.unescape(resultado.anotacoes or ''),
+                'Anexos: ' + ', '.join(
+                    arquivo.name for arquivo in
+                    (resultado.anexo_1, resultado.anexo_2, resultado.anexo_3)
+                    if arquivo and arquivo.name),
+            ])
+        texto_parag = '\\n'.join(parte for parte in partes if parte)
+        gerenciador_personalizado = GerenciadorRelatorioPersonalizado.objects.filter(
+            relatorio='exame', estabelecimento_id=estabelecimento_id,
+            tipo_exame_id=vardin.tipo_exame_id, status='A').first() or gerenciador_personalizado
     if nome_modelo == 'evolucao':
         iniciais = vardin.tipo_evolucao.iniciais_nome
         texto_parag = html.unescape(vardin.evolucao or '')

@@ -14,6 +14,12 @@ from smart_selects.db_fields import ChainedForeignKey
 from django.db.models import Q
 from django.core.validators import FileExtensionValidator
 
+meio_online_choices_cadastros = (
+    ('VIDEO', 'Videoconferência'),
+    ('WHATSAPP', 'WhatsApp (chamada de vídeo)'),
+    ('TELEFONE', 'Telefone'),
+)
+
 
 class BaseModel(models.Model):
 
@@ -408,7 +414,7 @@ class TipoAtendimento(models.Model):
     class Meta:
 
         verbose_name = 'Tipo de Atendimento'
-        verbose_name_plural = '10. Tipos de Atendimentos'
+        verbose_name_plural = '0. Tipos de Atendimentos'
         ordering = ['tipo_atendimento']
         constraints = [
             models.UniqueConstraint(
@@ -417,3 +423,238 @@ class TipoAtendimento(models.Model):
 
     def __str__(self):
         return f"{self.tipo_atendimento}"
+
+
+# ALA / SETOR / LOCAL (cadastros auxiliares da agenda) ########################
+#
+#   Estabelecimento ──► Ala (internação ou externa) ──► Setor ──► Local
+#
+# A agenda (`agenda_pacientes.AgendaPaciente.local`) aponta para este `Local`.
+
+
+class Ala(models.Model):
+    """Ala de um estabelecimento; define se seus setores são de internação."""
+    estabelecimento = models.ForeignKey(
+        Estabelecimento, on_delete=models.PROTECT, related_name='alas',
+        verbose_name='Estabelecimento')
+    nome = models.CharField(max_length=100, verbose_name='Nome da Ala')
+    internacao = models.BooleanField(
+        default=False, verbose_name='Ala de Internação',
+        help_text='Define se os setores desta ala podem receber leitos.')
+    status = models.CharField(
+        max_length=1, choices=status_choices, default='A', verbose_name='Status')
+    dt_registro = models.DateTimeField(
+        default=timezone.now, null=True, verbose_name='Dt.Registro')
+    us_registro = models.ForeignKey(
+        User, on_delete=models.PROTECT, null=True, blank=True,
+        related_name='ala_criada_por', verbose_name='Us.Registro')
+    dt_atualizacao = models.DateTimeField(
+        blank=True, null=True, default=None, verbose_name='Dt.Atualização')
+    us_atualizacao = models.ForeignKey(
+        User, on_delete=models.PROTECT, null=True, blank=True,
+        related_name='ala_atualizada_por', verbose_name='Us.Atualização')
+
+    class Meta:
+        verbose_name = 'Ala'
+        verbose_name_plural = '9.1. Alas'
+        ordering = ('estabelecimento', 'nome')
+        constraints = [
+            models.UniqueConstraint(
+                fields=['estabelecimento', 'nome', 'status'],
+                name='unique_ala_estabelecimento_nome_status')
+        ]
+
+    def __str__(self):
+        return f'Ala: {self.nome}'
+
+    def clean(self):
+        self.nome = (self.nome or '').strip()
+        if not self.nome:
+            raise ValidationError({'nome': 'Informe o nome da ala.'})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+
+class Setor(models.Model):
+    """Setor de uma ala, com o estabelecimento mantido para compatibilidade."""
+    estabelecimento = models.ForeignKey(
+        Estabelecimento, on_delete=models.PROTECT, related_name='setores',
+        verbose_name='Estabelecimento')
+    ala = models.ForeignKey(
+        Ala, on_delete=models.PROTECT, related_name='setores',
+        verbose_name='Ala')
+    nome = models.CharField(max_length=100, verbose_name='Nome do Setor')
+    status = models.CharField(
+        max_length=1, choices=status_choices, default='A', verbose_name='Status')
+    dt_registro = models.DateTimeField(
+        default=timezone.now, null=True, verbose_name='Dt.Registro')
+    us_registro = models.ForeignKey(
+        User, on_delete=models.PROTECT, null=True, blank=True,
+        related_name='setor_criado_por', verbose_name='Us.Registro')
+    dt_atualizacao = models.DateTimeField(
+        blank=True, null=True, default=None, verbose_name='Dt.Atualização')
+    us_atualizacao = models.ForeignKey(
+        User, on_delete=models.PROTECT, null=True, blank=True,
+        related_name='setor_atualizado_por', verbose_name='Us.Atualização')
+
+    class Meta:
+        verbose_name = 'Setor'
+        verbose_name_plural = '9.2. Setores'
+        ordering = ('estabelecimento', 'nome')
+        constraints = [
+            models.UniqueConstraint(
+                fields=['estabelecimento', 'nome', 'status'],
+                name='unique_setor_estabelecimento_nome_status')
+        ]
+
+    def __str__(self):
+        return f'Setor: {self.nome}'
+
+    def clean(self):
+        if self.ala_id and self.estabelecimento_id and \
+                self.ala.estabelecimento_id != self.estabelecimento_id:
+            raise ValidationError({
+                'ala': 'Selecione uma ala do mesmo estabelecimento do setor.'
+            })
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+
+class Local(models.Model):
+    """Local de um setor (enfermaria, sala...) ou recurso online."""
+    setor = models.ForeignKey(
+        Setor, on_delete=models.PROTECT, related_name='locais',
+        blank=True, null=True, verbose_name='Setor',
+        help_text='Não obrigatório quando o local for ONLINE.')
+    nome = models.CharField(max_length=100, verbose_name='Nome do Local')
+    online = models.CharField(
+        max_length=1, choices=sn_choices, default='N', verbose_name='Online')
+    meio_online = models.CharField(
+        max_length=10, choices=meio_online_choices_cadastros, blank=True,
+        null=True, verbose_name='Meio Online')
+    link_online = models.CharField(
+        max_length=300, blank=True, null=True, verbose_name='Link de Acesso',
+        help_text='Link da videochamada ou número do WhatsApp para chamada.')
+    status = models.CharField(
+        max_length=1, choices=status_choices, default='A', verbose_name='Status')
+    dt_registro = models.DateTimeField(
+        default=timezone.now, null=True, verbose_name='Dt.Registro')
+    us_registro = models.ForeignKey(
+        User, on_delete=models.PROTECT, null=True, blank=True,
+        related_name='local_criado_por', verbose_name='Us.Registro')
+    dt_atualizacao = models.DateTimeField(
+        blank=True, null=True, default=None, verbose_name='Dt.Atualização')
+    us_atualizacao = models.ForeignKey(
+        User, on_delete=models.PROTECT, null=True, blank=True,
+        related_name='local_atualizado_por', verbose_name='Us.Atualização')
+
+    class Meta:
+        verbose_name = 'Local'
+        verbose_name_plural = '9.3. Locais'
+        ordering = ('setor__estabelecimento', 'setor__nome', 'nome')
+
+    def __str__(self):
+        if self.setor_id:
+            return f'Local: {self.nome}'
+        return self.nome
+
+    @property
+    def estabelecimento(self):
+        """Estabelecimento herdado do setor (None para local só ONLINE)."""
+        return self.setor.estabelecimento if self.setor_id else None
+
+    # Apelido mantido para compatibilidade com telas que usavam `unidade`.
+    @property
+    def unidade(self):
+        return self.estabelecimento
+
+    def clean(self):
+        if self.online == 'N' and not self.setor_id:
+            raise ValidationError(
+                {'setor': 'Informe o setor do local quando ele não for online.'})
+        if self.online == 'S' and not (self.meio_online or self.link_online):
+            raise ValidationError(
+                {'link_online': 'Informe o meio online e/ou o link de acesso.'})
+        if self.online == 'S' and self.setor_id and \
+                self.setor.ala.internacao:
+            raise ValidationError({
+                'online': 'Um local online não pode pertencer a uma ala de '
+                          'internação. Selecione uma ala externa.'
+            })
+
+    def save(self, *args, **kwargs):
+        # `full_clean` não é automático no model: o admin usa o form, mas o
+        # shell/importação também precisam das mesmas invariantes.
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+
+class Leito(models.Model):
+    """Leito de um local de internação (um local pode ter vários leitos).
+
+    Base da gestão de leitos: identificação do leito, ocupação atual e
+    controle. O `local` precisa pertencer a uma ala de internação.
+    """
+    local = models.ForeignKey(
+        Local, on_delete=models.PROTECT, related_name='leitos',
+        verbose_name='Local de Internação')
+    leito = models.CharField(
+        max_length=50, verbose_name='Leito',
+        help_text='Identificação do leito no local (ex.: 101-A, 12, UTI-3).')
+    ocupado = models.BooleanField(
+        default=False, verbose_name='Ocupado',
+        help_text='Marcado pelo sistema na ocupação; pode ser ajustado aqui.')
+    observacoes = models.CharField(
+        max_length=255, blank=True, null=True, verbose_name='Observações')
+    status = models.CharField(
+        max_length=1, choices=status_choices, default='A', verbose_name='Status')
+    dt_registro = models.DateTimeField(
+        default=timezone.now, null=True, verbose_name='Dt.Registro')
+    us_registro = models.ForeignKey(
+        User, on_delete=models.PROTECT, null=True, blank=True,
+        related_name='leito_criado_por', verbose_name='Us.Registro')
+    dt_atualizacao = models.DateTimeField(
+        blank=True, null=True, default=None, verbose_name='Dt.Atualização')
+    us_atualizacao = models.ForeignKey(
+        User, on_delete=models.PROTECT, null=True, blank=True,
+        related_name='leito_atualizado_por', verbose_name='Us.Atualização')
+
+    class Meta:
+        verbose_name = 'Leito'
+        verbose_name_plural = '9.4. Leitos'
+        ordering = ('local', 'leito')
+        constraints = [
+            models.UniqueConstraint(
+                fields=['local', 'leito'],
+                name='unique_leito_por_local')
+        ]
+
+    def __str__(self):
+        return f'Leito: {self.leito}'
+
+    @property
+    def estabelecimento(self):
+        return self.local.estabelecimento
+
+    def clean(self):
+        # `self.local` (e não só `local_id`) para não disparar a validação de
+        # existência do `full_clean` em objeto ainda não salvo.
+        local = self.local if self.local_id else None
+        if local is not None and (
+                not local.setor_id or not local.setor.ala.internacao):
+            raise ValidationError({
+                'local': 'O local “%s” não pertence a uma ala de internação. '
+                         'Mova-o para um setor de uma ala de internação antes '
+                         'de criar leitos.' % local.nome,
+            })
+        self.leito = (self.leito or '').strip()
+        if not self.leito:
+            raise ValidationError({'leito': 'Informe a identificação do leito.'})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)

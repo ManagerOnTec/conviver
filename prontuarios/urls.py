@@ -1,4 +1,5 @@
 from . import views
+from . import exames_views as views_exames
 from django.urls import path
 from . views import (AdepListarAdministrarView, AdepListarAssinarView, DiagnosticoCreateView, DiagnosticoDetailView, DiagnosticoListView, DiagnosticoUpdateView, GestaoPacientesListView, ItensPrescricaoListView, PassagemPlantaoCreateView, PassagemPlantaoDetailView, PassagemPlantaoListView, PrescricaoCreateView, PrescricaoListView, PrescricaoUpdateView, ProntuarioAcessosCreateView, PsicoterapiaCreateView, PsicoterapiaDetailView, PsicoterapiaListView, PsicoterapiaUpdateView, combine_pdfs_specific, download_filtered_pdfs, download_adep_pdfs, get_aspecto_analisado, get_evidencia, PerdasGanhosCreateView, PerdasGanhosDetailView, PerdasGanhosListView, PerdasGanhosUpdateView, PlanoCuidadosCreateView, PlanoCuidadosDetailView,
                      PlanoCuidadosListView, PlanoCuidadosUpdateView, ProntuarioDetailView, EvolucaoListView, EvolucaoCreateView, EvolucaoDetailView, EvolucaoUpdateView, ProntuarioListView, SAECreateView, SAEDetailView, SAEListView, SAEUpdateView, SinaisVitaisCreateView, SinaisVitaisDetailView, SinaisVitaisListView, SinaisVitaisUpdateView, TextoPadraoFiltradoView, AdepListView,
@@ -24,6 +25,16 @@ urlpatterns = [
          EvolucaoDetailView.as_view(), name='evolucao_detalhe'),
     path('evolucao_editar/<int:pk>/',
          EvolucaoUpdateView.as_view(), name='evolucao_editar'),
+
+    path('exame_listar/<int:atendimento_id>/', views_exames.ExameListView.as_view(), name='exame_listar'),
+    path('exame/<int:pk>/agendar-modal/', views_exames.ExameAgendaModalView.as_view(), name='exame_agendar_modal'),
+    path('exame/<int:pk>/resultado-modal/', views_exames.ExameResultadoModalView.as_view(), name='exame_resultado_modal'),
+    path('exame/<int:pk>/resultado/<int:resultado_pk>/', views_exames.ExameResultadoDetalheModalView.as_view(), name='exame_resultado_detalhe_modal'),
+    path('exame_cadastrar/<int:atendimento_id>/', views_exames.ExameCreateView.as_view(), name='exame_cadastrar'),
+    path('exame_detalhe/<int:pk>/', views_exames.ExameDetailView.as_view(), name='exame_detalhe'),
+    path('exame_editar/<int:pk>/', views_exames.ExameUpdateView.as_view(), name='exame_editar'),
+    path('exame/<int:pk>/anexo/<int:numero>/', views_exames.ExameAnexoView.as_view(), name='exame_anexo'),
+    path('exame/<int:pk>/resultado/<int:resultado_pk>/anexo/<int:numero>/', views_exames.ExameAnexoView.as_view(), name='resultado_exame_anexo'),
 
     path('psicoterapia_listar/<int:atendimento_id>/',
          PsicoterapiaListView.as_view(), name='psicoterapia_listar'),

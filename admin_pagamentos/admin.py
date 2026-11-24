@@ -193,17 +193,24 @@ class AcordoPagamentoAdmin(
     actions = ['export_as_xls', 'gerar_previsoes_em_lote',
                'excluir_selecionados']
 
-    list_display = ['id', 'gerar_previsoes_button', 'duplicate_button',
-                    'excluir_linha', 'fornecedor', 'fornecedor_classificacao', 'classe_pagamento',
-                    'valor_previsto', 'tx_retencao', 'vl_retencao',
-                    'recorrencia', 'data_inicio',
-                    'data_fim', 'estabelecimento', 'pre_pago', 'status']
-    list_display_links = ['id', 'fornecedor']
+    list_display = ['id', 'fornecedor_link', 'gerar_previsoes_button',
+                    'duplicate_button', 'excluir_linha', 'fornecedor_classificacao',
+                    'classe_pagamento', 'valor_previsto', 'tx_retencao', 'vl_retencao',
+                    'recorrencia', 'data_inicio', 'data_fim', 'estabelecimento',
+                    'pre_pago', 'status']
+    list_display_links = ['id']
     # EDIÇÃO EM LINHA (a mesma regra da tela): acordo que JÁ gerou previsão
     # não edita nenhuma coluna.
     list_editable_sempre = ['valor_previsto', 'tx_retencao', 'vl_retencao',
                             'recorrencia', 'status']
     list_editable = list_editable_sempre
+
+    def fornecedor_link(self, obj):
+        url = reverse(
+            'admin:admin_pagamentos_acordopagamento_change', args=[obj.pk])
+        return format_html('<a href="{}">{}</a>', url, obj.fornecedor)
+    fornecedor_link.short_description = 'Fornecedor'
+    fornecedor_link.admin_order_field = 'fornecedor__descricao'
 
     def fornecedor_classificacao(self, obj):
         return obj.fornecedor.classificacao
@@ -396,6 +403,8 @@ class PrePagamentoAdmin(
         AdminEstabelecimentoPadraoMixin,
         ExportToXLSMixin, admin.ModelAdmin):
 
+    ordering = ('dt_vencimento', 'pk')
+
     # INDICADORES / FILTROS.
     dashboard_competencia_field = 'competencia'
     dashboard_vencimento_field = 'dt_vencimento'
@@ -432,15 +441,22 @@ class PrePagamentoAdmin(
     actions = ['export_as_xls', 'gerar_pagamentos_em_lote',
                'excluir_selecionados']
 
-    list_display = ['id', 'gerar_pagamento_button', 'excluir_linha',
-                    'fornecedor', 'classe_fornecedor', 'classe_pagamento','valor',
-                    'competencia', 'dt_vencimento', 'acordo_pagamento',
+    list_display = ['id', 'fornecedor_link', 'gerar_pagamento_button',
+                    'excluir_linha', 'classe_fornecedor', 'classe_pagamento',
+                    'valor', 'competencia', 'dt_vencimento', 'acordo_pagamento',
                     'previsto_fechado', 'estabelecimento', 'status']
-    list_display_links = ['id', 'fornecedor']
+    list_display_links = ['id']
     # EDIÇÃO EM LINHA (mesma regra da tela): previsão que JÁ gerou pagamento
     # não edita nenhuma coluna.
     list_editable_sempre = ['valor', 'status']
     list_editable = list_editable_sempre
+
+    def fornecedor_link(self, obj):
+        url = reverse(
+            'admin:admin_pagamentos_prepagamento_change', args=[obj.pk])
+        return format_html('<a href="{}">{}</a>', url, obj.fornecedor)
+    fornecedor_link.short_description = 'Fornecedor'
+    fornecedor_link.admin_order_field = 'fornecedor__descricao'
 
     def get_changelist(self, request, **kwargs):
         """Listagem editável com CADEADO nas previsões que já geraram
@@ -594,6 +610,8 @@ class PagamentoAdmin(
         ExclusaoEmLoteComRegrasMixin, AdminEstabelecimentoPadraoMixin,
         AdminSaveModelAuditMixin, ExportToXLSMixin, admin.ModelAdmin):
 
+    ordering = ('dt_vencimento', 'pk')
+
     # INDICADORES / FILTROS (espelho da Fatura: saldo em aberto/vencido).
     dashboard_competencia_field = 'competencia'
     dashboard_vencimento_field = 'dt_vencimento'
@@ -633,11 +651,11 @@ class PagamentoAdmin(
     actions = ['export_as_xls', 'finalizar_pagamentos_em_lote',
                'abrir_pagamentos_em_lote', 'excluir_selecionados']
 
-    list_display = ['id', 'finalizar_pagamento_button', 'baixas_button',
-                    'excluir_linha', 'fornecedor', 'classe_fornecedor','classe_pagamento',
-                    'valor_pagamento', 'valor_saldo', 'dt_vencimento',
-                    'dt_liquidacao', 'estabelecimento', 'status']
-    list_display_links = ['id', 'fornecedor']
+    list_display = ['id', 'fornecedor_link', 'finalizar_pagamento_button',
+                    'baixas_button', 'excluir_linha', 'classe_fornecedor',
+                    'classe_pagamento', 'valor_pagamento', 'valor_saldo',
+                    'dt_vencimento', 'dt_liquidacao', 'estabelecimento', 'status']
+    list_display_links = ['id']
     list_editable_sempre = ['status']
     list_editable = list_editable_sempre
     list_filter = [FornecedorPagadorFilter, 'fornecedor',
@@ -645,6 +663,13 @@ class PagamentoAdmin(
                    StatusFilterAdminMixin, EstabelecimentoFilterAdminMixin,
                    ('dt_vencimento', admin.DateFieldListFilter)]
     list_per_page = 99
+
+    def fornecedor_link(self, obj):
+        url = reverse(
+            'admin:admin_pagamentos_pagamento_change', args=[obj.pk])
+        return format_html('<a href="{}">{}</a>', url, obj.fornecedor)
+    fornecedor_link.short_description = 'Fornecedor'
+    fornecedor_link.admin_order_field = 'fornecedor__descricao'
 
     def get_urls(self):
         urls = super().get_urls()

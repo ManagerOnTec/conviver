@@ -32,7 +32,7 @@ class Perfil(models.Model):
         null=True,
         validators=[
             FileExtensionValidator(
-                allowed_extensions=['pfx']
+                allowed_extensions=['pfx', 'crt']
             )
         ]
     )

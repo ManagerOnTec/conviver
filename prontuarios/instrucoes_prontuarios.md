@@ -13,6 +13,18 @@
 - Não duplicar a implementação CSS do switch em prontuários; reutilizar as classes globais.
 - Não alterar lógica do `AtendimentoFilter` só para estilo.
 
+## Exames
+- A navegação do prontuário deve listar Exames imediatamente abaixo de Evoluções em todas as telas clínicas, preservando o atendimento atual.
+- Tipos disponíveis vêm de `admin_exames.ParametrosExames` ativos por estabelecimento, profissão ou profissional. O tipo padrão deve estar entre os liberados.
+- A listagem de exames apresenta, nesta ordem, tipo, solicitação/indicação em modal, profissional solicitante, data da solicitação, agendamento, status do agendamento, resultado e profissional que registrou o resultado. Anotações completas e anexos protegidos ficam no modal de resultado; cada resultado aceita até três anexos PDF/PNG/JPG/JPEG (5 MB por arquivo).
+- A listagem de Exames mantém filtros de ID, tipo, datas de registro/resultado, usuário/data de auditoria e status na sessão; “Limpar” remove os filtros salvos e mantém o status ativo padrão.
+- Cada linha de exame mostra o agendamento ativo com data e local. O detalhe abre em modal; “Agendar” abre um modal na própria linha com paciente, atendimento, exame e solicitação carregados. A lista não permite editar agendamento, e só pode existir um agendamento ativo por exame.
+- O modal de resultado só fica disponível após o agendamento ativo ser marcado
+  como efetuado. Registrar o resultado não altera a situação do agendamento.
+- O PDF do exame usa os gerenciadores de relatório e a assinatura digital existentes.
+- Especificação, estado, testes e limitações estão em `prontuarios/exames.md`.
+
 ## Como testar
 - Abrir `/prontuarios/prontuario_listar/`, alternar o filtro de alta e confirmar que a requisição filtra como antes.
+- Testar fluxo de Exames conforme `prontuarios/exames.md`.
 - `manage.py check`.

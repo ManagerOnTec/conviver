@@ -1,0 +1,758 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+{% block titulos %}Exames |{% endblock %}
+{% block menul %}
+<div class="form-group text-left m-3 mt-2">
+<a href="{% url 'exame_cadastrar' atendimento_id=atendimento_id %}" class="btn-novo mt-2 list-group-item list-group-item-action bg-primary text-white rounded"><i class="fas fa-plus me-2"></i>Novo Exame</a>
+<a href="{% url 'prontuario_detalhe' pk=atendimento_id %}" class="mt-2 list-group-item list-group-item-action custom-link rounded"><i class="fas fa-notes-medical me-2"></i>Prontuário</a>
+<a href="{% url 'diagnostico_listar' atendimento_id=atendimento_id %}" class="mt-2 list-group-item list-group-item-action custom-link rounded"><i class="fas fa-diagnoses me-2"></i>Diagnósticos</a>
+<a href="{% url 'evolucao_listar' atendimento_id=atendimento_id %}" class="mt-2 list-group-item list-group-item-action custom-link rounded"><i class="fas fa-file-alt me-2"></i>Evoluções</a>
+<a href="{% url 'exame_listar' atendimento_id=atendimento_id %}" class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded"><i class="fas fa-flask me-2"></i>Exames</a>
+<a href="{% url 'psicoterapia_listar' atendimento_id=atendimento_id %}" class="mt-2 list-group-item list-group-item-action custom-link rounded"><i class="fas fa-brain me-2"></i>Psicoterapias</a>
+<a href="{% url 'prescricao_listar' atendimento_id=atendimento_id %}" class="mt-2 list-group-item list-group-item-action custom-link rounded"><i class="fas fa-capsules me-2"></i>Prescrições</a>
+<a href="{% url 'adep_listar' atendimento_id=atendimento_id %}" class="mt-2 list-group-item list-group-item-action custom-link rounded"><i class="fas fa-syringe me-2"></i>ADEP</a>
+<a href="{% url 'sinais_vitais_listar' atendimento_id=atendimento_id %}" class="mt-2 list-group-item list-group-item-action custom-link rounded"><i class="fa fa-heartbeat me-2"></i>Sinais Vitais</a>
+<a href="{% url 'sae_listar' atendimento_id=atendimento_id %}" class="mt-2 list-group-item list-group-item-action custom-link rounded"><i class="fas fa-stethoscope me-2"></i>SAE</a>
+<a href="{% url 'plano_cuidados_listar' atendimento_id=atendimento_id %}" class="mt-2 list-group-item list-group-item-action custom-link rounded"><i class="fas fa-procedures me-2"></i>Plano de Cuidados</a>
+<a href="{% url 'perdas_ganhos_listar' atendimento_id=atendimento_id %}" class="mt-2 list-group-item list-group-item-action custom-link rounded"><i class="fa fa-weight me-2"></i>Perdas e Ganhos</a>
+<form class="mt-3 text-white text-left" method="GET" action="">
+    <div class="item-left"><h5>Filtros</h5></div>
+    <div class="item-left">{{ filter.form|crispy }}</div>
+    <div class="row mt-2">
+
+ <div class="row">
+
+
+                <div class="col-md-12">
+
+                    <div class="justify-content-center mt-2">
+                        <button class="col-md-12 btn btn-primary btn-outline-light justify-content-center"
+                            title="Filtrar" type="submit">
+                            <i class="fas fa-check" style="transition: color 0.3s;"></i>
+                            Filtrar
+                        </button>
+                    </div>
+                </div>
+
+
+                <div class="col-md-12">
+
+                    <div class="justify-content-center mt-2">
+                        <button class="col-md-12 btn btn-outline-danger justify-content-center" name="limpar" value="1">
+                            <i class="fas fa-times-circle" style="transition: color 0.3s;"></i>
+                            Limpar
+                        </button>
+                    </div>
+                </div>
+
+
+
+        
+    </div>
+
+
+
+</form>
+</div>
+{% endblock %}
+{% block cabdados %}{% include 'parciais/_patient_record_header.html' with module_icon='fas fa-flask' module_title='Exames' module_subtitle='Solicitações, resultados e laudos do atendimento.' show_cpf=True %}{% endblock %}
+{% block lista %}
+<style>
+body.modal-open .modal#modal-agendar-exame,
+body.modal-open .modal#modal-detalhe-agenda,
+body.modal-open .modal#modal-solicitacao-exame,
+body.modal-open .modal#modal-detalhe-resultado,
+body.modal-open .modal#modal-registrar-resultado,
+.modal#modal-agendar-exame,
+.modal#modal-detalhe-agenda,
+.modal#modal-solicitacao-exame,
+.modal#modal-detalhe-resultado,
+.modal#modal-registrar-resultado {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 2147483000 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    outline: 0 !important;
+}
+
+.modal-backdrop {
+    z-index: 2147482000 !important;
+}
+
+#modal-agendar-exame .modal-dialog,
+#modal-detalhe-agenda .modal-dialog,
+#modal-solicitacao-exame .modal-dialog,
+#modal-detalhe-resultado .modal-dialog,
+#modal-registrar-resultado .modal-dialog {
+    position: relative !important;
+    z-index: 2147483001 !important;
+    pointer-events: auto !important;
+}
+
+#modal-agendar-exame .modal-content,
+#modal-detalhe-agenda .modal-content,
+#modal-solicitacao-exame .modal-content,
+#modal-detalhe-resultado .modal-content,
+#modal-registrar-resultado .modal-content {
+    position: relative !important;
+    z-index: 2147483002 !important;
+    pointer-events: auto !important;
+}
+
+#modal-agendar-exame .modal-content *,
+#modal-detalhe-agenda .modal-content *,
+#modal-solicitacao-exame .modal-content *,
+#modal-detalhe-resultado .modal-content *,
+#modal-registrar-resultado .modal-content * {
+    pointer-events: auto !important;
+}
+</style>
+<div id="table-container">
+    <table class="table table-striped">
+        <thead class="sticky-lista listing-table-head text-white">
+            <tr>
+                <th>Ações</th>
+                <th>Tipo</th>
+                <th>Solicitação / Indicação</th>
+                <th>Prof. solicitante</th>
+                <th>Dt. solicitação</th>
+                <th>Agendamento</th>
+                <th>Status agendamento</th>
+                <th>Resultado exame</th>
+                <th>Prof. resultado</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for exame in exames %}
+            <tr>
+                <td>
+                    <a href="{% url 'exame_detalhe' pk=exame.pk %}"
+                       class="btn btn-outline-primary btn-sm" title="Visualizar">
+                        <i class="fas fa-folder-open"></i>
+                    </a>
+                    <a href="{% url 'exame_editar' pk=exame.pk %}"
+                       class="btn btn-outline-warning btn-sm" title="Editar">
+                        <i class="fas fa-edit"></i>
+                    </a>
+                    <a href="{% url 'combine_pdfs_specific' object_id=exame.pk tipo='exame' %}"
+                       target="_blank" class="btn btn-outline-success btn-sm"
+                       title="Relatório">
+                        <i class="fas fa-print"></i>
+                    </a>
+                    {% if pode_agendar_exame and not exame.tem_agendamento %}
+                    <button type="button" class="btn btn-outline-primary btn-sm"
+                            data-bs-toggle="modal" data-bs-target="#modal-agendar-exame"
+                            data-url="{% url 'exame_agendar_modal' pk=exame.pk %}"
+                            data-exame="{{ exame.pk }}"
+                            data-atendimento="{{ atendimento_id }}"
+                            data-paciente="{{ atendimento.pessoa.nome }}"
+                            data-tipo-exame="{{ exame.tipo_exame }}"
+                            data-solicitacao="{{ exame.solicitacao }}"
+                            title="Agendar este exame">
+                        <i class="fas fa-calendar-plus"></i>
+                    </button>
+                    {% endif %}
+                    {% if exame.pode_registrar_resultado %}
+                    <button type="button" class="btn btn-outline-success btn-sm"
+                            data-bs-toggle="modal" data-bs-target="#modal-registrar-resultado"
+                            data-url="{% url 'exame_resultado_modal' pk=exame.pk %}"
+                            data-agenda-executada="true"
+                            data-exame="{{ exame.pk }}"
+                            data-paciente="{{ atendimento.pessoa.nome }}"
+                            data-tipo-exame="{{ exame.tipo_exame }}"
+                            data-solicitacao="{{ exame.solicitacao }}"
+                            title="Registrar resultado">
+                        <i class="fas fa-file-medical"></i>
+                    </button>
+                    {% elif pode_registrar_resultado %}
+                    <button type="button" class="btn btn-outline-success btn-sm"
+                            disabled
+                            title="Marque o agendamento deste exame como efetuado antes de registrar o resultado."
+                            aria-label="Resultado indisponível até a execução do agendamento">
+                        <i class="fas fa-file-medical"></i>
+                    </button>
+                    {% endif %}
+                </td>
+                <td>{{ exame.tipo_exame }}</td>
+                <td>
+                    <button type="button" class="btn btn-link btn-sm text-start p-0"
+                            data-bs-toggle="modal"
+                            data-bs-target="#modal-solicitacao-exame"
+                            data-solicitacao="{{ exame.solicitacao|default:'' }}"
+                            aria-label="Ver solicitação ou indicação do exame">
+                        Ver solicitação
+                    </button>
+                </td>
+                <td>{{ exame.us_registro.get_full_name|default:exame.us_registro|default:'-' }}</td>
+                <td class="text-nowrap">{{ exame.dt_registro|date:'d/m/Y' }}</td>
+                <td class="text-nowrap">
+                    {% for agenda in exame.agendamentos_vinculados %}
+                    <button type="button" class="btn btn-link btn-sm text-start p-0"
+                            data-bs-toggle="modal" data-bs-target="#modal-detalhe-agenda"
+                            data-data="{{ agenda.data_hora|date:'d/m/Y H:i' }}"
+                            data-tipo="{{ agenda.tipo }}"
+                            data-local="{{ agenda.local|default:'Local não definido' }}"
+                            data-observacao="{{ agenda.observacao }}">
+                        <strong>{{ agenda.data_hora|date:'d/m/Y H:i' }}</strong>
+                        <span class="d-block small">{{ agenda.local|default:'Local não definido' }}</span>
+                    </button>
+                    {% empty %}
+                    {% if pode_ver_agenda_exame %}
+                    <span class="text-muted">Sem agendamento</span>
+                    {% else %}
+                    <span class="text-muted">Agenda indisponível</span>
+                    {% endif %}
+                    {% endfor %}
+                </td>
+                <td>
+                    {% if not exame.tem_agendamento %}
+                    <span class="badge text-bg-secondary">Não agendado</span>
+                    {% elif not exame.agendamento_executado %}
+                    <span class="badge text-bg-warning">Não efetuado</span>
+                    {% else %}
+                    <span class="badge text-bg-success">Efetuado</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% for resultado in exame.resultados_ativos %}
+                    <button type="button" class="btn btn-link btn-sm text-start p-0 d-block"
+                            data-bs-toggle="modal"
+                            data-bs-target="#modal-detalhe-resultado"
+                            data-url="{% url 'exame_resultado_detalhe_modal' pk=exame.pk resultado_pk=resultado.pk %}"
+                            title="Ver resultado de {{ resultado.data_resultado|date:'d/m/Y' }}">
+                        {{ resultado.data_resultado|date:'d/m/Y' }}
+                    </button>
+                    {% empty %}
+                    <span class="text-muted">Sem resultado</span>
+                    {% endfor %}
+                </td>
+                <td>
+                    {% for resultado in exame.resultados_ativos %}
+                    <span class="d-block">
+                        {{ resultado.us_registro.get_full_name|default:resultado.us_registro|default:'-' }}
+                    </span>
+                    {% empty %}
+                    <span class="text-muted">-</span>
+                    {% endfor %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="9">Nenhum exame cadastrado.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="modal fade" id="modal-solicitacao-exame" tabindex="-1"
+     aria-labelledby="modal-solicitacao-exame-titulo" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modal-solicitacao-exame-titulo">
+                    Solicitação / Indicação do exame
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"
+                        aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body text-break" id="modal-solicitacao-exame-texto">
+                Sem detalhes da solicitação.
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modal-detalhe-resultado" tabindex="-1"
+     aria-labelledby="modal-detalhe-resultado-titulo" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modal-detalhe-resultado-titulo">
+                    Resultado do exame
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"
+                        aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning" id="detalhe-resultado-feedback"
+                     role="alert" hidden></div>
+                <dl class="row mb-0">
+                    <dt class="col-sm-3">Data do resultado</dt>
+                    <dd class="col-sm-9" id="detalhe-resultado-data">Carregando...</dd>
+                    <dt class="col-sm-3">Anotações</dt>
+                    <dd class="col-sm-9 text-break" id="detalhe-resultado-anotacoes"></dd>
+                    <dt class="col-sm-3">Anexos</dt>
+                    <dd class="col-sm-9" id="detalhe-resultado-anexos"></dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modal-detalhe-agenda" tabindex="-1"
+     aria-labelledby="modal-detalhe-agenda-titulo" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modal-detalhe-agenda-titulo">
+                    Agendamento do exame
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"
+                        aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Tipo</dt>
+                    <dd class="col-sm-8" id="detalhe-agenda-tipo"></dd>
+                    <dt class="col-sm-4">Data e hora</dt>
+                    <dd class="col-sm-8" id="detalhe-agenda-data"></dd>
+                    <dt class="col-sm-4">Local</dt>
+                    <dd class="col-sm-8" id="detalhe-agenda-local"></dd>
+                    <dt class="col-sm-4">Anotação</dt>
+                    <dd class="col-sm-8" id="detalhe-agenda-observacao"></dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if pode_agendar_exame %}
+<div class="modal fade" id="modal-agendar-exame" tabindex="-1"
+     aria-labelledby="modal-agendar-exame-titulo" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form id="form-modal-agenda" method="post">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modal-agendar-exame-titulo">
+                        Agendar exame solicitado
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"
+                            aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <strong id="agenda-modal-paciente"></strong>
+                        <div id="agenda-modal-exame"></div>
+                        <div id="agenda-modal-solicitacao" class="small mt-1"></div>
+                    </div>
+                    <div class="alert alert-warning" id="agenda-modal-feedback"
+                         role="alert" hidden></div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="agenda-modal-tipo" class="form-label">
+                                Tipo de agendamento
+                            </label>
+                            <select class="form-select" id="agenda-modal-tipo"
+                                    name="tipo" required>
+                                <option value="">Selecione</option>
+                                {% for tipo_agendamento in tipos_agendamento_exame %}
+                                <option value="{{ tipo_agendamento.pk }}">
+                                    {{ tipo_agendamento.descricao }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="agenda-modal-data" class="form-label">
+                                Data e hora
+                            </label>
+                            <input class="form-control" type="datetime-local"
+                                   id="agenda-modal-data" name="data_hora" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="agenda-modal-local" class="form-label">
+                                Local
+                            </label>
+                            <select class="form-select" id="agenda-modal-local"
+                                    name="local">
+                                <option value="">Selecione</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="agenda-modal-video" class="form-label">
+                                Link da videochamada
+                            </label>
+                            <input class="form-control" type="url"
+                                   id="agenda-modal-video"
+                                   name="link_videochamada" maxlength="300">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="agenda-modal-whatsapp" class="form-label">
+                                Link do WhatsApp
+                            </label>
+                            <input class="form-control" type="url"
+                                   id="agenda-modal-whatsapp"
+                                   name="link_whatsapp" maxlength="300">
+                        </div>
+                        <div class="col-12 mb-3">
+                            <label for="agenda-modal-observacao" class="form-label">
+                                Anotação
+                            </label>
+                            <textarea class="form-control" id="agenda-modal-observacao"
+                                      name="observacao" rows="2"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary"
+                            data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-calendar-check me-1"></i>Marcar agendamento
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if pode_registrar_resultado_modal %}
+<div class="modal fade" id="modal-registrar-resultado" tabindex="-1"
+     aria-labelledby="modal-registrar-resultado-titulo" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form id="form-modal-resultado" method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modal-registrar-resultado-titulo">
+                        Registrar resultado do exame
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"
+                            aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <strong id="resultado-modal-paciente"></strong>
+                        <div id="resultado-modal-exame"></div>
+                        <div id="resultado-modal-solicitacao" class="small mt-1"></div>
+                    </div>
+                    <div class="alert alert-warning" id="resultado-modal-feedback"
+                         role="alert" hidden></div>
+                    <div class="mb-3">
+                        <label for="resultado-modal-data" class="form-label">
+                            Data do resultado
+                        </label>
+                        <input class="form-control" type="date"
+                               id="resultado-modal-data" name="data_resultado"
+                               value="{{ data_resultado_inicial }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="resultado-modal-anotacoes" class="form-label">
+                            Anotações
+                        </label>
+                        <textarea class="form-control" id="resultado-modal-anotacoes"
+                                  name="anotacoes" rows="3"></textarea>
+                    </div>
+                    <div class="row">
+                        {% for numero in "123" %}
+                        <div class="col-md-4 mb-3">
+                            <label for="resultado-modal-anexo-{{ numero }}"
+                                   class="form-label">Anexo {{ numero }}</label>
+                            <input class="form-control" type="file"
+                                   id="resultado-modal-anexo-{{ numero }}"
+                                   name="anexo_{{ numero }}"
+                                   accept=".pdf,.png,.jpg,.jpeg">
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary"
+                            data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-save me-1"></i>Salvar resultado
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    [
+        'modal-agendar-exame',
+        'modal-detalhe-agenda',
+        'modal-solicitacao-exame',
+        'modal-detalhe-resultado',
+        'modal-registrar-resultado'
+    ].forEach(function (id) {
+        const modal = document.getElementById(id);
+        if (modal && modal.parentElement !== document.body) {
+            document.body.appendChild(modal);
+        }
+    });
+
+    function showFeedback(container, message) {
+        container.textContent = message;
+        container.hidden = false;
+    }
+
+    const solicitacaoModal =
+        document.getElementById('modal-solicitacao-exame');
+    if (solicitacaoModal) {
+        solicitacaoModal.addEventListener('show.bs.modal', function (event) {
+            const botao = event.relatedTarget;
+            document.getElementById('modal-solicitacao-exame-texto')
+                .textContent = botao?.dataset.solicitacao
+                    || 'Sem detalhes da solicitação.';
+        });
+    }
+
+    async function enviarFormulario(formulario, feedback) {
+        feedback.hidden = true;
+        try {
+            const resposta = await fetch(formulario.action, {
+                method: 'POST',
+                body: new FormData(formulario),
+                headers: {'Accept': 'application/json'},
+                credentials: 'same-origin'
+            });
+            const dados = await resposta.json();
+            if (!resposta.ok) {
+                const mensagens = dados.erro || Object.values(dados.erros || {})
+                    .flatMap(erros => erros.map(erro => erro.message))
+                    .join(' ');
+                throw new Error(mensagens || 'Revise os campos e tente novamente.');
+            }
+            window.location.reload();
+        } catch (erro) {
+            showFeedback(feedback, erro.message);
+        }
+    }
+
+    const agendaModal = document.getElementById('modal-agendar-exame');
+    if (agendaModal) {
+        const agendaForm = document.getElementById('form-modal-agenda');
+        const agendaTipo = document.getElementById('agenda-modal-tipo');
+        const agendaLocal = document.getElementById('agenda-modal-local');
+        const agendaFeedback =
+            document.getElementById('agenda-modal-feedback');
+        const opcoesUrl = '{{ agenda_opcoes_url|escapejs }}';
+
+        async function carregarLocais(atendimentoId) {
+            agendaFeedback.hidden = true;
+            agendaLocal.replaceChildren(new Option('Selecione', ''));
+            if (!agendaTipo.value) return;
+
+            const parametros = new URLSearchParams({
+                tipo: agendaTipo.value,
+                atendimento: atendimentoId
+            });
+            try {
+                const resposta = await fetch(`${opcoesUrl}?${parametros}`, {
+                    headers: {'Accept': 'application/json'},
+                    credentials: 'same-origin'
+                });
+                const dados = await resposta.json();
+                if (!resposta.ok) {
+                    throw new Error(
+                        dados.erro || 'Não foi possível carregar os locais.');
+                }
+                dados.locais.forEach(function (local) {
+                    agendaLocal.add(new Option(local.nome, local.id));
+                });
+                agendaLocal.required = dados.local_obrigatorio;
+                if (dados.local_padrao) {
+                    agendaLocal.value = String(dados.local_padrao);
+                }
+            } catch (erro) {
+                showFeedback(agendaFeedback, erro.message);
+            }
+        }
+
+        agendaModal.addEventListener('show.bs.modal', function (event) {
+            const botao = event.relatedTarget;
+            agendaForm.reset();
+            agendaForm.action = botao.dataset.url;
+            agendaLocal.replaceChildren(new Option('Selecione', ''));
+            agendaFeedback.hidden = true;
+            document.getElementById('agenda-modal-paciente').textContent =
+                botao.dataset.paciente;
+            document.getElementById('agenda-modal-exame').textContent =
+                botao.dataset.tipoExame;
+            document.getElementById('agenda-modal-solicitacao').textContent =
+                botao.dataset.solicitacao || 'Sem detalhes da solicitação.';
+            agendaForm.dataset.atendimento = botao.dataset.atendimento;
+        });
+
+        agendaTipo.addEventListener('change', function () {
+            carregarLocais(agendaForm.dataset.atendimento);
+        });
+        agendaForm.addEventListener('submit', function (event) {
+            event.preventDefault();
+            enviarFormulario(agendaForm, agendaFeedback);
+        });
+    }
+
+    const resultadoModal = document.getElementById(
+        'modal-registrar-resultado');
+    if (resultadoModal) {
+        const resultadoForm =
+            document.getElementById('form-modal-resultado');
+        const resultadoFeedback =
+            document.getElementById('resultado-modal-feedback');
+        resultadoModal.addEventListener('show.bs.modal', function (event) {
+            const botao = event.relatedTarget;
+            if (!botao || botao.dataset.agendaExecutada !== 'true') {
+                event.preventDefault();
+                return;
+            }
+            resultadoForm.reset();
+            resultadoForm.action = botao.dataset.url;
+            document.getElementById('resultado-modal-data').value =
+                '{{ data_resultado_inicial|escapejs }}';
+            resultadoFeedback.hidden = true;
+            document.getElementById('resultado-modal-paciente').textContent =
+                botao.dataset.paciente;
+            document.getElementById('resultado-modal-exame').textContent =
+                botao.dataset.tipoExame;
+            document.getElementById('resultado-modal-solicitacao').textContent =
+                botao.dataset.solicitacao || 'Sem detalhes da solicitação.';
+        });
+        resultadoForm.addEventListener('submit', function (event) {
+            event.preventDefault();
+            enviarFormulario(resultadoForm, resultadoFeedback);
+        });
+    }
+
+    const resultadoDetalheModal =
+        document.getElementById('modal-detalhe-resultado');
+    if (resultadoDetalheModal) {
+        const resultadoData = document.getElementById(
+            'detalhe-resultado-data');
+        const resultadoAnotacoes = document.getElementById(
+            'detalhe-resultado-anotacoes');
+        const resultadoAnexos = document.getElementById(
+            'detalhe-resultado-anexos');
+        const resultadoDetalheFeedback = document.getElementById(
+            'detalhe-resultado-feedback');
+        let requisicaoAtual = 0;
+
+        resultadoDetalheModal.addEventListener(
+            'show.bs.modal', async function (event) {
+                const botao = event.relatedTarget;
+                if (!botao || !botao.dataset.url) {
+                    event.preventDefault();
+                    return;
+                }
+
+                const idRequisicao = ++requisicaoAtual;
+                resultadoDetalheFeedback.hidden = true;
+                resultadoData.textContent = 'Carregando...';
+                resultadoAnotacoes.textContent = '';
+                resultadoAnexos.replaceChildren();
+
+                try {
+                    const resposta = await fetch(botao.dataset.url, {
+                        headers: {'Accept': 'application/json'},
+                        credentials: 'same-origin'
+                    });
+                    const dados = await resposta.json();
+                    if (!resposta.ok) {
+                        throw new Error(
+                            dados.erro || 'Não foi possível carregar o resultado.');
+                    }
+                    if (idRequisicao !== requisicaoAtual) return;
+
+                    resultadoData.textContent = dados.data;
+                    resultadoAnotacoes.textContent =
+                        dados.anotacoes || 'Sem anotações registradas.';
+                    if (!dados.anexos.length) {
+                        resultadoAnexos.textContent = 'Sem anexos.';
+                        return;
+                    }
+
+                    const lista = document.createElement('ul');
+                    lista.className = 'list-unstyled mb-0';
+                    dados.anexos.forEach(function (anexo) {
+                        const item = document.createElement('li');
+                        const link = document.createElement('a');
+                        link.href = anexo.url;
+                        link.target = '_blank';
+                        link.rel = 'noopener';
+                        link.textContent = anexo.nome;
+                        item.appendChild(link);
+                        lista.appendChild(item);
+                    });
+                    resultadoAnexos.appendChild(lista);
+                } catch (erro) {
+                    if (idRequisicao === requisicaoAtual) {
+                        showFeedback(resultadoDetalheFeedback, erro.message);
+                        resultadoData.textContent = 'Indisponível';
+                    }
+                }
+            });
+
+        resultadoDetalheModal.addEventListener('hidden.bs.modal', function () {
+            requisicaoAtual += 1;
+        });
+    }
+
+    document.querySelectorAll(
+        '[data-bs-target="#modal-detalhe-agenda"]').forEach(function (botao) {
+        botao.addEventListener('click', function () {
+            document.getElementById('detalhe-agenda-tipo').textContent =
+                botao.dataset.tipo;
+            document.getElementById('detalhe-agenda-data').textContent =
+                botao.dataset.data;
+            document.getElementById('detalhe-agenda-local').textContent =
+                botao.dataset.local;
+            document.getElementById('detalhe-agenda-observacao').textContent =
+                botao.dataset.observacao || '—';
+        });
+    });
+});
+</script>
+{% endblock %}
+{% block paginate %}
+<!--PAGINACAO-->
+{% if is_paginated %}
+<div id="pages" class="listing-pagination-panel">
+    <div class="listing-pagination-meta">
+        <span>Exibindo {{ page_obj.start_index }}-{{ page_obj.end_index }}</span>
+        <strong>de {{ page_obj.paginator.count }} registros</strong>
+    </div>
+    <ul class="pagination listing-pagination btn-sm mb-0">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+            <a href="?{{ filters|urlencode }}&page=1"
+                class="page-link"><i class="fas fa-step-backward"></i></a>
+        </li>
+        <li class="page-item">
+            <a href="?{{ filters|urlencode }}&page={{ page_obj.previous_page_number }}"
+                class="page-link"><i class="fas fa-arrow-left"></i></a>
+        </li>
+        {% endif %}
+
+        {% for i in page_obj.paginator.page_range %}
+        {% if page_obj.number == i %}
+        <li class="page-item active">
+            <span class="page-link">{{ i }}</span>
+        </li>
+        {% elif i > page_obj.number|add:"-3" and i < page_obj.number|add:"3" %}
+        <li class="page-item">
+            <a href="?{{ filters|urlencode }}&page={{ i }}"
+                class="page-link">{{ i }}</a>
+        </li>
+        {% endif %}
+        {% endfor %}
+
+        {% if page_obj.has_next %}
+        <li class="page-item">
+            <a href="?{{ filters|urlencode }}&page={{ page_obj.next_page_number }}"
+                class="page-link"><i class="fas fa-arrow-right"></i></a>
+        </li>
+        <li class="page-item">
+            <a href="?{{ filters|urlencode }}&page={{ page_obj.paginator.num_pages }}"
+                class="page-link"><i class="fas fa-step-forward"></i></a>
+        </li>
+        {% endif %}
+    </ul>
+</div>
+{% endif %}
+<!--FIM PAGINAÇÃO-->
+{% endblock %}

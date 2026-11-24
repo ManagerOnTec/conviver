@@ -27,6 +27,10 @@
     <a href="" class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded">
         <i class="fas fa-file-alt me-2"></i>Evoluções
     </a>
+    <a href="{% url 'exame_listar' atendimento_id=atendimento_id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-flask me-2"></i>Exames
+    </a>
 
     <a href="{% url 'psicoterapia_listar' atendimento_id=atendimento_id %}"
         class="mt-2 list-group-item list-group-item-action custom-link rounded">

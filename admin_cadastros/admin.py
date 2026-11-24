@@ -5,11 +5,24 @@ from datetime import date as _dt_date
 from django.db import models
 from django.utils import timezone
 from django.contrib import admin
-from dominios.utils import StatusFilterAdminMixin, ExportToXLSMixin, Select2AdminModelAdminMixin
+from admin_cadastros.utils import EstabelecimentoFilterAdminMixin
+from dominios.utils import (
+    AdminEstabelecimentoPadraoMixin,
+    ExportToXLSMixin,
+    StatusFilterAdminMixin,
+    Select2AdminModelAdminMixin,
+)
 from dominios.admin_dashboard_mixins import AdminDashboardAndTopFilterMixin
 from dominios.choices import tipo_empresa_choices
-from .models import Estado, Cidade, Genero, Pessoa, Empresa, Estabelecimento, PessoaCampos, EmpresaCampos, TipoAtendimento, Pais
-from .forms import EstadoForm, CidadeForm, PessoaAdminForm, EmpresaForm, EstabelecimentoForm, PessoaCamposForm, EmpresaCamposForm, TipoAtendimentoForm, PaisForm, GeneroForm
+from .models import (
+    Ala, Estado, Cidade, Genero, Pessoa, Empresa, Estabelecimento,
+    PessoaCampos, EmpresaCampos, TipoAtendimento, Pais, Setor, Local, Leito,
+)
+from .forms import (
+    AlaForm, EstadoForm, CidadeForm, PessoaAdminForm, EmpresaForm,
+    EstabelecimentoForm, PessoaCamposForm, EmpresaCamposForm,
+    TipoAtendimentoForm, PaisForm, GeneroForm, SetorForm, LocalForm, LeitoForm,
+)
 from django.contrib import messages
 from django.urls import reverse
 from django.contrib.auth.models import User
@@ -1069,6 +1082,213 @@ class TipoAtendimentoAdmin(admin.ModelAdmin):
         super().save_model(request, obj, form, change)
 
 
+# SETOR / LOCAL ##############################################################
+
+
+def _sem_regra_de_fluxo(request):
+    """Nenhuma linha travada: cadastros auxiliares não têm regra de fluxo."""
+    return set()
+
+
+class BaseLocalAgendaAdmin(ExportToXLSMixin, admin.ModelAdmin):
+    """Auditoria e exportação dos cadastros da hierarquia de locais."""
+
+    actions = ['export_as_xls']
+    readonly_fields = ('dt_registro', 'us_registro',
+                       'dt_atualizacao', 'us_atualizacao')
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.us_registro = request.user
+            obj.dt_registro = timezone.now()
+        else:
+            obj.us_atualizacao = request.user
+            obj.dt_atualizacao = timezone.now()
+        super().save_model(request, obj, form, change)
+
+
+class AlaAdmin(AdminEstabelecimentoPadraoMixin, BaseLocalAgendaAdmin):
+    """Alas que classificam os setores como internação ou externos."""
+
+    form = AlaForm
+    autocomplete_fields = ('estabelecimento',)
+    list_display = ('id', 'nome', 'estabelecimento', 'internacao', 'status',
+                    'dt_registro', 'us_registro')
+    list_display_links = ('id', 'nome')
+    list_filter = (EstabelecimentoFilterAdminMixin, StatusFilterAdminMixin,
+                   'internacao')
+    search_fields = ('id', 'nome', 'estabelecimento__estabelecimento')
+    list_editable = ('internacao', 'status')
+    ordering = ('estabelecimento', 'nome')
+    list_per_page = 15
+    get_linhas_nao_editaveis = staticmethod(_sem_regra_de_fluxo)
+
+    def get_changelist(self, request, **kwargs):
+        from admin_faturas.changelist_editavel import ChangeListEditavel
+        return ChangeListEditavel
+
+
+class SetorAdmin(AdminEstabelecimentoPadraoMixin, BaseLocalAgendaAdmin):
+    """Setores vinculados a uma ala e ao estabelecimento."""
+
+    form = SetorForm
+
+    autocomplete_fields = ('estabelecimento',)
+    list_display = ('id', 'nome', 'ala', 'estabelecimento', 'status',
+                    'dt_registro', 'us_registro', 'dt_atualizacao', 'us_atualizacao')
+    list_display_links = ('id', 'nome')
+    list_filter = (EstabelecimentoFilterAdminMixin, StatusFilterAdminMixin,
+                   'ala')
+    search_fields = ('id', 'nome', 'ala__nome',
+                     'estabelecimento__estabelecimento')
+    list_editable = ['status']
+    ordering = ['estabelecimento', 'nome']
+    list_per_page = 15
+    get_linhas_nao_editaveis = staticmethod(_sem_regra_de_fluxo)
+
+    def get_changelist(self, request, **kwargs):
+        from admin_faturas.changelist_editavel import ChangeListEditavel
+        return ChangeListEditavel
+
+    def get_search_results(self, request, queryset, search_term):
+        queryset, use_distinct = super().get_search_results(
+            request, queryset, search_term)
+        if 'HTTP_REFERER' in request.META:
+            from urllib.parse import urlparse
+            referer_path = urlparse(request.META['HTTP_REFERER']).path
+            if '/add/' in referer_path or '/change/' in referer_path:
+                queryset = queryset.filter(status='A')
+        return queryset, use_distinct
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.us_registro = request.user
+            obj.dt_registro = timezone.now()
+        else:
+            obj.us_atualizacao = request.user
+            obj.dt_atualizacao = timezone.now()
+        super().save_model(request, obj, form, change)
+
+
+class LocalAdmin(BaseLocalAgendaAdmin):
+    """Locais dos setores (leitos/salas) e locais ONLINE (link/WhatsApp)."""
+
+    form = LocalForm
+
+    list_display = ('id', 'nome', 'setor', 'ala_exibicao', 'online', 'meio_online',
+                    'link_online', 'status', 'dt_registro', 'us_registro')
+    list_display_links = ('id', 'nome')
+    list_filter = (StatusFilterAdminMixin, 'online',
+                   'meio_online', 'setor')
+    search_fields = ('id', 'nome', 'setor__nome',
+                     'setor__ala__nome',
+                     'setor__estabelecimento__estabelecimento')
+    list_editable = ['status']
+    ordering = ['setor__estabelecimento', 'setor__nome', 'nome']
+    list_per_page = 15
+    get_linhas_nao_editaveis = staticmethod(_sem_regra_de_fluxo)
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            'setor', 'setor__ala', 'setor__estabelecimento')
+
+    @admin.display(description='Ala')
+    def ala_exibicao(self, obj):
+        return obj.setor.ala if obj.setor_id else '-'
+
+    def get_changelist(self, request, **kwargs):
+        from admin_faturas.changelist_editavel import ChangeListEditavel
+        return ChangeListEditavel
+
+    def get_search_results(self, request, queryset, search_term):
+        queryset, use_distinct = super().get_search_results(
+            request, queryset, search_term)
+        if 'HTTP_REFERER' in request.META:
+            from urllib.parse import urlparse
+            referer_path = urlparse(request.META['HTTP_REFERER']).path
+            if '/add/' in referer_path or '/change/' in referer_path:
+                queryset = queryset.filter(status='A')
+        return queryset, use_distinct
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.us_registro = request.user
+            obj.dt_registro = timezone.now()
+        else:
+            obj.us_atualizacao = request.user
+            obj.dt_atualizacao = timezone.now()
+        super().save_model(request, obj, form, change)
+
+
+class LeitoAdmin(BaseLocalAgendaAdmin):
+    """Leitos dos locais de internação (um local pode ter vários leitos)."""
+
+    form = LeitoForm
+
+    # `autocomplete_fields` ignora o `queryset` do form (o widget recorta pelo
+    # admin do Local), então o campo é selecionado normalmente: mostra só
+    # locais de internação e o usuário não aponta um local errado.
+    list_display = ('id', 'leito', 'local', 'estabelecimento_exibicao',
+                    'ocupado', 'status', 'dt_registro', 'us_registro')
+    list_display_links = ('id', 'leito')
+    list_filter = (StatusFilterAdminMixin, 'ocupado',
+                   'local__setor__ala__internacao', 'local')
+    search_fields = ('id', 'leito', 'local__nome', 'local__setor__nome',
+                     'local__setor__ala__nome',
+                     'local__setor__estabelecimento__estabelecimento')
+    list_editable = ['ocupado', 'status']
+    ordering = ['local', 'leito']
+    list_per_page = 20
+    get_linhas_nao_editaveis = staticmethod(_sem_regra_de_fluxo)
+
+    def get_form(self, request, obj=None, **kwargs):
+        """Só locais de alas de internação (o já salvo é preservado).
+
+        Precisa ser aqui: o `ModelChoiceField` do admin substitui o queryset
+        do form, e a validação acontece contra o queryset do campo.
+        """
+        from django.db.models import Q
+        form = super().get_form(request, obj, **kwargs)
+        campo = form.base_fields.get('local')
+        if campo is not None:
+            atual = obj.local_id if obj else None
+            campo.queryset = Local.objects.filter(
+                Q(setor__ala__internacao=True, status='A') | Q(pk=atual))
+        return form
+
+    def get_changelist(self, request, **kwargs):
+        from admin_faturas.changelist_editavel import ChangeListEditavel
+        return ChangeListEditavel
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            'local', 'local__setor', 'local__setor__ala',
+            'local__setor__estabelecimento')
+
+    def get_search_results(self, request, queryset, search_term):
+        queryset, use_distinct = super().get_search_results(
+            request, queryset, search_term)
+        if 'HTTP_REFERER' in request.META:
+            from urllib.parse import urlparse
+            referer_path = urlparse(request.META['HTTP_REFERER']).path
+            if '/add/' in referer_path or '/change/' in referer_path:
+                queryset = queryset.filter(status='A')
+        return queryset, use_distinct
+
+    @admin.display(description='Estabelecimento')
+    def estabelecimento_exibicao(self, obj):
+        return obj.estabelecimento or '-'
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.us_registro = request.user
+            obj.dt_registro = timezone.now()
+        else:
+            obj.us_atualizacao = request.user
+            obj.dt_atualizacao = timezone.now()
+        super().save_model(request, obj, form, change)
+
+
 admin.site.register(PessoaCampos, PessoaCamposAdmin)
 admin.site.register(Estado, EstadoAdmin)
 admin.site.register(Cidade, CidadeAdmin)
@@ -1078,4 +1298,8 @@ admin.site.register(Pessoa, PessoaAdmin)
 admin.site.register(EmpresaCampos, EmpresaCamposAdmin)
 admin.site.register(Empresa, EmpresaAdmin)
 admin.site.register(Estabelecimento, EstabelecimentoAdmin)
+admin.site.register(Ala, AlaAdmin)
+admin.site.register(Setor, SetorAdmin)
+admin.site.register(Local, LocalAdmin)
+admin.site.register(Leito, LeitoAdmin)
 admin.site.register(TipoAtendimento, TipoAtendimentoAdmin)

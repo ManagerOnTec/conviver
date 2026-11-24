@@ -18,6 +18,7 @@ urlpatterns = [
     path('admin_cadastros_assistenciais/',
          include('admin_cadastros_assistenciais.urls')),
     path('atendimentos/', include('atendimentos.urls')),
+    path('agenda/', include('agenda_pacientes.urls')),
     path('prontuarios/', include('prontuarios.urls')),
     path('oficios/', include('oficios.urls')),
     path('orcamentos/', include('orcamentos.urls')),

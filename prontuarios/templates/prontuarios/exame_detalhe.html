@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+{% block titulos %}Exames |{% endblock %}
+{% block menul %}
+
+<div class="form-group text-left mt-2 m-3">
+    <a title="Clique aqui para fechar" href="{% url 'exame_listar' atendimento_id=object.atendimento_id %}"
+        class="mt-2 list-group-item list-group-item-action voltar-link rounded">
+        <i class="fas fa-arrow-left me-2"></i>Voltar
+    </a>
+    <a href="{% url 'exame_listar' atendimento_id=object.atendimento_id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-list me-2"></i>Lista de Exames
+    </a>
+    <a href="{% url 'prontuario_detalhe' pk=object.atendimento_id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-notes-medical me-2"></i>Prontuário
+    </a>
+    <a href="{% url 'diagnostico_listar' atendimento_id=object.atendimento_id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-diagnoses me-2"></i>Diagnósticos
+    </a>
+    <a href="{% url 'evolucao_listar' atendimento_id=object.atendimento_id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-file-alt me-2"></i>Evoluções
+    </a>
+    <a href="{% url 'exame_listar' atendimento_id=object.atendimento_id %}"
+        class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded">
+        <i class="fas fa-flask me-2"></i>Exames
+    </a>
+    <a href="{% url 'psicoterapia_listar' atendimento_id=object.atendimento_id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-brain me-2"></i>Psicoterapias
+    </a>
+    <a href="{% url 'prescricao_listar' atendimento_id=object.atendimento_id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-capsules me-2"></i>Prescrições
+    </a>
+    <a href="{% url 'adep_listar' atendimento_id=object.atendimento_id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-syringe me-2"></i>ADEP
+    </a>
+    <a href="{% url 'sinais_vitais_listar' atendimento_id=object.atendimento_id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fa fa-heartbeat me-2"></i>Sinais Vitais
+    </a>
+    <a href="{% url 'sae_listar' atendimento_id=object.atendimento_id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-stethoscope me-2"></i>SAE
+    </a>
+    <a href="{% url 'plano_cuidados_listar' atendimento_id=object.atendimento_id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-procedures me-2"></i>Plano de Cuidados
+    </a>
+    <a href="{% url 'perdas_ganhos_listar' atendimento_id=object.atendimento_id %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fa fa-weight me-2"></i>Perdas e Ganhos
+    </a>
+  
+</div>
+{% endblock %}
+
+{% block cabdados %}
+{% include 'parciais/_patient_context_header.html' with module_icon='fas fa-flask' module_title='Exame' module_subtitle='Solicitação e resultados do exame.' primary_label='Prontuário' primary_value=object.atendimento_id secondary_label='Tela' secondary_value='Detalhe' show_cpf=True %}
+{% endblock %}
+
+{% block lista %}
+<div class="container">
+  <div class="row">
+    <div class="col-lg-9 col-md-9 col-sm-9 col-xs-9">
+    <div class="card mt-2 bg-white shadow-sm">
+        <div class="card-body">
+            <h3>{{ object.tipo_exame }}</h3>
+            <p><strong>Solicitação:</strong> {{ object.solicitacao|default:'-' }}</p>
+            <p>
+                <strong>Data:</strong> {{ object.dt_registro|date:'d/m/Y H:i' }}
+                &middot;
+                <strong>Profissional:</strong> {{ object.us_registro|default:'-' }}
+            </p>
+            {% if object.anexo_exame %}
+            <p>
+                <a href="{% url 'exame_anexo' pk=object.pk numero=0 %}" target="_blank" class="custom-link">
+                    <i class="fas fa-paperclip me-1"></i>Abrir laudo/anexo
+                </a>
+            </p>
+            {% endif %}
+        </div>
+    </div>
+
+    <h4 class="mt-3">Resultados</h4>
+    {% for resultado in object.resultados.all %}
+    {% if resultado.status == 'A' %}
+    <section class="border rounded p-3 mb-3 bg-white shadow-sm">
+        <strong>{{ resultado.data_resultado|date:'d/m/Y' }}</strong>
+        <p class="mb-2">{{ resultado.anotacoes|linebreaksbr }}</p>
+        {% if resultado.anexo_1 %}
+        <a href="{% url 'resultado_exame_anexo' pk=object.pk resultado_pk=resultado.pk numero=1 %}" target="_blank" class="custom-link me-3">
+            <i class="fas fa-paperclip me-1"></i>Anexo 1
+        </a>
+        {% endif %}
+        {% if resultado.anexo_2 %}
+        <a href="{% url 'resultado_exame_anexo' pk=object.pk resultado_pk=resultado.pk numero=2 %}" target="_blank" class="custom-link me-3">
+            <i class="fas fa-paperclip me-1"></i>Anexo 2
+        </a>
+        {% endif %}
+        {% if resultado.anexo_3 %}
+        <a href="{% url 'resultado_exame_anexo' pk=object.pk resultado_pk=resultado.pk numero=3 %}" target="_blank" class="custom-link me-3">
+            <i class="fas fa-paperclip me-1"></i>Anexo 3
+        </a>
+        {% endif %}
+    </section>
+    {% endif %}
+    {% empty %}
+    <p>Nenhum resultado cadastrado.</p>
+    {% endfor %}
+    </div>
+    <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
+        {% include 'parciais/_detail_object_nav.html' with detail_url_name='exame_detalhe' nav_label='Navegar entre exames' %}
+    </div>
+  </div>
+</div>
+{% endblock %}

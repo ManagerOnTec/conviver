@@ -7,7 +7,10 @@ from django.contrib import messages
 from django import forms
 from contas import models
 from dominios.widgets import DateTimePickerInput
-from . models import Estado, Cidade, Genero, Pessoa, Empresa, Estabelecimento, PessoaCampos, EmpresaCampos, TipoAtendimento, Pais
+from . models import (
+    Ala, Estado, Cidade, Genero, Pessoa, Empresa, Estabelecimento,
+    PessoaCampos, EmpresaCampos, TipoAtendimento, Pais, Setor, Local, Leito,
+)
 from unidecode import unidecode
 from django.apps import apps
 from django.contrib.contenttypes.models import ContentType
@@ -409,3 +412,121 @@ class TipoAtendimentoForm(FilterByStatusMixin, forms.ModelForm):
 
 class TipoAtendimentoOpForm(FilterByStatusMixin, forms.Form):
     tipo_atendimento = TipoAtendimento.objects.all()
+
+
+# SETOR / LOCAL ############################################################
+
+class AlaForm(FilterByStatusMixin, forms.ModelForm):
+    """Ala que classifica seus setores como internação ou externos."""
+
+    class Meta:
+        model = Ala
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        self.usuario = kwargs.pop('usuario', None)
+        super().__init__(*args, **kwargs)
+
+        if self.instance._state.adding:
+            self.fields['status'].widget = forms.HiddenInput()
+
+    def clean_nome(self):
+        nome = (self.cleaned_data.get('nome') or '').strip()
+        if not nome:
+            raise forms.ValidationError('Informe o nome da ala.')
+        return nome.title()
+
+
+class SetorForm(FilterByStatusMixin, forms.ModelForm):
+    """Setor da ala e do estabelecimento selecionados."""
+
+    class Meta:
+        model = Setor
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        self.usuario = kwargs.pop('usuario', None)
+        super(SetorForm, self).__init__(*args, **kwargs)
+
+        if self.instance._state.adding:
+            self.fields['status'].widget = forms.HiddenInput()
+
+        if 'ala' in self.fields:
+            estabelecimento_id = (
+                self.data.get('estabelecimento') if self.is_bound
+                else self.instance.estabelecimento_id
+                or self.initial.get('estabelecimento'))
+            try:
+                estabelecimento_id = int(estabelecimento_id)
+            except (TypeError, ValueError):
+                estabelecimento_id = None
+
+            alas = Ala.objects.filter(status='A')
+            if estabelecimento_id:
+                alas = alas.filter(estabelecimento_id=estabelecimento_id)
+            atual = self.instance.ala_id if self.instance.pk else None
+            if atual:
+                from django.db.models import Q
+                alas = Ala.objects.filter(Q(pk=atual) | Q(pk__in=alas))
+            self.fields['ala'].queryset = alas.order_by('nome')
+
+    def clean_nome(self):
+        nome = (self.cleaned_data.get('nome') or '').strip()
+        if not nome:
+            raise forms.ValidationError('Informe o nome do setor.')
+        return nome.title()
+
+
+class LocalForm(FilterByStatusMixin, forms.ModelForm):
+    """Local do setor (leito, sala...) ou local ONLINE (link/whastapp)."""
+
+    class Meta:
+        model = Local
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        self.usuario = kwargs.pop('usuario', None)
+        super(LocalForm, self).__init__(*args, **kwargs)
+
+        if self.instance._state.adding:
+            self.fields['status'].widget = forms.HiddenInput()
+
+    def clean_nome(self):
+        nome = (self.cleaned_data.get('nome') or '').strip()
+        if not nome:
+            raise forms.ValidationError('Informe o nome do local.')
+        return nome.title()
+
+
+class LeitoForm(FilterByStatusMixin, forms.ModelForm):
+    """Leito de um local cujo setor pertence a uma ala de internação."""
+
+    class Meta:
+        model = Leito
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        self.usuario = kwargs.pop('usuario', None)
+        super(LeitoForm, self).__init__(*args, **kwargs)
+
+        if self.instance._state.adding:
+            self.fields['status'].widget = forms.HiddenInput()
+
+        # A restrição `limit_choices_to` do model NÃO aceita o registro já
+        # salvo: o queryset explícito preserva a edição de um leito cujo local
+        # tenha sido desmarcado como internação depois do cadastro.
+        if 'local' in self.fields:
+            from django.db.models import Q
+            atual = self.instance.local_id if self.instance.pk else None
+            self.fields['local'].queryset = Local.objects.filter(
+                Q(setor__ala__internacao=True, status='A') | Q(pk=atual))
+            self.fields['local'].error_messages['invalid_choice'] = (
+                'Escolha um local ATIVO de um setor pertencente a uma ala de '
+                'internação. Se o local estiver correto, mova o setor para '
+                'uma ala de internação e tente novamente.')
+
+    def clean_leito(self):
+        leito = (self.cleaned_data.get('leito') or '').strip()
+        if not leito:
+            raise forms.ValidationError('Informe a identificação do leito.')
+        return leito

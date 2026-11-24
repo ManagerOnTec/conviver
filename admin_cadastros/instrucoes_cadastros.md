@@ -198,7 +198,26 @@ então a barra de KPIs/filtros continua aparecendo normalmente.
 
 1. Classificação Fornecedores · 2. Pessoas - campos obrigatórios ·
 3. Empresa - campos obrigatórios · **7. Pessoas** · **8. Empresas** ·
-**9. Estabelecimentos**
+**9. Estabelecimentos** · **9.1. Alas** · **9.2. Setores** ·
+**9.3. Locais** · **9.4. Leitos**
+
+### Ala → Setor → Local → Leito (cadastros auxiliares da agenda/leitos)
+
+Hierarquia: **Estabelecimento → Ala → Setor → Local → Leito**.
+
+- `Ala` pertence ao estabelecimento e define se os seus setores são de
+  **internação** ou **externos**.
+- `Setor` pertence a uma Ala e mantém o estabelecimento direto para
+  compatibilidade; ambos precisam ser do mesmo estabelecimento.
+- `Local` pertence ao Setor (exceto recurso ONLINE) e não tem checkbox de
+  internação. Um local ONLINE não pode ficar em uma Ala de internação.
+- `Leito` pertence a um local de Ala de internação; a regra é validada no
+  model/`save()` e no admin (`LeitoAdmin.get_form` lista somente locais ativos
+  cujos setores estão em Alas de internação). A mensagem orienta mover o setor
+  para uma Ala de internação. O `LeitoAdmin` não usa `autocomplete_fields`,
+  pois esse widget ignora o queryset do form.
+- Os admins com `list_editable` seguem a regra 3
+  (`get_changelist` → `ChangeListEditavel` + `get_linhas_nao_editaveis`).
 
 Estoques (`admin_estoques`): 1. Tipos de Produtos · 2. Grupos · 3. Classes ·
 4. Sub Classes · 5. Categorias · 6. Unidades de Medidas · 7. Vias de
@@ -216,6 +235,9 @@ Administração · **8. Produtos**
 - Não criar `_btn(..., param=None, ...)` esperando `**{None: ...}` —
   `**` exige chaves `str` (“keywords must be strings”). O botão “Todos”
   deve montar o dicionário de mudanças **sem** a chave.
+- Não usar `limit_choices_to={'internacao': True}` na FK do `Leito`: ela
+  recusa o registro **já salvo** ao editar. Recorte no queryset do form /
+  `get_form` e valide no `Leito.clean()`.
 
 ## Como testar
 
@@ -228,4 +250,9 @@ Em `with transaction.atomic():` + `raise RuntimeError('rollback')`:
 5. tela `/admin/admin_cadastros/pessoa/` com os 4 parâmetros combinados;
 6. `/admin/admin_estoques/produto/` com `?tipo_produto=N&medicamento=sim`;
 7. `/admin/admin_estoques/grupo/` — `qtd_produtos` não deve gerar N+1;
-8. `python manage.py check` antes de concluir.
+8. Configure Alas internação/externa; confira que um Setor só aceite Ala do
+   mesmo estabelecimento;
+9. `/admin/admin_cadastros/leito/add/` só lista locais ativos em Alas de
+   internação;
+10. `Leito(local=<local fora de Ala de internação>).full_clean()` → **recusa**;
+11. `python manage.py check` antes de concluir.

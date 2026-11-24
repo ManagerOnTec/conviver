@@ -177,9 +177,7 @@ class AcordoPagamento(models.Model):
     )
     data_fim = models.DateField(
         verbose_name='Fim da Recorrência',
-        help_text='Data final para geração das previsões. Deixe em branco para recorrência indefinida.',
-        blank=True,
-        null=True,
+        help_text='Data final obrigatória para geração das previsões.',
     )
     forma_pagamento = models.CharField(
         max_length=1, choices=forma_pagamento_choices, default='A',

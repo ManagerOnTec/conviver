@@ -51,6 +51,7 @@ class PerfilForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['certificado_digital'].widget.attrs['accept'] = '.pfx'
 
         # Limita apenas pessoas com classificação FUNCIONARIO
         self.fields['pessoa'].queryset = Pessoa.objects.filter(

@@ -64,9 +64,9 @@ class GerenciadorRelatorioGeralAdmin(admin.ModelAdmin):
 @admin.register(GerenciadorRelatorioPersonalizado)
 class GerenciadorRelatorioPersonalizadoAdmin(admin.ModelAdmin):
     form = GerenciadorRelatorioPersonalizadoForm
-    list_display = ('relatorio', 'tipo_evolucao', 'tipo_documento_legal', 'dados_header',
+    list_display = ('relatorio', 'tipo_evolucao', 'tipo_exame', 'tipo_documento_legal', 'dados_header',
                     'dados_right_header', 'dados_footer', 'estabelecimento', 'status')
-    list_filter = ('relatorio', 'tipo_evolucao', 'tipo_documento_legal', 'estabelecimento', 'status')
+    list_filter = ('relatorio', 'tipo_evolucao', 'tipo_exame', 'tipo_documento_legal', 'estabelecimento', 'status')
     search_fields = ('dados_header', 'dados_footer')
     # Adicione mais configurações conforme necessário
 

@@ -62,6 +62,10 @@ class GerenciadorRelatorioPersonalizado(models.Model):
     tipo_evolucao = models.ForeignKey(
         TipoEvolucao, on_delete=models.PROTECT, blank=True, null=True)
 
+    tipo_exame = models.ForeignKey(
+        'admin_exames.TipoExame', on_delete=models.PROTECT,
+        blank=True, null=True, verbose_name='Tipo de Exame')
+
     tipo_documento_legal = models.ForeignKey(
         'documentos_legais.TipoDocumentoLegal',
         on_delete=models.PROTECT,

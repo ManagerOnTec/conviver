@@ -1,0 +1,4 @@
+- Relatório PDF de Exames, esta com tipo de exame e campo de texto na mesma linha, tem que quebrar o campo tipo e o campo descritivo
+- o /n que deveria ser uma quebra esta aparecendo no PDF, corrigir
+- delimitar em 2000 caracter o campo do modelo e form descritico de modelo exame
+

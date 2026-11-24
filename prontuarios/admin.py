@@ -6,7 +6,7 @@ from dominios.admin_dashboard_mixins import AdminDashboardAndTopFilterMixin
 from dominios.utils import SomenteLeituraEstatisticoAdminMixin
 from .models import (
     Evolucao, Prescricao, ProdutoPrescricao, Adep, SinaisVitais,
-    SAE, Diagnostico, PlanoCuidados, PerdasGanhos, Psicoterapia
+    SAE, Diagnostico, PlanoCuidados, PerdasGanhos, Psicoterapia, Exame, ResultadoExame
 )
 
 
@@ -71,6 +71,26 @@ class EvolucaoAdmin(SomenteLeituraEstatisticoAdminMixin, AdminDashboardAndTopFil
             },
         ]
 
+
+class ResultadoExameInline(admin.TabularInline):
+    model = ResultadoExame
+    extra = 0
+    max_num = 3
+    fields = ('data_resultado', 'anotacoes', 'anexo_1', 'anexo_2', 'anexo_3', 'status')
+
+@admin.register(Exame)
+class ExameAdmin(SomenteLeituraEstatisticoAdminMixin, AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
+    dashboard_date_field = 'dt_registro'
+    list_display = ('id', 'paciente_nome', 'tipo_exame', 'estabelecimento', 'dt_registro', 'us_registro', 'status')
+    list_filter = ('tipo_exame', 'status', 'estabelecimento', 'dt_registro')
+    search_fields = ('id', 'tipo_exame__descricao', 'atendimento__pessoa__nome', 'solicitacao')
+    ordering = ('-dt_registro', '-pk')
+    inlines = (ResultadoExameInline,)
+
+    def paciente_nome(self, obj):
+        return obj.atendimento.pessoa.nome if obj.atendimento_id else '-'
+    paciente_nome.short_description = 'Paciente'
+    paciente_nome.admin_order_field = 'atendimento__pessoa__nome'
 
 @admin.register(Prescricao)
 class PrescricaoAdmin(SomenteLeituraEstatisticoAdminMixin, AdminDashboardAndTopFilterMixin, admin.ModelAdmin):

@@ -65,6 +65,12 @@ Ordem de liberação (de baixo para cima):
   pagamento existir. Uma vez que gerou o pagamento, **quem a controla é o
   Pagamento**: só volta a ser editável/excluível depois que o pagamento sair.
 - **Acordo** → só sai quando não houver **nenhuma** pré-pagamento ligada.
+- **Fim da Recorrência** (`AcordoPagamento.data_fim`) é obrigatório no cadastro
+  e na edição; deve ser informado para gerar previsões.
+- As listagens de **Pré-Pagamentos** e **Pagamentos** iniciam ordenadas pelo
+  vencimento em ordem crescente: vencimentos mais próximos/antigos primeiro e
+  os mais distantes/novos depois. O cabeçalho da coluna permite alterar a
+  ordenação manualmente.
 
 Ou seja, a exclusão **sobe de baixo para cima** e a **criação desce de cima
 para baixo**:
@@ -335,8 +341,10 @@ def get_linhas_nao_editaveis(self, request):
 
 ## Botões personalizados — ordem no início da listagem
 
-`id → botões de função → excluir → dados` (AGENTS.md, item 10). No acordo:
-`id, Gerar previsões, Duplicar, excluir, …`
+Nas listagens de Acordos, Pré-Pagamentos e Pagamentos, Fornecedor aparece logo
+após o ID e é link para abrir o cadastro correspondente. O ID continua sendo o
+link para abrir o próprio objeto. Nos Acordos, após Fornecedor vêm os botões
+Gerar previsões, Duplicar e excluir; nas demais listagens vêm os botões da etapa.
 
 ## Modal de baixas — obrigatório
 
@@ -400,4 +408,8 @@ Em `with transaction.atomic():` + `raise RuntimeError('rollback')`:
 15. **list_editable**: acordo com previsão / previsão com pagamento /
     pagamento finalizado ou com baixa → a listagem mostra as colunas em
     TEXTO (classe `celula-travada`), não como campo editável;
-16. `python manage.py check` antes de concluir.
+16. Acordo sem **Fim da Recorrência** deve ser inválido; acordos antigos
+    sem fim recebem a data inicial durante a migration.
+17. Na listagem de acordos, Fornecedor é o segundo item após o ID e o link
+    abre o cadastro correspondente.
+18. `python manage.py check` antes de concluir.

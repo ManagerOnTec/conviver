@@ -81,12 +81,17 @@ class GerenciadorRelatorioPersonalizadoForm(FilterByStatusMixin, forms.ModelForm
         cleaned_data = super().clean()
         relatorio = cleaned_data.get("relatorio")
         tipo_evolucao = cleaned_data.get("tipo_evolucao")
+        tipo_exame = cleaned_data.get("tipo_exame")
         tipo_documento_legal = cleaned_data.get("tipo_documento_legal")
 
         # Se 'relatorio' for 'evolucao', então 'tipo_evolucao' é obrigatório
         if relatorio == "evolucao" and not tipo_evolucao:
             self.add_error(
                 'tipo_evolucao', "O campo Tipo Evolução é obrigatório quando Relatório é Evolução.")
+
+        if relatorio == "exame" and not tipo_exame:
+            self.add_error(
+                'tipo_exame', "O campo Tipo de Exame é obrigatório quando Relatório é Exame.")
 
         if relatorio == "documentos_legais" and not tipo_documento_legal:
             self.add_error(
@@ -96,6 +101,8 @@ class GerenciadorRelatorioPersonalizadoForm(FilterByStatusMixin, forms.ModelForm
         if relatorio != "evolucao":
             cleaned_data['tipo_evolucao'] = None
 
+        if relatorio != "exame":
+            cleaned_data['tipo_exame'] = None
         if relatorio != "documentos_legais":
             cleaned_data['tipo_documento_legal'] = None
 

@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% block titulos %}{{ title }}|{% endblock %}
+
+{% block menul %}
+<div class="form-group text-left mt-2 m-3">
+    <a href="{% url 'agendapaciente_listar' %}"
+       class="mt-2 list-group-item list-group-item-action voltar-link rounded">
+        <i class="fas fa-arrow-left me-2"></i>Voltar
+    </a>
+    <a href="{% url 'agendapaciente_listar' %}"
+       class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-list me-2"></i>Lista de Agendas
+    </a>
+
+</div>
+{% endblock %}
+
+{% block cabdados %}
+{% include 'parciais/_patient_context_header.html' with module_icon='fas fa-calendar-check' module_title='Agendamento' module_subtitle='Detalhes do agendamento em modo de leitura.' primary_label='Agendamento' primary_value=objeto.pk secondary_label='Tela' secondary_value='Detalhe' show_cpf=True %}
+{% endblock %}
+
+{% block lista %}
+<div class="container">
+    <form id="agenda-detalhe" class="form-control mt-2">
+        {% csrf_token %}
+        {{ form.media }}
+        <div class="row">
+            <div class="col-lg-12 col-md-12 col-sm-12">
+                <div id="table-container">
+                    <div class="container">
+                        <div class="row">
+                            <div class="col-md-6">{{ form.atendimento|as_crispy_field }}</div>
+                            <div class="col-md-6">{{ form.tipo|as_crispy_field }}</div>
+                            <div class="col-md-6">
+                                {{ form.exame|as_crispy_field }}
+                                {% if objeto.exame %}
+                                <a href="{% url 'exame_detalhe' pk=objeto.exame.pk %}">
+                                    Abrir exame solicitado
+                                </a>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">{{ form.local|as_crispy_field }}</div>
+                            <div class="col-md-6">{{ form.data_hora|as_crispy_field }}</div>
+                            <div class="col-md-6">{{ form.responsavel|as_crispy_field }}</div>
+                            <div class="col-md-6">{{ form.link_videochamada|as_crispy_field }}</div>
+                            <div class="col-md-6">{{ form.link_whatsapp|as_crispy_field }}</div>
+                            <div class="col-md-12">{{ form.observacao|as_crispy_field }}</div>
+                            <div class="col-md-4">{{ form.efetuado|as_crispy_field }}</div>
+                            <div class="col-md-4">{{ form.dt_efetuado|as_crispy_field }}</div>
+                            <div class="col-md-4">{{ form.status|as_crispy_field }}</div>
+                            <div class="col-md-12">
+                                <label class="form-label">Data da Execução</label>
+                                <input class="form-control" value="{{ objeto.data_execucao|date:'d/m/Y H:i'|default:'-' }}" disabled>
+                            </div>
+                            <div class="col-md-12">{{ form.observacao_execucao|as_crispy_field }}</div>
+                            <div class="col-md-6">
+                                <label class="form-label">Estabelecimento</label>
+                                <input class="form-control" value="{{ objeto.estabelecimento }}" disabled>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Dt. Registro</label>
+                                <input class="form-control" value="{{ objeto.dt_registro|date:'d/m/Y H:i'|default:'-' }}" disabled>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Us. Registro</label>
+                                <input class="form-control" value="{{ objeto.us_registro|default:'-' }}" disabled>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Dt. Atualização</label>
+                                <input class="form-control" value="{{ objeto.dt_atualizacao|date:'d/m/Y H:i'|default:'-' }}" disabled>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Us. Atualização</label>
+                                <input class="form-control" value="{{ objeto.us_atualizacao|default:'-' }}" disabled>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}

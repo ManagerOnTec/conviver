@@ -160,6 +160,8 @@ INSTALLED_APPS = [
     'admin_sinais_vitais',
     'admin_psicoterapia',
     'admin_diagnosticos',
+    'admin_exames',
+    'agenda_pacientes',
     'admin_passagem_plantao',
     'admin_cadastros_financeiros',
     'admin_pagamentos',

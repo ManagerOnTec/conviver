@@ -345,6 +345,7 @@ fase_adep_choices = (
 
 relatorios_choices = (
     ('evolucao', 'Evolução'),
+    ('exame', 'Exame'),
     ('prescricao', 'Prescrição'),
     ('adep', 'ADEP'),
     ('sae', 'SAE'),
