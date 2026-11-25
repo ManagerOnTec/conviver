@@ -107,6 +107,9 @@
               <ul class="object-tools">
                 {% block object-tools-items %}
                   {% change_list_object_tools %}
+                  {% if pagamento_import_url %}
+                    <li><a href="{{ pagamento_import_url }}">Importar Pagamentos</a></li>
+                  {% endif %}
                   {% if cl.formset %}
                     <li class="li-salvar-listagem">
                       <input type="submit" name="_save" value="Salvar"

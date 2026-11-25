@@ -311,13 +311,7 @@ class AgendaPaciente(models.Model):
     # Execução espelhada: agenda ↔ exame
     # ------------------------------------------------------------------
     def efetuar(self, usuario=None, desfazer=False, observacao_execucao=None):
-        """Marca/desmarca a execução — e espelha no exame (ResultadoExame).
-
-        O que faz em um reflete no outro: efetuar aqui cria/marca o resultado
-        do exame; desfazer aqui remove-o.
-        """
-        from prontuarios.models import ResultadoExame
-
+        """Marca ou desfaz a execução da agenda sem criar resultado clínico."""
         self.efetuado = 'N' if desfazer else 'S'
         self.dt_efetuado = None if desfazer else timezone.now()
         self.data_execucao = self.dt_efetuado
@@ -331,40 +325,6 @@ class AgendaPaciente(models.Model):
         self.save(update_fields=[
             'efetuado', 'dt_efetuado', 'data_execucao',
             'observacao_execucao', 'us_atualizacao', 'dt_atualizacao'])
-
-        if self.exame_id:
-            if desfazer:
-                ResultadoExame.objects.filter(
-                    exame_id=self.exame_id, status='A').delete()
-            else:
-                resultado, criado = ResultadoExame.objects.get_or_create(
-                    exame_id=self.exame_id, status='A',
-                    defaults={
-                        'data_resultado': timezone.localdate(),
-                        'us_registro': usuario,
-                        'dt_registro': timezone.now(),
-                    })
-                if criado and not resultado.us_registro_id and usuario:
-                    resultado.us_registro = usuario
-                    resultado.dt_registro = timezone.now()
-                    resultado.save(update_fields=['us_registro', 'dt_registro'])
-        return self
-
-    def sincronizar_execucao(self):
-        """Espelha a execução vinda do EXAME (ResultadoExame → agenda)."""
-        from prontuarios.models import ResultadoExame
-        executado = self.exame_id and ResultadoExame.objects.filter(
-            exame_id=self.exame_id, status='A').exists()
-        if executado and self.efetuado != 'S':
-            self.efetuado = 'S'
-            self.dt_efetuado = timezone.now()
-            self.data_execucao = self.dt_efetuado
-            self.save(update_fields=['efetuado', 'dt_efetuado', 'data_execucao'])
-        elif not executado and self.efetuado == 'S':
-            self.efetuado = 'N'
-            self.dt_efetuado = None
-            self.data_execucao = None
-            self.save(update_fields=['efetuado', 'dt_efetuado', 'data_execucao'])
         return self
 
     def get_absolute_url(self):

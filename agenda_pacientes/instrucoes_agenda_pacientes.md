@@ -125,11 +125,11 @@
     foi executado e não pode ser agendado novamente."*
   - tipo NÃO-exame com exame setado → *"Somente agendamento do tipo exame
     pode estar vinculado a um exame."*
-- **Execução espelhada**: efetuar/desfazer na agenda marca/desmarca o
-  `ResultadoExame` do exame (e vice-versa quando aplicável) — o que faz em um
-  reflete no outro (`AgendaPaciente.efetuar()` e
-  `AgendaPaciente.sincronizar_execucao()`). Registrar resultado pelo modal da
-  lista de exames, por si só, **não** conclui o agendamento.
+- Efetivar uma agenda libera o exame para registro clínico e **não cria**
+  um `ResultadoExame` vazio ou fictício. Somente o médico, pelo modal de
+  resultado da listagem ou pela edição do exame, cria o resultado real com
+  data, anotação e anexos. A sincronização de resultado ativo para agenda
+  continua disponível, mas desfazer a agenda não exclui um resultado real.
 - Local online exige link: **"Este local é online: informe o link da
   videochamada ou do WhatsApp."**
 - Sem estabelecimento na sessão: **"Selecione o estabelecimento na barra

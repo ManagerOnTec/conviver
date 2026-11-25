@@ -28,6 +28,9 @@
   sem tornar o resultado inteiro obrigatório em novos formulários vazios.
 - O modal de resultado só fica disponível após o agendamento ativo ser marcado
   como efetuado. Registrar o resultado não altera a situação do agendamento.
+- Efetivar o agendamento não gera automaticamente um registro de resultado.
+  A coluna Resultado só mostra dados após o médico registrar data, anotação
+  e anexos pelo modal da listagem ou pela edição do exame.
 - O PDF do exame usa os gerenciadores de relatório e a assinatura digital existentes.
 - Especificação, estado, testes e limitações estão em `prontuarios/exames.md`.
 

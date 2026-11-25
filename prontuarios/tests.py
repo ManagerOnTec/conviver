@@ -1795,6 +1795,66 @@ class ExameAgendaModalTests(TestCase):
         self.assertContains(response, 'Exames Pendentes')
         self.assertContains(response, 'Exames Pendentes de Agendamento')
 
+    def test_exam_list_paginates_15_then_remaining_items(self):
+        for index in range(16):
+            Exame.objects.create(
+                atendimento=self.atendimento,
+                tipo_exame=self.tipo_exame,
+                solicitacao=f'Solicitação paginada {index}',
+                estabelecimento=self.estabelecimento,
+                us_registro=self.user,
+                status='A',
+            )
+
+        primeira = self.client.get(
+            reverse('exame_listar', kwargs={
+                'atendimento_id': self.atendimento.pk,
+            }))
+        segunda = self.client.get(
+            reverse('exame_listar', kwargs={
+                'atendimento_id': self.atendimento.pk,
+            }),
+            {'page': 2},
+        )
+
+        self.assertEqual(primeira.context['page_obj'].paginator.count, 17)
+        self.assertEqual(len(primeira.context['exames']), 15)
+        self.assertEqual(len(segunda.context['exames']), 2)
+        self.assertEqual(segunda.context['page_obj'].number, 2)
+
+    def test_agenda_list_paginates_15_then_remaining_items(self):
+        hoje = timezone.localdate()
+        tipo_agendamento_geral = TipoAgendamento.objects.create(
+            descricao='Agenda geral paginada',
+            externo=True,
+            exige_exame_solicitado=False,
+            status='A',
+        )
+        for index in range(17):
+            AgendaPaciente.objects.create(
+                atendimento=self.atendimento,
+                tipo=tipo_agendamento_geral,
+                local=self.local,
+                data_hora=timezone.make_aware(
+                    datetime.combine(hoje, datetime.min.time())
+                    + timedelta(hours=index)),
+                observacao=f'Agendamento paginado {index}',
+                estabelecimento=self.estabelecimento,
+                us_registro=self.user,
+                status='A',
+            )
+
+        primeira = self.client.get(reverse('agendapaciente_listar'))
+        segunda = self.client.get(
+            reverse('agendapaciente_listar'),
+            {'page': 2},
+        )
+
+        self.assertEqual(primeira.context['page_obj'].paginator.count, 17)
+        self.assertEqual(len(primeira.context['agendas']), 15)
+        self.assertEqual(len(segunda.context['agendas']), 2)
+        self.assertEqual(segunda.context['page_obj'].number, 2)
+
     def test_result_requires_an_executed_schedule(self):
         self._marcar_agendamento()
         response = self._registrar_resultado()
@@ -1817,6 +1877,12 @@ class ExameAgendaModalTests(TestCase):
         agenda.efetuar(
             usuario=self.user,
             observacao_execucao='Execução registrada pelo teste.',
+        )
+
+        self.assertFalse(
+            ResultadoExame.objects.filter(
+                exame=self.exame, status='A').exists(),
+            'Efetivar a agenda não pode criar um resultado clínico vazio.',
         )
 
         lista = self.client.get(

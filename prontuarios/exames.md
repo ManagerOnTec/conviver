@@ -28,6 +28,9 @@ Implementar no prontuário um fluxo de solicitação e registro de resultados de
 - O modal de resultado só fica disponível após o agendamento ativo ser
   marcado como efetuado. O servidor e o modelo também bloqueiam o registro sem
   essa condição; lançar o resultado não altera a situação do agendamento.
+- Efetivar a agenda apenas libera o registro clínico e não cria um resultado
+  vazio. A coluna Resultado mostra somente registros reais de
+  `ResultadoExame`, com data, anotação e anexos.
 - Os anexos são servidos por uma view autenticada, com verificação de permissão e estabelecimento; não se expõe diretamente a URL do storage.
 - Anotações e anexos dos resultados não aparecem mais em colunas da listagem; ficam no modal de detalhe do resultado. O anexo da solicitação continua disponível no detalhe do exame.
 - As rotas de exame são separadas em `prontuarios/exames_views.py`, mas incluídas em `prontuarios/urls.py`, para evitar dependência circular com o módulo legado e preservar seu funcionamento.

@@ -205,6 +205,7 @@ body.modal-open .modal#modal-registrar-resultado,
                             data-bs-target="#modal-detalhe-resultado"
                             data-url="{% url 'exame_resultado_detalhe_modal' pk=exame.pk resultado_pk=resultado.pk %}"
                             title="Ver resultado de {{ resultado.data_resultado|date:'d/m/Y' }}">
+                        <i class="fas fa-file-medical me-1"></i>
                         {{ resultado.data_resultado|date:'d/m/Y' }}
                     </button>
                     {% empty %}
@@ -736,11 +737,11 @@ document.addEventListener('DOMContentLoaded', function () {
     <ul class="pagination listing-pagination btn-sm mb-0">
         {% if page_obj.has_previous %}
         <li class="page-item">
-            <a href="?{{ filters|urlencode }}&page=1"
+            <a href="?{% if filters %}{{ filters }}&{% endif %}page=1"
                 class="page-link"><i class="fas fa-step-backward"></i></a>
         </li>
         <li class="page-item">
-            <a href="?{{ filters|urlencode }}&page={{ page_obj.previous_page_number }}"
+            <a href="?{% if filters %}{{ filters }}&{% endif %}page={{ page_obj.previous_page_number }}"
                 class="page-link"><i class="fas fa-arrow-left"></i></a>
         </li>
         {% endif %}
@@ -752,7 +753,7 @@ document.addEventListener('DOMContentLoaded', function () {
         </li>
         {% elif i > page_obj.number|add:"-3" and i < page_obj.number|add:"3" %}
         <li class="page-item">
-            <a href="?{{ filters|urlencode }}&page={{ i }}"
+            <a href="?{% if filters %}{{ filters }}&{% endif %}page={{ i }}"
                 class="page-link">{{ i }}</a>
         </li>
         {% endif %}
@@ -760,11 +761,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
         {% if page_obj.has_next %}
         <li class="page-item">
-            <a href="?{{ filters|urlencode }}&page={{ page_obj.next_page_number }}"
+            <a href="?{% if filters %}{{ filters }}&{% endif %}page={{ page_obj.next_page_number }}"
                 class="page-link"><i class="fas fa-arrow-right"></i></a>
         </li>
         <li class="page-item">
-            <a href="?{{ filters|urlencode }}&page={{ page_obj.paginator.num_pages }}"
+            <a href="?{% if filters %}{{ filters }}&{% endif %}page={{ page_obj.paginator.num_pages }}"
                 class="page-link"><i class="fas fa-step-forward"></i></a>
         </li>
         {% endif %}

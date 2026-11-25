@@ -124,6 +124,8 @@ class ExameListView(LoginRequiredMixin, CustomPermissionRequiredMixin, FilterObj
         ).select_related('tipo_exame', 'us_registro').prefetch_related('resultados')
 
         params = self.request.GET.copy()
+        params.pop('page', None)
+        params.pop('pagina', None)
         limpar_clicado = 'limpar' in params
         params.pop('limpar', None)
         if limpar_clicado:
@@ -131,7 +133,11 @@ class ExameListView(LoginRequiredMixin, CustomPermissionRequiredMixin, FilterObj
             params.clear()
             self.request.session.pop(self.session_key, None)
         elif any(field in params for field in ExameFilter.Meta.fields):
-            self._salvar_filtros(params)
+            filtros = {
+                campo: valor for campo, valor in params.items()
+                if campo in ExameFilter.Meta.fields
+            }
+            self.request.session[self.session_key] = filtros
         elif self.request.session.get(self.session_key):
             self._restaurar_filtros(params)
 
@@ -142,7 +148,7 @@ class ExameListView(LoginRequiredMixin, CustomPermissionRequiredMixin, FilterObj
     # ------------------------------------------------------------------
     def _context_resultados(self, context):
         """Resultados ativos agrupados por exame da pagina corrente."""
-        ids = list(self.object_list.values_list('pk', flat=True))
+        ids = [exame.pk for exame in context['object_list']]
         resultados = ResultadoExame.objects.filter(
             exame_id__in=ids, status='A').select_related(
                 'us_registro').order_by('-data_resultado', '-pk')
@@ -178,6 +184,12 @@ class ExameListView(LoginRequiredMixin, CustomPermissionRequiredMixin, FilterObj
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['filter'] = self.filter
+        filtros = self.request.session.get(self.session_key) or {}
+        from urllib.parse import urlencode
+        context['filters'] = urlencode({
+            campo: valor for campo, valor in filtros.items()
+            if valor
+        })
         self._context_resultados(context)
         self._context_atendimento(context)
         self._context_navegacao(context)
@@ -197,7 +209,7 @@ class ExameListView(LoginRequiredMixin, CustomPermissionRequiredMixin, FilterObj
 
         estabelecimento = context.get('estabelecimento')
         estabelecimento_id = self.request.session.get('estabelecimento_id')
-        exames = list(self.object_list)
+        exames = list(context['object_list'])
         exame_ids = [exame.pk for exame in exames]
         pode_ver_agenda = (
             self.request.user.has_perm('agenda_pacientes.view_agendapaciente')
@@ -630,10 +642,6 @@ class ExameUpdateView(LoginRequiredMixin, UserIsCreatorMixin, CustomPermissionRe
                 self.object.save()
                 salvar_resultados_exame(
                     self.object, resultado_formset, self.request.user)
-                from agenda_pacientes.models import AgendaPaciente
-                for agenda in AgendaPaciente.objects.filter(
-                        exame=self.object, status='A'):
-                    agenda.sincronizar_execucao()
                 from admin_relatorios.models import Relatorio
                 from django.contrib.contenttypes.models import ContentType
                 Relatorio.objects.filter(content_type=ContentType.objects.get_for_model(self.object), object_id=self.object.pk, status='A').update(status='I')

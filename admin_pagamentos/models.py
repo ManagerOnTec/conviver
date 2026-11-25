@@ -523,7 +523,7 @@ class Pagamento(PrePagamento):
         blank=True,
         null=True,
         verbose_name='Anexo Nota Fiscal',
-        validators=[FileExtensionValidator(allowed_extensions=['pdf', 'jpg', 'jpeg', 'png', 'peg'])]
+        validators=[FileExtensionValidator(allowed_extensions=['pdf', 'xml', 'jpg', 'jpeg', 'png', 'peg'])]
     )
 
     dt_liquidacao = models.DateField(

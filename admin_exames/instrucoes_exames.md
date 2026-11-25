@@ -11,8 +11,9 @@
   - tipo do tipo exame → **exige** `exame` do **mesmo atendimento**, que **não
     pode ter sido executado** (sem `ResultadoExame` ativo);
   - tipo não-exame → **não** pode ter `exame` vinculado.
-- **Execução espelhada**: efetuar na agenda marca/genera o `ResultadoExame` do
-  exame; desfazer remove. O que faz em um reflete no outro.
+- Efetivar na agenda libera o registro do resultado para o médico e não gera
+  um `ResultadoExame` vazio. Desfazer a agenda não exclui resultado clínico
+  real já registrado.
 - A listagem de exames do prontuário (`exame_listar.html`) mostra o painel
   “Agendamentos de exame” do atendimento; a agenda nunca derruba a listagem.
 
@@ -23,8 +24,8 @@
   - exame solicitado só é obrigatório quando o tipo de agendamento é do tipo
     exame; o exame deve pertencer ao **mesmo atendimento** e não pode ter sido
     executado (sem `ResultadoExame` ativo);
-  - efetuar na agenda marca/remove o `ResultadoExame` do exame — e o que faz
-    em um reflete no outro.
+  - efetuar na agenda libera o registro do resultado e não cria nem remove um
+    `ResultadoExame` real.
 - Não remover a validação de `atendimento` no agendamento: **não existe**
   `AgendaPaciente.pessoa` (o paciente é sempre o do atendimento).
 - Arquivos de resultado limitados a PDF, PNG, JPG e JPEG, com limite de 5 MB por arquivo.

@@ -653,8 +653,11 @@ class PagamentoAdmin(
 
     list_display = ['id', 'fornecedor_link', 'finalizar_pagamento_button',
                     'baixas_button', 'excluir_linha', 'classe_fornecedor',
-                    'classe_pagamento', 'valor_pagamento', 'valor_saldo',
-                    'dt_vencimento', 'dt_liquidacao', 'estabelecimento', 'status']
+                    'classe_pagamento', 'forma_pagamento',
+                    'valor_pagamento', 'valor_saldo',
+                    'dt_vencimento', 'dt_liquidacao',
+                    'anexo_nota_fiscal_link', 'anexo_boleto_link',
+                    'estabelecimento', 'status']
     list_display_links = ['id']
     list_editable_sempre = ['status']
     list_editable = list_editable_sempre
@@ -671,9 +674,30 @@ class PagamentoAdmin(
     fornecedor_link.short_description = 'Fornecedor'
     fornecedor_link.admin_order_field = 'fornecedor__descricao'
 
+    def anexo_nota_fiscal_link(self, obj):
+        if not obj.anexo_nota_fiscal:
+            return '-'
+        return format_html(
+            '<a href="{}" target="_blank" rel="noopener noreferrer">'
+            'Visualizar</a>',
+            obj.anexo_nota_fiscal.url)
+    anexo_nota_fiscal_link.short_description = 'Anexo NF'
+
+    def anexo_boleto_link(self, obj):
+        if not obj.anexo_boleto:
+            return '-'
+        return format_html(
+            '<a href="{}" target="_blank" rel="noopener noreferrer">'
+            'Visualizar</a>',
+            obj.anexo_boleto.url)
+    anexo_boleto_link.short_description = 'Anexo Boleto'
+
     def get_urls(self):
         urls = super().get_urls()
         custom = [
+            path('importar/',
+                 self.admin_site.admin_view(self.importar_pagamentos_view),
+                 name='admin_pagamentos_pagamento_importar'),
             path('<path:object_id>/finalizar/',
                  self.admin_site.admin_view(self.finalizar_view),
                  name='admin_pagamentos_pagamento_finalizar'),
@@ -682,6 +706,16 @@ class PagamentoAdmin(
                  name='admin_pagamentos_pagamento_baixas'),
         ]
         return custom + urls
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = dict(extra_context or {})
+        extra_context['pagamento_import_url'] = reverse(
+            'admin:admin_pagamentos_pagamento_importar')
+        return super().changelist_view(request, extra_context)
+
+    def importar_pagamentos_view(self, request):
+        from .importacao import importar_pagamentos_view
+        return importar_pagamentos_view(request, self)
 
     # ------------------------------------------------------------------
     # FINALIZAR / REABRIR

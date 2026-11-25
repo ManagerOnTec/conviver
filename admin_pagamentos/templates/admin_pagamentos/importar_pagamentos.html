@@ -1,0 +1,161 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block breadcrumbs %}
+  {% include "admin/includes/breadcrumbs.html" %}
+{% endblock %}
+
+{% block content %}
+<div id="content-main" class="pagamentos-importacao">
+  <h1>{{ title }}</h1>
+
+  {% if etapa_abas %}
+    <p>Selecione as abas mensais que deseja converter em pagamentos. As abas
+      sem colunas reconhecidas foram ignoradas.</p>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="acao" value="selecionar_abas">
+      {{ selecao_form.non_field_errors }}
+      {% for erro in selecao_form.abas.errors %}<p class="errornote">{{ erro }}</p>{% endfor %}
+      <div class="module">
+        {{ selecao_form.abas }}
+      </div>
+      <div class="submit-row">
+        <input type="submit" class="default" value="Pré-visualizar pagamentos">
+      </div>
+    </form>
+  {% elif etapa_revisao %}
+    <p>Arquivo: <strong>{{ pendencia.nome }}</strong> ·
+      {{ registros|length }} pagamento(s) encontrados.
+      Os registros só serão criados depois de confirmar esta revisão.</p>
+
+    <form method="post" id="pagamentos-import-review">
+      {% csrf_token %}
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="acao" value="confirmar">
+
+      {% if mapeamento_form.non_field_errors %}
+        <div class="errornote">{{ mapeamento_form.non_field_errors }}</div>
+      {% endif %}
+      {{ linhas_formset.management_form }}
+      {{ linhas_formset.non_form_errors }}
+
+      <fieldset class="module aligned">
+        <h2>Fornecedores</h2>
+        {% for grupo in fornecedor_groups %}
+          <div class="form-row">
+            <h3>{{ grupo.nome|default:"Fornecedor não identificado" }}</h3>
+            <p>{{ grupo.situacao }}</p>
+            {% for campo in grupo.fields %}
+              <div class="field-box">
+                {{ campo.label_tag }} {{ campo }}
+                {% for erro in campo.errors %}<p class="errornote">{{ erro }}</p>{% endfor %}
+              </div>
+            {% endfor %}
+          </div>
+        {% endfor %}
+      </fieldset>
+
+      <fieldset class="module aligned">
+        <h2>Classes de pagamento</h2>
+        {% for grupo in classe_groups %}
+          <div class="form-row">
+            <h3>{{ grupo.nome|default:"Sem classe detectada" }}</h3>
+            <p>{{ grupo.situacao }}</p>
+            {% for campo in grupo.fields %}
+              <div class="field-box">
+                {{ campo.label_tag }} {{ campo }}
+                {% for erro in campo.errors %}<p class="errornote">{{ erro }}</p>{% endfor %}
+              </div>
+            {% endfor %}
+          </div>
+        {% endfor %}
+      </fieldset>
+
+      <fieldset class="module aligned">
+        <h2>Estabelecimentos</h2>
+        {% for grupo in estabelecimento_groups %}
+          <div class="form-row">
+            <h3>{{ grupo.nome }}</h3>
+            <p>{{ grupo.situacao }}</p>
+            {{ grupo.field.label_tag }} {{ grupo.field }}
+            {% for erro in grupo.field.errors %}<p class="errornote">{{ erro }}</p>{% endfor %}
+          </div>
+        {% endfor %}
+      </fieldset>
+
+      <div class="results">
+        <table>
+          <thead>
+            <tr>
+              <th>Importar</th>
+              <th>Origem</th>
+              <th>Fornecedor sugerido</th>
+              <th>Classe sugerida</th>
+              <th>Competência</th>
+              <th>Vencimento</th>
+              <th>Valor</th>
+              <th>Forma de pagamento</th>
+              <th>Observação</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for registro in registros %}
+              {% with linha=registro.form %}
+              <tr>
+                <td>{{ linha.incluir }}{{ linha.incluir.errors }}
+                  {% for campo in linha.hidden_fields %}{{ campo }}{% endfor %}
+                </td>
+                <td>{{ registro.origem }}{{ linha.non_field_errors }}{% if registro.aviso %}<br><span class="help">{{ registro.aviso }}</span>{% endif %}</td>
+                <td>{{ registro.fornecedor_label }}</td>
+                <td>{{ registro.classe_label }}</td>
+                <td>{{ linha.competencia }}{{ linha.competencia.errors }}</td>
+                <td>{{ linha.vencimento }}{{ linha.vencimento.errors }}</td>
+                <td>{{ linha.valor }}{{ linha.valor.errors }}</td>
+                <td>{{ linha.forma_pagamento }}{{ linha.forma_pagamento.errors }}</td>
+                <td>{{ linha.observacao }}{{ linha.observacao.errors }}</td>
+              </tr>
+              {% endwith %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="submit-row">
+        <input type="submit" class="default" value="Confirmar e criar pagamentos">
+      </div>
+    </form>
+  {% else %}
+    <p>Envie uma nota fiscal ou boleto em PDF, uma NF-e em XML ou uma planilha Excel com
+      colunas de Fornecedor, Data e Valor. O tipo padrão é Boleto; os dados e
+      vínculos serão revisados antes da gravação.</p>
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      {% for campo in form %}
+        <div class="form-row">
+          {{ campo.label_tag }} {{ campo }}
+          {% if campo.help_text %}<p class="help">{{ campo.help_text }}</p>{% endif %}
+          {% for erro in campo.errors %}<p class="errornote">{{ erro }}</p>{% endfor %}
+        </div>
+      {% endfor %}
+      <div class="submit-row">
+        <input type="submit" class="default" value="Ler arquivo e revisar">
+        <a href="{{ cancel_url }}" class="button">Voltar aos pagamentos</a>
+      </div>
+    </form>
+  {% endif %}
+
+  {% if etapa_abas or etapa_revisao %}
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="acao" value="cancelar">
+      <div class="submit-row">
+        <input type="submit" value="Cancelar importação">
+      </div>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

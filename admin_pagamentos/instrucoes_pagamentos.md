@@ -370,6 +370,39 @@ não aparece no menu e a URL da changelist responde 404.
 Mesmo padrão de `admin_faturas`, onde `BaixaFaturaAdmin` também existe mas
 o modelo não é registrado.
 
+## Importação revisável de pagamentos
+
+Na listagem **6. Pagamentos**, o botão **Importar Pagamentos** aceita boleto
+em PDF, nota fiscal em PDF, NF-e em XML ou planilha Excel (`.xlsx`). O tipo
+padrão é boleto. Nenhum registro é criado durante a leitura: primeiro são
+exibidos os dados extraídos, as sugestões de fornecedor/classe/estabelecimento
+e os campos para corrigir valores e vínculos.
+
+- A NF-e XML usa o emitente como fornecedor, procura empresa pelo CNPJ e anexa
+  o XML ao campo **Anexo Nota Fiscal**; valor e número vêm do XML, e o
+  vencimento usa a primeira duplicata quando presente, senão a emissão.
+- PDF de boleto e nota fiscal também são anexados ao campo correspondente.
+- Excel permite escolher as abas que tenham colunas reconhecidas e importar
+  várias linhas. O vencimento é lido da coluna de vencimento; se houver
+  competência explícita ela é preservada, senão a competência recebe a mesma
+  data do vencimento. Cada linha pode ser excluída da confirmação.
+- O fornecedor é localizado pelo CNPJ; se não existir, pode-se criar empresa
+  e fornecedor no passo de confirmação. CNPJ já cadastrado em empresa de outro
+  tipo deve ser corrigido no cadastro antes de prosseguir.
+- Classe do fornecedor e classe do pagamento são sugeridas pelo conteúdo e
+  podem ser selecionadas ou criadas na revisão. A forma padrão de pagamento é
+  **Boleto**, editável por linha.
+- Na importação Excel, se o fornecedor ainda não tiver classificação, a classe
+  de pagamento mais frequente entre as linhas dele é sugerida como
+  classificação do fornecedor. A classificação continua editável na revisão;
+  em empate, a primeira classe entre as mais frequentes é sugerida.
+- A criação grava `PrePagamento` e depois chama `gerar_pagamento()` para
+  respeitar a herança multitable e o saldo líquido inicial. Todas as linhas
+  são criadas dentro de uma transação; falha não pode deixar pagamentos
+  parciais. O arquivo temporário é removido após confirmação ou cancelamento.
+- XML com declarações DTD/ENTITY é recusado; envie uma NF-e XML válida em
+  UTF-8.
+
 ## Não fazer
 
 - Não lançar baixa em pagamento **aberto**.
@@ -413,3 +446,6 @@ Em `with transaction.atomic():` + `raise RuntimeError('rollback')`:
 17. Na listagem de acordos, Fornecedor é o segundo item após o ID e o link
     abre o cadastro correspondente.
 18. `python manage.py check` antes de concluir.
+19. Importar boleto, PDF de NF, XML de NF-e e planilha: conferir a prévia,
+    alterar forma de pagamento e vínculos, desmarcar uma linha e confirmar;
+    validar anexos e ausência de registros parciais ao forçar erro.
