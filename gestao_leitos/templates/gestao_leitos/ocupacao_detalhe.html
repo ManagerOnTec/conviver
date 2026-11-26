@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block titulos %}{{title}}|{% endblock %}
+
+{% block menul %}
+<div class="form-group text-left m-3 mt-2">
+    <a href="{% url 'gl_leito_mapa' %}"
+       class="mt-2 list-group-item list-group-item-action voltar-link rounded">
+        <i class="fas fa-arrow-left me-2"></i>Voltar
+    </a>
+    <a href="{% url 'gl_leito_mapa' %}"
+       class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-list me-2"></i>Mapa de Leitos
+    </a>
+</div>
+{% endblock %}
+
+{% block cabdados %}
+{% include 'parciais/_patient_context_header.html' with module_icon='fas fa-bed' module_title='Ocupação de Leito' module_subtitle='Detalhes da ocupação em modo de leitura.' primary_label='Ocupação' primary_value=ocupacao.pk secondary_label='Tela' secondary_value='Detalhe' %}
+{% endblock %}
+
+{% block lista %}
+<div class="container">
+    <form id="ocupacao-detalhe" class="form-control mt-2">
+        {% csrf_token %}
+        <div class="row">
+            <div class="col-lg-12 col-md-12 col-sm-12">
+                <div id="table-container">
+                    <div class="container">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="form-label">Leito</label>
+                                <input class="form-control" value="{{ ocupacao.leito }}" disabled>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Local / Setor / Ala</label>
+                                <input class="form-control"
+                                       value="{{ ocupacao.leito.local.nome }} / {{ ocupacao.leito.local.setor.nome }} / {{ ocupacao.leito.local.setor.ala.nome }}"
+                                       disabled>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Paciente (atendimento)</label>
+                                <input class="form-control"
+                                       value="{{ ocupacao.atendimento.pessoa }} (atendimento #{{ ocupacao.atendimento.pk }})"
+                                       disabled>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Situação</label>
+                                <input class="form-control" value="{{ ocupacao.get_situacao_display }}" disabled>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Entrada</label>
+                                <input class="form-control" value="{{ ocupacao.dt_entrada|date:'d/m/Y H:i' }}" disabled>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Saída</label>
+                                <input class="form-control" value="{{ ocupacao.dt_saida|date:'d/m/Y H:i'|default:'—' }}" disabled>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Dias internado</label>
+                                <input class="form-control" value="{{ ocupacao.dias_internado }}" disabled>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Estabelecimento</label>
+                                <input class="form-control" value="{{ ocupacao.estabelecimento }}" disabled>
+                            </div>
+                            <div class="col-md-12">
+                                <label class="form-label">Observações</label>
+                                <textarea class="form-control" rows="2" disabled>{{ ocupacao.observacoes|default:'—' }}</textarea>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Dt. Registro</label>
+                                <input class="form-control" value="{{ ocupacao.dt_registro|date:'d/m/Y H:i' }}" disabled>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Us. Registro</label>
+                                <input class="form-control" value="{{ ocupacao.us_registro|default:'-' }}" disabled>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Abrir atendimento</label>
+                                <a class="form-control" style="text-decoration:none;"
+                                   href="{% url 'atendimento_detalhe' pk=ocupacao.atendimento.pk %}">
+                                    <i class="fas fa-hospital-user me-1"></i>Ir para o atendimento
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <div class="card mb-3 mt-3">
+        <div class="card-header">Histórico de operações</div>
+        <ul class="list-group list-group-flush">
+            {% for item in historico %}
+            <li class="list-group-item">
+                <strong>{{ item.get_operacao_display }}</strong> —
+                {{ item.dt_operacao|date:"d/m/Y H:i" }} por {{ item.usuario }}<br>
+                <small class="text-muted">{{ item.descricao }}</small>
+            </li>
+            {% empty %}
+            <li class="list-group-item text-muted">Sem operações registradas.</li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endblock %}

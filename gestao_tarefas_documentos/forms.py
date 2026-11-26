@@ -91,6 +91,10 @@ class DocumentoFiltroForm(forms.Form):
     data_fim = forms.DateField(
         label='Vigência final (até)', required=False,
         widget=forms.DateInput(attrs={'type': 'date'}))
+    status = forms.ChoiceField(
+        label='Status', required=False,
+        choices=(('', 'Todos'), ('A', 'Ativos'), ('I', 'Inativos')),
+    )
 
     def __init__(self, *args, tipos=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -208,6 +212,10 @@ class TarefaFiltroForm(forms.Form):
     q = forms.CharField(
         label='Busca', required=False,
         widget=forms.TextInput(attrs={'placeholder': 'Título, documento...'}))
+    status = forms.ChoiceField(
+        label='Status', required=False,
+        choices=(('', 'Todos'), ('A', 'Ativos'), ('I', 'Inativos')),
+    )
     documento = forms.ModelChoiceField(
         label='Documento', required=False,
         queryset=Documento.objects.none(), empty_label='Todos')

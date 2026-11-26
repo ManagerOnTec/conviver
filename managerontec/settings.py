@@ -169,6 +169,7 @@ INSTALLED_APPS = [
     'admin_tesouraria',
     'gestao_tarefas_documentos',
     'gestao_pessoas',
+    'gestao_leitos',
     'oficios',
     'orcamentos',
     'atas',

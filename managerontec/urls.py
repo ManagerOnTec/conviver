@@ -21,6 +21,7 @@ urlpatterns = [
     path('agenda/', include('agenda_pacientes.urls')),
     path('gtd/', include('gestao_tarefas_documentos.urls')),
     path('gp/', include('gestao_pessoas.urls')),
+    path('leitos/', include('gestao_leitos.urls')),
     path('prontuarios/', include('prontuarios.urls')),
     path('oficios/', include('oficios.urls')),
     path('orcamentos/', include('orcamentos.urls')),

@@ -12,64 +12,88 @@
     </a>
     {% endif %}
 
-    <form class="mt-3 text-white text-left" method="GET" action="{% url 'gp_funcionario_listar' %}">
+    <form class="mt-2 text-white text-left" method="GET" action="{% url 'gp_funcionario_listar' %}">
         <div class="item-left">
             <h5>Filtros</h5>
         </div>
-        <div class="item-left mb-2">
-            <input type="text" name="q" value="{{ filter.q|default:'' }}" class="form-control"
-                placeholder="Nome ou CPF...">
+
+        <div class="item-left">
+            {% for field in filter_form %}
+                {% if field.field.widget.input_type == 'checkbox' %}
+                    <div class="filter-toggle-row">
+                        <label class="filter-toggle-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        <span class="filter-toggle-control">
+                            <input type="checkbox"
+                                   name="{{ field.html_name }}"
+                                   id="{{ field.id_for_label }}"
+                                   class="filter-toggle-input"
+                                   {% if field.value %}checked{% endif %}
+                                   {% if field.field.disabled %}disabled{% endif %}
+                                   aria-label="{{ field.label }}">
+                            <span class="filter-toggle-track" aria-hidden="true"></span>
+                        </span>
+                    </div>
+                    {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors }}</div>{% endif %}
+                    {% if field.help_text %}<small class="form-text text-light">{{ field.help_text }}</small>{% endif %}
+                {% else %}
+                    {{ field|as_crispy_field }}
+                {% endif %}
+            {% endfor %}
         </div>
-        <div class="item-left mb-2">
-            <label class="form-label mb-0 small">Situação</label>
-            <select name="situacao" class="form-select">
-                <option value="">Todas</option>
-                <option value="A" {% if filter.situacao=='A' %}selected{% endif %}>Ativos</option>
-                <option value="F" {% if filter.situacao=='F' %}selected{% endif %}>Afastados</option>
-                <option value="D" {% if filter.situacao=='D' %}selected{% endif %}>Desligados</option>
-            </select>
-        </div>
-        <div class="item-left mb-2">
-            <label class="form-label mb-0 small">Admissão (de/até)</label>
-            <input type="date" name="admissao_inicio" value="{{ filter.admissao_inicio|default:'' }}"
-                class="form-control">
-            <input type="date" name="admissao_fim" value="{{ filter.admissao_fim|default:'' }}" class="form-control">
-        </div>
-        <div class="form-check ms-2 mb-1">
-            <input class="form-check-input" type="checkbox" name="sem_aso_agendado" value="1" {% if
-                filter.sem_aso_agendado %}checked{% endif %}>
-            <label class="form-check-label small">Sem ASO agendado/realizado</label>
-        </div>
-        <div class="form-check ms-2 mb-1">
-            <input class="form-check-input" type="checkbox" name="sem_ficha" value="1" {% if filter.sem_ficha
-                %}checked{% endif %}>
-            <label class="form-check-label small">Ficha de registro pendente</label>
-        </div>
-        <div class="form-check ms-2 mb-1">
-            <input class="form-check-input" type="checkbox" name="sem_periodico" value="1" {% if filter.sem_periodico
-                %}checked{% endif %}>
-            <label class="form-check-label small">Periódico pendente</label>
-        </div>
-        <div class="form-check ms-2 mb-1">
-            <input class="form-check-input" type="checkbox" name="cursos_vencidos" value="1" {% if
-                filter.cursos_vencidos %}checked{% endif %}>
-            <label class="form-check-label small">Cursos vencidos</label>
-        </div>
-        <div class="form-check ms-2 mb-1">
-            <input class="form-check-input" type="checkbox" name="ferias_pendentes" value="1" {% if
-                filter.ferias_pendentes %}checked{% endif %}>
-            <label class="form-check-label small">Férias pendentes/programadas</label>
-        </div>
-        <div class="row mt-2">
-            <div class="col-md-12">
-                <button class="col-md-12 btn btn-primary btn-outline-light" type="submit">
-                    <i class="fas fa-check"></i> Filtrar
-                </button>
-            </div>
-            <div class="col-md-12 mt-2">
-                <button class="col-md-12 btn btn-outline-danger" name="limpar" value="1" type="submit">
-                    <i class="fas fa-times-circle"></i> Limpar
-                </button>
+
+        <style>
+        /* Rótulos longos (ASO, Férias...) quebram em vez de empurrar o
+           toggle para fora da tela; o switch alinha no topo da linha. */
+        #left-menu .filter-toggle-row {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 0.5rem;
+            width: 100%;
+        }
+        #left-menu .filter-toggle-label {
+            flex: 1 1 auto;
+            min-width: 0;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            text-align: left;
+            line-height: 1.15;
+            margin: 0;
+        }
+        #left-menu .filter-toggle-control {
+            flex: 0 0 auto;
+        }
+        /* Botões Filtrar/Limpar sempre empilhados e dentro da largura. */
+        #left-menu form .row .col-md-12 {
+            width: 100%;
+            max-width: 100%;
+            flex: 0 0 100%;
+        }
+        #left-menu form button {
+            width: 100%;
+            white-space: normal;
+        }
+        </style>
+
+        <div class="mt-2" style="display: flex; flex-direction: row;">
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="justify-content-center mt-2">
+                        <button class="col-md-12 btn btn-primary  btn-outline-light justify-content-center"
+                            title="Filtrar" type="submit">
+                            <i class="fas fa-check" style="transition: color 0.3s;"></i>
+                            Filtrar
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-12">
+                    <div class="justify-content-center mt-2">
+                        <button class="col-md-12 btn btn-outline-danger justify-content-center"
+                                name="limpar" value="1" title="Limpar filtros" type="submit">
+                            <i class="fas fa-times-circle"></i> Limpar
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </form>
@@ -77,9 +101,7 @@
 {% endblock %}
 
 {% block cabdados %}
-{% include 'parciais/_list_header.html' with icon_class='fas fa-users' title='Gestão de Pessoas' subtitle='Funcionários,
-documentação, ASO, cursos e férias em uma única listagem.' context_label='Estabelecimento' context_value=estabelecimento
-%}
+{% include 'parciais/_list_header.html' with icon_class='fas fa-users' title='Gestão de Pessoas' subtitle='Funcionários, documentação, ASO, cursos e férias em uma única listagem.' context_label='Estabelecimento' context_value=estabelecimento %}
 {% endblock %}
 
 {% block lista %}
@@ -152,7 +174,7 @@ documentação, ASO, cursos e férias em uma única listagem.' context_label='Es
                     <button type="button" class="btn btn-outline-primary btn-sm ms-1" title="Ver documentos"
                         data-bs-toggle="modal" data-bs-target="#modal-ver-documentos"
                         data-funcionario="{{ funcionario.nome }}"
-                        data-json="{{ funcionario.documentos_lista|map_doc }}">
+                        data-json="{{ funcionario.documentos_html }}">
                         <i class="fas fa-eye"></i>
                     </button>
                     {% endif %}
@@ -176,7 +198,7 @@ documentação, ASO, cursos e férias em uma única listagem.' context_label='Es
                         {% if funcionario.aso_lista %}
                         <button type="button" class="btn btn-outline-info btn-sm" title="Histórico de ASOs"
                             data-bs-toggle="modal" data-bs-target="#modal-aso-historico"
-                            data-funcionario="{{ funcionario.nome }}" data-json="{{ funcionario.aso_lista|map_aso }}">
+                            data-funcionario="{{ funcionario.nome }}" data-json="{{ funcionario.aso_html }}">
                             <i class="fas fa-history"></i>
                         </button>
                         {% endif %}
@@ -244,7 +266,7 @@ documentação, ASO, cursos e férias em uma única listagem.' context_label='Es
                         <button type="button" class="btn btn-outline-info btn-sm" title="Histórico de exames"
                             data-bs-toggle="modal" data-bs-target="#modal-periodico-historico"
                             data-funcionario="{{ funcionario.nome }}"
-                            data-json="{{ funcionario.periodico_lista|map_periodico }}">
+                            data-json="{{ funcionario.periodico_html }}">
                             <i class="fas fa-history"></i>
                         </button>
                         {% endif %}
@@ -283,8 +305,7 @@ documentação, ASO, cursos e férias em uma única listagem.' context_label='Es
                         {% endif %}
                         {% if ferias.concessivo_vencendo %}<span class="badge bg-warning text-dark ms-1">concessivo
                             vencendo</span>{% endif %}
-                        {% if ferias.concessivo_vencido %}<span class="badge bg-danger ms-1">concessivo vencido</span>{%
-                        endif %}
+                        {% if ferias.concessivo_vencido %}<span class="badge bg-danger ms-1">concessivo vencido</span>{% endif %}
                     </div>
                     {% else %}
                     <span class="badge bg-warning text-dark">Sem registro</span>
@@ -326,7 +347,7 @@ documentação, ASO, cursos e férias em uma única listagem.' context_label='Es
                         <button type="button" class="btn btn-outline-info btn-sm" title="Histórico de férias"
                             data-bs-toggle="modal" data-bs-target="#modal-ferias-historico"
                             data-funcionario="{{ funcionario.nome }}"
-                            data-json="{{ funcionario.ferias_lista|map_ferias }}">
+                            data-json="{{ funcionario.ferias_html }}">
                             <i class="fas fa-history"></i>
                         </button>
                         {% endif %}
@@ -728,6 +749,11 @@ documentação, ASO, cursos e férias em uma única listagem.' context_label='Es
 </div>
 
 <script>
+    // PADRÃO DA AGENDA: modais para o <body> (não ficar atrás do backdrop —
+    // #table-container tem z-index 80 e os modais dentro dele ficam presos).
+    document.querySelectorAll('.modal.fade').forEach(function (modal) {
+        document.body.appendChild(modal);
+    });
     // Ação do modal de cursos: realizado (POST no form) ou pendente (troca action)
     document.addEventListener('show.bs.modal', function (event) {
         const botao = event.relatedTarget;
@@ -770,4 +796,51 @@ documentação, ASO, cursos e férias em uma única listagem.' context_label='Es
     });
 </script>
 {% endif %}
+{% endblock %}
+
+{% block paginate %}
+<!--PAGINACAO-->
+{% if is_paginated %}
+<div id="pages" class="listing-pagination-panel">
+    <div class="listing-pagination-meta">
+        <span>Exibindo {{ page_obj.start_index }}-{{ page_obj.end_index }}</span>
+        <strong>de {{ page_obj.paginator.count }} registros</strong>
+    </div>
+    <ul class="pagination listing-pagination btn-sm mb-0">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+            <a href="?{% if querystring %}{{ querystring }}&{% endif %}page=1"
+               class="page-link"><i class="fas fa-step-backward"></i></a>
+        </li>
+        <li class="page-item">
+            <a href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.previous_page_number }}"
+               class="page-link"><i class="fas fa-arrow-left"></i></a>
+        </li>
+        {% endif %}
+
+        {% for i in page_obj.paginator.page_range %}
+        {% if page_obj.number == i %}
+        <li class="page-item active"><span class="page-link">{{ i }}</span></li>
+        {% elif i > page_obj.number|add:"-3" and i < page_obj.number|add:"3" %}
+        <li class="page-item">
+            <a href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ i }}"
+               class="page-link">{{ i }}</a>
+        </li>
+        {% endif %}
+        {% endfor %}
+
+        {% if page_obj.has_next %}
+        <li class="page-item">
+            <a href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.next_page_number }}"
+               class="page-link"><i class="fas fa-arrow-right"></i></a>
+        </li>
+        <li class="page-item">
+            <a href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.paginator.num_pages }}"
+               class="page-link"><i class="fas fa-step-forward"></i></a>
+        </li>
+        {% endif %}
+    </ul>
+</div>
+{% endif %}
+<!--FIM PAGINACAO-->
 {% endblock %}

@@ -197,3 +197,37 @@ class FeriasForm(forms.ModelForm):
                 f'Os dias gozados ({gozados}) não podem ultrapassar os dias '
                 f'de direito ({direito}).')
         return dados
+
+
+class FuncionarioFiltroForm(forms.Form):
+    """Filtros do menu lateral da listagem de funcionários.
+
+    Mesmo padrão do `AgendaPacienteFiltroForm` (crispy no menul, compacto).
+    """
+
+    q = forms.CharField(
+        label='Busca', required=False,
+        widget=forms.TextInput(attrs={
+            'placeholder': 'Nome ou CPF...'}),
+    )
+    situacao = forms.ChoiceField(
+        label='Situação', required=False,
+        choices=(('', 'Todas'), ('A', 'Ativos'), ('F', 'Afastados'),
+                 ('D', 'Desligados')),
+    )
+    admissao_inicio = forms.DateField(
+        label='Admissão (de)', required=False,
+        widget=forms.DateInput(attrs={'type': 'date'}))
+    admissao_fim = forms.DateField(
+        label='Admissão (até)', required=False,
+        widget=forms.DateInput(attrs={'type': 'date'}))
+    sem_aso_agendado = forms.BooleanField(
+        label='Sem ASO agendado/realizado', required=False)
+    sem_ficha = forms.BooleanField(
+        label='Ficha de registro pendente', required=False)
+    sem_periodico = forms.BooleanField(
+        label='Periódico pendente', required=False)
+    cursos_vencidos = forms.BooleanField(
+        label='Cursos vencidos', required=False)
+    ferias_pendentes = forms.BooleanField(
+        label='Férias pendentes/programadas', required=False)

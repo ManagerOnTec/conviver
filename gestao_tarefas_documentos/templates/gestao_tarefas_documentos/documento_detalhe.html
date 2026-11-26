@@ -1,76 +1,96 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load crispy_forms_tags %}
-{% block titulos %}{{title}}|{% endblock %}
+{% block titulos %}{{ title }}|{% endblock %}
 
 {% block menul %}
-<div class="form-group text-left m-3 mt-2">
-    <a href="{% url 'gtd_documento_listar' %}" class="mt-2 list-group-item list-group-item-action custom-link rounded">
+<div class="form-group text-left mt-2 m-3">
+    <a href="{% url 'gtd_documento_listar' %}"
+       class="mt-2 list-group-item list-group-item-action voltar-link rounded">
         <i class="fas fa-arrow-left me-2"></i>Voltar
     </a>
-    {% if pode_editar %}
-    <a href="{% url 'gtd_documento_editar' pk=documento.pk %}"
-        class="mt-2 list-group-item list-group-item-action custom-link rounded">
-        <i class="fas fa-edit me-2"></i>Editar
+    <a href="{% url 'gtd_documento_listar' %}"
+       class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-list me-2"></i>Lista de Documentos
     </a>
-    {% endif %}
 </div>
 {% endblock %}
 
 {% block cabdados %}
-{% include 'parciais/_list_header.html' with icon_class='fas fa-folder-open' title='Gestão de Tarefas e Documentos'
-subtitle='Detalhe do documento' context_label='Estabelecimento' context_value=estabelecimento %}
+{% include 'parciais/_patient_context_header.html' with module_icon='fas fa-folder-open' module_title='Documento' module_subtitle='Detalhes do documento em modo de leitura.' primary_label='Documento' primary_value=documento.pk secondary_label='Tela' secondary_value='Detalhe' %}
 {% endblock %}
 
 {% block lista %}
-<div class="container-fluid px-3 py-3">
-    <div class="card mb-3">
-        <div class="card-body">
-            <h5><i class="fas fa-file me-2" style="color:{{ documento.situacao_cor }}"></i>
-                {{ documento.tipo.descricao }}{% if documento.descricao_documento %} — {{ documento.descricao_documento
-                }}{% endif %}</h5>
-            <div class="row mt-3">
-                <div class="col-md-3"><strong>Vigência inicial:</strong>
-                    {{ documento.vigencia_inicial|date:"d/m/Y"|default:"—" }}</div>
-                <div class="col-md-3"><strong>Vigência final:</strong>
-                    {{ documento.vigencia_final|date:"d/m/Y"|default:"—" }}</div>
-                <div class="col-md-3"><strong>Início da renovação:</strong>
-                    {{ documento.inicio_renovacao|date:"d/m/Y"|default:"—" }}</div>
-                <div class="col-md-3">
-                    <strong>Situação:</strong>
-                    <span class="badge" style="background:{{ documento.situacao_cor }};">
-                        {{ documento.situacao_rotulo }}</span>
-                    <strong class="ms-2">Validado:</strong>
-                    {% if documento.validado %}
-                    <span class="badge bg-success">Sim</span>
-                    <small class="text-muted d-block">
-                        {{ documento.dt_validacao|date:"d/m/Y H:i" }} por {{ documento.us_validacao }}</small>
-                    {% else %}<span class="badge bg-secondary">Não</span>{% endif %}
+<div class="container">
+    <form id="documento-detalhe" class="form-control mt-2">
+        {% csrf_token %}
+        {{ form.media }}
+        <div class="row">
+            <div class="col-lg-12 col-md-12 col-sm-12">
+                <div id="table-container">
+                    <div class="container">
+                        <div class="row">
+                            <div class="col-md-6">{{ form.tipo|as_crispy_field }}</div>
+                            <div class="col-md-6">{{ form.descricao_documento|as_crispy_field }}</div>
+                            <div class="col-md-6">{{ form.vigencia_inicial|as_crispy_field }}</div>
+                            <div class="col-md-6">{{ form.vigencia_final|as_crispy_field }}</div>
+                            <div class="col-md-6">{{ form.inicio_renovacao|as_crispy_field }}</div>
+                            <div class="col-md-6">{{ form.status|as_crispy_field }}</div>
+                            <div class="col-md-12">{{ form.anotacoes|as_crispy_field }}</div>
+
+                            <!-- Anexo (link de navegação entre telas) -->
+                            <div class="col-md-6">
+                                <label class="form-label">Anexo</label>
+                                {% if documento.anexo %}
+                                <a href="{{ documento.anexo.url }}" target="_blank" class="form-control" style="text-decoration:none;">
+                                    <i class="fas fa-paperclip me-1"></i>{{ documento.anexo.name }}
+                                </a>
+                                {% else %}
+                                <input class="form-control" value="Sem anexo" disabled>
+                                {% endif %}
+                            </div>
+
+                            <!-- Situação calculada + validação -->
+                            <div class="col-md-6">
+                                <label class="form-label">Situação</label>
+                                <input class="form-control" value="{{ documento.situacao_rotulo }}" disabled
+                                       style="border-left: 4px solid {{ documento.situacao_cor }};">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Validado</label>
+                                <input class="form-control"
+                                       value="{% if documento.validado %}Sim — {{ documento.dt_validacao|date:'d/m/Y H:i' }} por {{ documento.us_validacao }}{% else %}Não{% endif %}"
+                                       disabled>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Estabelecimento</label>
+                                <input class="form-control" value="{{ documento.estabelecimento }}" disabled>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Dt. Registro</label>
+                                <input class="form-control" value="{{ documento.dt_registro|date:'d/m/Y H:i'|default:'-' }}" disabled>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Us. Registro</label>
+                                <input class="form-control" value="{{ documento.us_registro|default:'-' }}" disabled>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Dt. Atualização</label>
+                                <input class="form-control" value="{{ documento.dt_atualizacao|date:'d/m/Y H:i'|default:'-' }}" disabled>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Us. Atualização</label>
+                                <input class="form-control" value="{{ documento.us_atualizacao|default:'-' }}" disabled>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-            {% if documento.anexo %}
-            <div class="mt-2">
-                <a href="{{ documento.anexo.url }}" target="_blank" class="btn btn-outline-primary btn-sm">
-                    <i class="fas fa-paperclip me-1"></i>Abrir anexo</a>
-            </div>
-            {% endif %}
         </div>
-    </div>
+    </form>
 
-    <div class="card mb-3">
-        <div class="card-header">Anotações</div>
-        <div class="card-body" style="white-space: pre-wrap;">{{ documento.anotacoes|default:"Sem anotações." }}</div>
-        {% if pode_editar %}
-        <div class="card-footer">
-            <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal"
-                data-bs-target="#modal-anotar" data-url="{% url 'gtd_documento_anotar' pk=documento.pk %}">
-                <i class="fas fa-comment-alt me-1"></i>Adicionar anotação
-            </button>
-        </div>
-        {% endif %}
-    </div>
-
-    <div class="card mb-3">
+    <!-- Tarefas vinculadas -->
+    <div class="card mb-3 mt-3">
         <div class="card-header">Tarefas vinculadas ({{ tarefas|length }})</div>
         <ul class="list-group list-group-flush">
             {% for tarefa in tarefas %}
@@ -86,7 +106,8 @@ subtitle='Detalhe do documento' context_label='Estabelecimento' context_value=es
         </ul>
     </div>
 
-    <div class="card">
+    <!-- Histórico -->
+    <div class="card mb-3">
         <div class="card-header">Histórico de operações</div>
         <ul class="list-group list-group-flush">
             {% for item in historico %}
@@ -101,27 +122,4 @@ subtitle='Detalhe do documento' context_label='Estabelecimento' context_value=es
         </ul>
     </div>
 </div>
-
-{% if pode_editar %}
-<div class="modal fade" id="modal-anotar" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <form method="post" action="{% url 'gtd_documento_anotar' pk=documento.pk %}">
-                {% csrf_token %}
-                <div class="modal-header">
-                    <h5 class="modal-title">Adicionar anotação</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
-                </div>
-                <div class="modal-body">
-                    <textarea name="texto" class="form-control" rows="4" required></textarea>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Salvar</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-{% endif %}
 {% endblock %}

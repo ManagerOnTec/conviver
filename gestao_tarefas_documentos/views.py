@@ -96,7 +96,7 @@ def _querystring_filtros(filtros):
 # DOCUMENTOS
 # ---------------------------------------------------------------------------
 def _dados_filtros_documento(request):
-    campos = ('tipo', 'situacao', 'data_inicio', 'data_fim', 'q')
+    campos = ('tipo', 'situacao', 'data_inicio', 'data_fim', 'q', 'status')
     dados = request.GET
     if 'limpar' in dados:
         request.session.pop('gtd_documento_filters', None)
@@ -110,6 +110,11 @@ def _dados_filtros_documento(request):
 
 def _aplicar_filtros_documento(queryset, dados):
     filtros = {}
+
+    status = dados.get('status')
+    if status in ('A', 'I'):
+        queryset = queryset.filter(status=status)
+        filtros['status'] = status
 
     tipo = dados.get('tipo')
     if tipo:
@@ -177,11 +182,11 @@ def _aplicar_filtros_documento(queryset, dados):
 
 
 def _kpis_documentos(request, queryset):
-    """Indicadores clicáveis da barra superior (mensagens com link filtrado)."""
+    """Indicadores clicáveis de DOCUMENTOS da barra superior."""
     hoje = timezone.localdate()
     vivos = queryset.filter(status='A')
     kpis = [
-        ('Total de documentos', queryset.count(), '', ''),
+        ('Total de documentos', queryset.count(), '', 'kpi-blue'),
         ('Vigentes', vivos.filter(
             vigencia_final__gte=hoje).filter(
             Q(inicio_renovacao__isnull=True)
@@ -199,25 +204,31 @@ def _kpis_documentos(request, queryset):
             | Q(vigencia_final__gte=hoje)).count(),
             'aguardando_renovacao', 'kpi-blue'),
     ]
-    # Tarefas (mesmo estabelecimento da sessão)
-    estabelecimento = _estabelecimento(request)
-    pendentes = Tarefa.objects.filter(
-        estabelecimento=estabelecimento, status='P').count()
-    atrasadas = Tarefa.objects.filter(
-        estabelecimento=estabelecimento, status__in=('P', 'A'),
-        data_prazo__lt=timezone.localdate()).count()
-    concluidas = Tarefa.objects.filter(
-        estabelecimento=estabelecimento, status='C').count()
     return [
         {'title': titulo, 'value': str(valor),
-         'subtitle': url_situacao, 'color_class': cor, 'icon': '📑',
+         'subtitle': '', 'color_class': cor, 'icon': '📑',
          'url': (f"{reverse('gtd_documento_listar')}?situacao={url_situacao}"
                  if url_situacao else '')}
         for titulo, valor, url_situacao, cor in kpis
-    ] + [
+    ]
+
+
+def _kpis_tarefas(request, queryset=None):
+    """Indicadores clicáveis de TAREFAS (listagem de tarefas)."""
+    estabelecimento = _estabelecimento(request)
+    base = Tarefa.objects.filter(estabelecimento=estabelecimento)
+    pendentes = base.filter(status='P').count()
+    em_andamento = base.filter(status='A').count()
+    atrasadas = base.filter(status__in=('P', 'A'),
+                            data_prazo__lt=timezone.localdate()).count()
+    concluidas = base.filter(status='C').count()
+    return [
         {'title': 'Tarefas pendentes', 'value': str(pendentes),
-         'subtitle': '', 'color_class': 'kpi-blue', 'icon': '⏳',
+         'subtitle': '', 'color_class': 'kpi-orange', 'icon': '⏳',
          'url': f"{reverse('gtd_tarefa_listar')}?situacao=P"},
+        {'title': 'Tarefas em andamento', 'value': str(em_andamento),
+         'subtitle': '', 'color_class': 'kpi-blue', 'icon': '▶',
+         'url': f"{reverse('gtd_tarefa_listar')}?situacao=A"},
         {'title': 'Tarefas atrasadas', 'value': str(atrasadas),
          'subtitle': '', 'color_class': 'kpi-red', 'icon': '🔥',
          'url': f"{reverse('gtd_tarefa_listar')}?situacao=atrasadas"},
@@ -240,7 +251,10 @@ class DocumentoListView(
 
     def get_queryset(self):
         queryset = super().get_queryset().select_related('tipo')
-        queryset = queryset.filter(status='A')
+        # Padrão do sistema: sem filtro escolhido, abre com status='A'
+        # (Ativos); escolher “Inativos” na lista mostra os inativos.
+        queryset = queryset.filter(
+            status=self.request.GET.get('status') or 'A')
         dados = _dados_filtros_documento(self.request)
         queryset, self.filtros_sessao = _aplicar_filtros_documento(
             queryset, dados)
@@ -250,7 +264,7 @@ class DocumentoListView(
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context.update(_contexto_base(
-            self.request, 'Gestão de Tarefas e Documentos', 'Documentos'))
+            self.request, 'Tarefas e Documentos', 'Documentos'))
         tipos = Tipo.objects.filter(status='A').order_by('descricao')
         context['filter_form'] = DocumentoFiltroForm(
             initial=self.filtros_sessao, tipos=tipos)
@@ -260,11 +274,6 @@ class DocumentoListView(
         context['is_paginated'] = True
         context['today'] = timezone.localdate()
         context['kpis'] = _kpis_documentos(self.request, self.object_list)
-        # Listagens auxiliares do menu (tarefas)
-        context['tarefas_pendentes'] = Tarefa.objects.filter(
-            estabelecimento_id=getattr(self, 'estabelecimento_id', None)
-            or _estabelecimento(self.request),
-            status='P').count()
         return context
 
 
@@ -317,7 +326,7 @@ class DocumentoCreateView(
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context.update(_contexto_base(
-            self.request, 'Gestão de Tarefas e Documentos',
+            self.request, 'Tarefas e Documentos',
             'Novo Documento'))
         context['pode_editar'] = True
         context.setdefault('is_paginated', False)
@@ -372,7 +381,7 @@ class DocumentoUpdateView(
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context.update(_contexto_base(
-            self.request, 'Gestão de Tarefas e Documentos',
+            self.request, 'Tarefas e Documentos',
             'Editar Documento'))
         context['objeto'] = self.object
         context['pode_editar'] = True
@@ -395,13 +404,17 @@ class DocumentoDetailView(
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context.update(_contexto_base(
-            self.request, 'Gestão de Tarefas e Documentos',
+            self.request, 'Tarefas e Documentos',
             'Detalhe do Documento'))
         context['objeto'] = self.object
         context['historico'] = self.object.historico.select_related(
             'usuario')
         context['tarefas'] = self.object.tarefas.all()
-        context['anotacao_form'] = AnotacaoForm()
+        # Form em modo LEITURA (padrão do detalhe da Agenda): todos os
+        # campos desabilitados e exibidos como crispy fields.
+        context['form'] = DocumentoForm(instance=self.object)
+        for field in context['form'].fields.values():
+            field.widget.attrs['disabled'] = True
         return context
 
 
@@ -643,8 +656,8 @@ class TarefaListView(
     def get_queryset(self):
         queryset = super().get_queryset().select_related(
             'documento', 'documento__tipo', 'usuario_responsavel')
-        queryset = queryset.filter(estabelecimento=_estabelecimento(
-            self.request))
+        queryset = queryset.filter(
+            estabelecimento=_estabelecimento(self.request))
         dados = _dados_filtros_tarefa(self.request)
         queryset, self.filtros_sessao = _aplicar_filtros_tarefa(
             queryset, dados)
@@ -654,7 +667,7 @@ class TarefaListView(
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context.update(_contexto_base(
-            self.request, 'Gestão de Tarefas e Documentos', 'Tarefas'))
+            self.request, 'Tarefas e Documentos', 'Tarefas'))
         documentos = Documento.objects.filter(
             estabelecimento=_estabelecimento(self.request), status='A')
         context['filter_form'] = TarefaFiltroForm(
@@ -664,6 +677,7 @@ class TarefaListView(
         context['querystring'] = _querystring_filtros(self.filtros_sessao)
         context['is_paginated'] = True
         context['today'] = timezone.localdate()
+        context['kpis'] = _kpis_tarefas(self.request)
         return context
 
 
@@ -711,7 +725,7 @@ class TarefaCreateView(
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context.update(_contexto_base(
-            self.request, 'Gestão de Tarefas e Documentos', 'Nova Tarefa'))
+            self.request, 'Tarefas e Documentos', 'Nova Tarefa'))
         context['pode_editar'] = True
         context.setdefault('is_paginated', False)
         return context
@@ -758,7 +772,7 @@ class TarefaUpdateView(
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context.update(_contexto_base(
-            self.request, 'Gestão de Tarefas e Documentos',
+            self.request, 'Tarefas e Documentos',
             'Editar Tarefa'))
         context['objeto'] = self.object
         context['pode_editar'] = True

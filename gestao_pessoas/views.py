@@ -259,6 +259,10 @@ class FuncionarioListView(
             self.request, 'Gestão de Pessoas', 'Funcionários'))
         context['gp_filters'] = self.filtros_sessao
         context['filter'] = self.filtros_sessao
+        # Filtros do menu lateral (padrão da Agenda: form crispy único).
+        from .forms import FuncionarioFiltroForm
+        context['filter_form'] = FuncionarioFiltroForm(
+            initial=self.filtros_sessao)
         context['querystring'] = _querystring_filtros(self.filtros_sessao)
         context['is_paginated'] = True
         context['today'] = timezone.localdate()
@@ -298,11 +302,20 @@ class FuncionarioCreateView(
         form = super().get_form(form_class)
         form.fields['pessoa'].queryset = Pessoa.objects.filter(
             status='A', classificacao_pessoa='funcionario').order_by('nome')
-        form.fields['estabelecimento'].queryset = Estabelecimento.objects.filter(
-            status='A')
+        # O ESTABELECIMENTO sai do formulário: é o da SESSÃO (padrão do
+        # projeto — usuário nunca escolhe).
+        form.fields.pop('estabelecimento', None)
         return form
 
     def form_valid(self, form):
+        # PADRÃO DO PROJETO: todo objeto novo grava usuário logado e o
+        # ESTABELECIMENTO DA SESSÃO (nunca escolhido pelo usuário).
+        form.instance.estabelecimento = _estabelecimento(self.request)
+        if not form.instance.estabelecimento:
+            form.add_error(
+                None, 'Selecione o estabelecimento na barra superior antes '
+                      'de cadastrar o funcionário.')
+            return self.form_invalid(form)
         form.instance.usuario_cadastro = self.request.user
         try:
             with transaction.atomic():
@@ -348,6 +361,8 @@ class FuncionarioUpdateView(
         form = super().get_form(form_class)
         form.fields['pessoa'].queryset = Pessoa.objects.filter(
             status='A').order_by('nome')
+        # Estabelecimento não é editável (padrão do projeto: vem da sessão).
+        form.fields.pop('estabelecimento', None)
         return form
 
     def form_valid(self, form):
@@ -406,6 +421,14 @@ class FuncionarioDetailView(
             self.request, 'Gestão de Pessoas', 'Detalhe do Funcionário'))
         context['objeto'] = self.object
         context['historico'] = self.object.historico.select_related('usuario')
+        # Form em modo LEITURA (padrão do detalhe da Agenda).
+        from django.forms.models import modelform_factory
+        context['form'] = modelform_factory(
+            Funcionario, fields=['pessoa', 'data_admissao',
+                                 'status_funcionario', 'anotacoes'])(
+                instance=self.object)
+        for field in context['form'].fields.values():
+            field.widget.attrs['disabled'] = True
         return context
 
 

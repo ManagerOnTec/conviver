@@ -15,18 +15,25 @@
 {% endblock %}
 
 {% block cabdados %}
-{% include 'parciais/_list_header.html' with icon_class='fas fa-users' title='Gestão de Pessoas' subtitle=title
-context_label='Estabelecimento' context_value=estabelecimento %}
+{% include 'parciais/_list_header.html' with icon_class='fas fa-users' title='Gestão de Pessoas' subtitle=title context_label='Estabelecimento' context_value=estabelecimento %}
 {% endblock %}
 
 {% block lista %}
-<div class="container-fluid px-3 py-3">
+<div class="container">
     <form method="post" novalidate>
         {% csrf_token %}
-        {{ form|crispy }}
-        <button type="submit" class="btn btn-primary mt-3">
-            <i class="fas fa-check me-1"></i>Salvar
-        </button>
+        <div class="row">
+            <div class="col-lg-9 col-md-9 col-sm-12">
+                <div class="container">
+                    <div class="row">
+                        <div class="col-md-12">{{ form|crispy }}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-3 col-sm-12">
+                {% include 'parciais/_workflow_submit_sidebar.html' with button_id='btn-funcionario-salvar' submit_label='Salvar' status_title='Salvando...' status_spinner_class='text-success' status_text_class='text-success' %}
+            </div>
+        </div>
     </form>
 </div>
 {% endblock %}

@@ -12,6 +12,10 @@
     </a>
     {% endif %}
 
+    <!-- Função atual (destaque azul, sem link) × outra função (clique) -->
+    <a href="" class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded">
+        <i class="fas fa-folder-open me-2"></i>Documentos
+    </a>
     <a href="{% url 'gtd_tarefa_listar' %}" title="Tarefas e providências"
         class="mt-2 list-group-item list-group-item-action custom-link rounded">
         <i class="fas fa-list-check me-2"></i>Tarefas
@@ -46,9 +50,7 @@
 {% endblock %}
 
 {% block cabdados %}
-{% include 'parciais/_list_header.html' with icon_class='fas fa-folder-open' title='Gestão de Tarefas e Documentos'
-subtitle='Documentos institucionais, vigências, renovações e providências.' context_label='Estabelecimento'
-context_value=estabelecimento %}
+{% include 'parciais/_list_header.html' with icon_class='fas fa-folder-open' title='Gestão de Tarefas e Documentos' subtitle='Documentos institucionais, vigências, renovações e providências.' context_label='Estabelecimento' context_value=estabelecimento %}
 {% endblock %}
 
 {% block lista %}
@@ -297,7 +299,13 @@ context_value=estabelecimento %}
     </div>
 </div>
 
-<script>
+    <script>
+    // PADRÃO DA AGENDA: os modais vão para o <body> — dentro de
+    // #table-container (z-index 80) eles ficariam ATRÁS do backdrop do
+    // Bootstrap (escurecidos e sem clique).
+    document.querySelectorAll('.modal.fade').forEach(function (modal) {
+        document.body.appendChild(modal);
+    });
     // Preenche o action e os campos do modal escolhido na linha
     document.addEventListener('show.bs.modal', function (event) {
         const botao = event.relatedTarget;
@@ -317,4 +325,52 @@ context_value=estabelecimento %}
     });
 </script>
 {% endif %}
+{% endblock %}
+
+{% block paginate %}
+<!--PAGINACAO-->
+{% if is_paginated %}
+<div id="pages" class="listing-pagination-panel">
+    <div class="listing-pagination-meta">
+        <span>Exibindo {{ page_obj.start_index }}-{{ page_obj.end_index }}</span>
+        <strong>de {{ page_obj.paginator.count }} registros</strong>
+    </div>
+    <ul class="pagination listing-pagination btn-sm mb-0">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+            <a href="?{% if querystring %}{{ querystring }}&{% endif %}page=1"
+               class="page-link"><i class="fas fa-step-backward"></i></a>
+        </li>
+        <li class="page-item">
+            <a href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.previous_page_number }}"
+               class="page-link"><i class="fas fa-arrow-left"></i></a>
+        </li>
+        {% endif %}
+
+        {% for i in page_obj.paginator.page_range %}
+        {% if page_obj.number == i %}
+        <li class="page-item active"><span class="page-link">{{ i }}</span></li>
+        {% elif i > page_obj.number|add:"-3" and i < page_obj.number|add:"3" %}
+        <li class="page-item">
+            <a href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ i }}"
+               class="page-link">{{ i }}</a>
+        </li>
+        {% endif %}
+
+        {% endfor %}
+
+        {% if page_obj.has_next %}
+        <li class="page-item">
+            <a href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.next_page_number }}"
+               class="page-link"><i class="fas fa-arrow-right"></i></a>
+        </li>
+        <li class="page-item">
+            <a href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.paginator.num_pages }}"
+               class="page-link"><i class="fas fa-step-forward"></i></a>
+        </li>
+        {% endif %}
+    </ul>
+</div>
+{% endif %}
+<!--FIM PAGINACAO-->
 {% endblock %}

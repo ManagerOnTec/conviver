@@ -156,3 +156,75 @@ demais (ver “Padrão obrigatório dos admins” abaixo).
 ## Como testar
 - ...
 ```
+
+## Padrão de PAGINAÇÃO e FILTROS do menul (listagens próprias — vale para
+## todos os apps de tela própria, ex.: agenda_pacientes,
+## gestao_tarefas_documentos, gestao_pessoas)
+
+- **Paginação**: SEMPRE pelo `{% block paginate %}` do `base.html` com o
+  painel `listing-pagination-panel` (copie o bloco de
+  `agenda_pacientes/agenda_listar.html` — setas ◀ ▶, páginas −3/+3, meta
+  "Exibindo X-Y de N registros", querystring preservada em todos os links).
+  A listagem deve declarar `{% endblock %}` em `block lista` e fechar
+  `block paginate` — nunca inventar outra paginação nem deixar sem.
+- **Filtros do menul**: SEMPRE um **form crispy único** (`filter_form|crispy`)
+  dentro do `<form method="GET">` do menul, com **Filtrar**/**Limpar** nos
+  botões padrão do menu (`row mt-2` + `col-md-12` + `justify-content-center`,
+  como na agenda). **NUNCA** montar filtros à mão com labels
+  `form-label mb-0 small`, checkboxes `form-check ms-2 mb-1` soltos ou
+  `mb-2` extras: ficam maiores que o padrão do sistema. Cada app cria o seu
+  `*FiltroForm` (ex.: `FuncionarioFiltroForm`), inicializado com os filtros
+  da sessão (`initial=filtros_sessao`).
+- **Campos booleanos nos filtros do menul (checkbox/toggle)**: NUNCA usar
+  `{{ filter_form|crispy }}` cru quando o form tem BooleanField — renderizar
+  como o Atendimento (`atendimentos/atendimento_listar.html`), com o
+  **toggle visual** (`filter-toggle-row` / `filter-toggle-label` /
+  `filter-toggle-input` / `filter-toggle-track`, CSS global do base.html):
+
+  ```django
+  {% for field in filter_form %}
+      {% if field.field.widget.input_type == 'checkbox' %}
+          <div class="filter-toggle-row">
+              <label class="filter-toggle-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+              <span class="filter-toggle-control">
+                  <input type="checkbox" name="{{ field.html_name }}"
+                         id="{{ field.id_for_label }}" class="filter-toggle-input"
+                         {% if field.value %}checked{% endif %}
+                         {% if field.field.disabled %}disabled{% endif %}
+                         aria-label="{{ field.label }}">
+                  <span class="filter-toggle-track" aria-hidden="true"></span>
+              </span>
+          </div>
+      {% else %}
+          {{ field|as_crispy_field }}
+      {% endif %}
+  {% endfor %}
+  ```
+
+  Campos não-booleanos continuam `as_crispy_field`. `<form class="mt-2 ...">`
+  (e não `mt-3`), igual ao atendimento.
+- **Modais em listagens**: os `.modal.fade` devem ser movidos para o
+  `<body>` no `DOMContentLoaded` (`document.body.appendChild(modal)`) —
+  `#table-container` tem `z-index: 80` e modais dentro dele ficam ATRÁS do
+  backdrop do Bootstrap (tela escurecida, nada clicável). Padrão da agenda.
+
+## PADRÃO DE CRIAÇÃO — usuário logado + estabelecimento da sessão
+## (todo CreateView de tela própria: agenda, gestão de tarefas/documentos,
+## gestão de pessoas e próximos módulos)
+
+- Todo objeto novo deve gravar, no `form_valid` da view:
+  1. **usuário logado** no campo de auditoria de criação
+     (`us_registro`/`usuario_cadastro` = `self.request.user`);
+  2. **estabelecimento da SESSÃO**
+     (`_estabelecimento(request)` lendo
+     `request.session['estabelecimento_id']`) no campo `estabelecimento`
+     — **nunca** oferecido como campo editável do formulário
+     (`form.fields.pop('estabelecimento', None)` ou campo fora do form).
+- Sem estabelecimento na sessão → recusar com mensagem amigável no form:
+  *"Selecione o estabelecimento na barra superior antes de cadastrar…"*
+  (nunca 500 e nunca criar órfão).
+- Nas EDIÇÕES, gravar `us_atualizacao`/`usuario_atualizacao` +
+  `dt_atualizacao` e **manter** o estabelecimento original (não regravar
+  pelo form).
+- O mesmo vale para o Admin: `AdminEstabelecimentoPadraoMixin` fixa o campo
+  e o `save_model` grava o usuário (Padrão obrigatório dos admins, itens 4-5).

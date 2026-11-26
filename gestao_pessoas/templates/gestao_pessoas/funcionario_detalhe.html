@@ -4,43 +4,84 @@
 {% block titulos %}{{title}}|{% endblock %}
 
 {% block menul %}
-<div class="form-group text-left m-3 mt-2">
-    <a href="{% url 'gp_funcionario_listar' %}" class="mt-2 list-group-item list-group-item-action custom-link rounded">
+<div class="form-group text-left mt-2 m-3">
+    <a href="{% url 'gp_funcionario_listar' %}"
+       class="mt-2 list-group-item list-group-item-action voltar-link rounded">
         <i class="fas fa-arrow-left me-2"></i>Voltar
     </a>
-    {% if pode_editar %}
-    <a href="{% url 'gp_funcionario_editar' pk=funcionario.pk %}"
-        class="mt-2 list-group-item list-group-item-action custom-link rounded">
-        <i class="fas fa-edit me-2"></i>Editar
+    <a href="{% url 'gp_funcionario_listar' %}"
+       class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-list me-2"></i>Lista de Funcionários
     </a>
-    {% endif %}
 </div>
 {% endblock %}
 
 {% block cabdados %}
-{% include 'parciais/_list_header.html' with icon_class='fas fa-users' title='Gestão de Pessoas' subtitle='Detalhe do
-funcionário' context_label='Estabelecimento' context_value=estabelecimento %}
+{% include 'parciais/_patient_context_header.html' with module_icon='fas fa-users' module_title='Funcionário' module_subtitle='Detalhes do funcionário em modo de leitura.' primary_label='Funcionário' primary_value=funcionario.pk secondary_label='Tela' secondary_value='Detalhe' %}
 {% endblock %}
 
 {% block lista %}
-<div class="container-fluid px-3 py-3">
-    <div class="card mb-3">
-        <div class="card-body">
-            <h5><i class="fas fa-user me-2"></i>{{ funcionario.nome }}
-                <span
-                    class="badge {% if funcionario.status_funcionario == 'A' %}bg-success{% else %}bg-secondary{% endif %} ms-2">
-                    {{ funcionario.get_status_funcionario_display }}</span>
-            </h5>
-            <div class="row mt-3">
-                <div class="col-md-3"><strong>Admissão:</strong> {{ funcionario.data_admissao|date:"d/m/Y" }}</div>
-                <div class="col-md-3"><strong>ASO:</strong> {{ funcionario.aso_situacao_rotulo }}</div>
-                <div class="col-md-3"><strong>Periódico:</strong> {{ funcionario.periodico_situacao_rotulo }}</div>
-                <div class="col-md-3"><strong>Cartão-ponto:</strong>
-                    {{ funcionario.cartao_ponto.numero_cartao|default:"pendente" }}</div>
+<div class="container">
+    <form id="funcionario-detalhe" class="form-control mt-2">
+        {% csrf_token %}
+        {{ form.media }}
+        <div class="row">
+            <div class="col-lg-12 col-md-12 col-sm-12">
+                <div id="table-container">
+                    <div class="container">
+                        <div class="row">
+                            <div class="col-md-6">{{ form.pessoa|as_crispy_field }}</div>
+                            <div class="col-md-6">{{ form.data_admissao|as_crispy_field }}</div>
+                            <div class="col-md-6">{{ form.status_funcionario|as_crispy_field }}</div>
+                            <div class="col-md-6">
+                                <label class="form-label">Estabelecimento</label>
+                                <input class="form-control" value="{{ funcionario.estabelecimento }}" disabled>
+                            </div>
+                            <div class="col-md-12">{{ form.anotacoes|as_crispy_field }}</div>
+                            <div class="col-md-6">
+                                <label class="form-label">Dt. Cadastro</label>
+                                <input class="form-control" value="{{ funcionario.dt_cadastro|date:'d/m/Y H:i'|default:'-' }}" disabled>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Us. Cadastro</label>
+                                <input class="form-control" value="{{ funcionario.usuario_cadastro|default:'-' }}" disabled>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Dt. Atualização</label>
+                                <input class="form-control" value="{{ funcionario.dt_atualizacao|date:'d/m/Y H:i'|default:'-' }}" disabled>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Us. Atualização</label>
+                                <input class="form-control" value="{{ funcionario.usuario_atualizacao|default:'-' }}" disabled>
+                            </div>
+                            <!-- Navegação entre telas de detalhe -->
+                            <div class="col-md-6">
+                                <label class="form-label">Pessoa (cadastro completo)</label>
+                                <a class="form-control" style="text-decoration:none;"
+                                   href="{% url 'pessoa_cadastrar' %}?pk={{ funcionario.pessoa.pk }}">
+                                    <i class="fas fa-user me-1"></i>Abrir cadastro da pessoa
+                                </a>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Situação ASO</label>
+                                <input class="form-control" value="{{ funcionario.aso_situacao_rotulo }}" disabled>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Situação Periódico</label>
+                                <input class="form-control" value="{{ funcionario.periodico_situacao_rotulo }}" disabled>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Cartão-Ponto</label>
+                                <input class="form-control" value="{{ funcionario.cartao_ponto.numero_cartao|default:'pendente' }}" disabled>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
+    </form>
 
+    <!-- Documentos -->
     <div class="card mb-3">
         <div class="card-header">Documentos ({{ funcionario.documentos|length }})</div>
         <ul class="list-group list-group-flush">

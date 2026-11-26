@@ -8,13 +8,16 @@
     {% if pode_editar %}
     <a title="Nova tarefa" href="{% url 'gtd_tarefa_cadastrar' %}"
         class="btn-novo mt-2 list-group-item list-group-item-action bg-primary text-white rounded">
-        <i class="fas fa-plus me-2"></i>Nova Tarefa
+        <i class="fas fa-plus me-2"></i>Novo
     </a>
     {% endif %}
 
-    <a href="{% url 'gtd_documento_listar' %}" title="Documentos"
+    <a href="{% url 'gtd_documento_listar' %}" title="Documentos institucionais"
         class="mt-2 list-group-item list-group-item-action custom-link rounded">
         <i class="fas fa-folder-open me-2"></i>Documentos
+    </a>
+    <a href="" class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded">
+        <i class="fas fa-list-check me-2"></i>Tarefas
     </a>
 
     <form class="mt-3 text-white text-left" method="GET" action="{% url 'gtd_tarefa_listar' %}">
@@ -45,12 +48,26 @@
 {% endblock %}
 
 {% block cabdados %}
-{% include 'parciais/_list_header.html' with icon_class='fas fa-list-check' title='Gestão de Tarefas e Documentos'
-subtitle='Tarefas e providências vinculadas aos documentos.' context_label='Estabelecimento'
-context_value=estabelecimento %}
+{% include 'parciais/_list_header.html' with icon_class='fas fa-list-check' title='Gestão de Tarefas e Documentos' subtitle='Tarefas e providências vinculadas aos documentos.' context_label='Estabelecimento' context_value=estabelecimento %}
 {% endblock %}
 
 {% block lista %}
+<!-- KPIs clicáveis de TAREFAS -->
+<div class="row g-3 mb-3">
+    {% for kpi in kpis %}
+    <div class="col-md-3 col-lg-2">
+        <a href="{{ kpi.url|default:'#' }}" class="text-decoration-none">
+            <div class="card h-100">
+                <div class="card-body text-center py-3">
+                    <div class="fs-4 fw-bold">{{ kpi.value }}</div>
+                    <div class="small text-muted">{{ kpi.title }}</div>
+                </div>
+            </div>
+        </a>
+    </div>
+    {% endfor %}
+</div>
+
 <div id="table-container" class="listing-table-shell">
     <table class="table listing-table align-middle mb-0">
         <thead class="sticky-lista listing-table-head text-white">
@@ -220,6 +237,10 @@ context_value=estabelecimento %}
 </div>
 
 <script>
+// PADRÃO DA AGENDA: modais para o <body> (não ficar atrás do backdrop).
+document.querySelectorAll('.modal.fade').forEach(function (modal) {
+        document.body.appendChild(modal);
+});
     document.addEventListener('show.bs.modal', function (event) {
         const botao = event.relatedTarget;
         if (!botao) return;
@@ -228,4 +249,51 @@ context_value=estabelecimento %}
     });
 </script>
 {% endif %}
+{% endblock %}
+
+{% block paginate %}
+<!--PAGINACAO-->
+{% if is_paginated %}
+<div id="pages" class="listing-pagination-panel">
+    <div class="listing-pagination-meta">
+        <span>Exibindo {{ page_obj.start_index }}-{{ page_obj.end_index }}</span>
+        <strong>de {{ page_obj.paginator.count }} registros</strong>
+    </div>
+    <ul class="pagination listing-pagination btn-sm mb-0">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+            <a href="?{% if querystring %}{{ querystring }}&{% endif %}page=1"
+               class="page-link"><i class="fas fa-step-backward"></i></a>
+        </li>
+        <li class="page-item">
+            <a href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.previous_page_number }}"
+               class="page-link"><i class="fas fa-arrow-left"></i></a>
+        </li>
+        {% endif %}
+
+        {% for i in page_obj.paginator.page_range %}
+        {% if page_obj.number == i %}
+        <li class="page-item active"><span class="page-link">{{ i }}</span></li>
+        {% elif i > page_obj.number|add:"-3" and i < page_obj.number|add:"3" %}
+        <li class="page-item">
+            <a href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ i }}"
+               class="page-link">{{ i }}</a>
+        </li>
+        {% endif %}
+        {% endfor %}
+
+        {% if page_obj.has_next %}
+        <li class="page-item">
+            <a href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.next_page_number }}"
+               class="page-link"><i class="fas fa-arrow-right"></i></a>
+        </li>
+        <li class="page-item">
+            <a href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.paginator.num_pages }}"
+               class="page-link"><i class="fas fa-step-forward"></i></a>
+        </li>
+        {% endif %}
+    </ul>
+</div>
+{% endif %}
+<!--FIM PAGINACAO-->
 {% endblock %}
