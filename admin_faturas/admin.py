@@ -6,15 +6,25 @@ from django.contrib import admin
 from django.http import HttpResponseRedirect
 from django.urls import path
 from django.shortcuts import redirect, get_object_or_404
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.utils.html import format_html
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.urls import reverse
 from contas.models import Perfil
 from .models import AcordoFaturamento, PreFatura, Fatura, BaixaFatura, periodo_cobranca
-from .forms import BaixaFaturaForm, AcordoFaturamentoForm, FaturaForm, PreFaturaForm
+from .forms import (
+    AcordoFaturamentoForm, BaixaFaturaForm, FaturaAnexoUploadForm,
+    FaturaForm, PreFaturaForm,
+)
 from django.contrib import messages
 from django.utils import timezone
-from dominios.utils import ExportToXLSMixin, AdminEstabelecimentoPadraoMixin, StatusFilterAdminMixin, chain_form_init, Select2AdminModelAdminMixin, ExclusaoEmLoteComRegrasMixin, EdicaoComRegrasMixin, BotaoExcluirLinhaMixin
+from dominios.utils import (
+    ExportToXLSMixin, ExportToXLSWithAttachmentsMixin,
+    AdminEstabelecimentoPadraoMixin, StatusFilterAdminMixin, chain_form_init,
+    Select2AdminModelAdminMixin, ExclusaoEmLoteComRegrasMixin,
+    EdicaoComRegrasMixin, BotaoExcluirLinhaMixin,
+)
 from .dashboard import (
     AcordoFaturamentoPagadorFilter, FaturasDashboardMixin, _money, _qtd,
 )
@@ -29,7 +39,8 @@ from admin_financeiro.models import CompetenciaBancaria, MovimentoBancario
 from django.contrib import admin
 from django.utils.translation import gettext_lazy as _
 from django import forms
-from django.db import transaction
+from django.db import DatabaseError, IntegrityError, transaction
+import logging
 from django.utils.html import format_html
 from django.urls import reverse
 from datetime import datetime
@@ -37,6 +48,8 @@ from django.contrib import admin
 from .models import AcordoFaturamento, PreFatura, Fatura, BaixaFatura
 from .changelist_editavel import ChangeListEditavel  # noqa: F401
 from .changelist_editavel import ChangeListEditavel  # noqa: F401
+
+logger = logging.getLogger(__name__)
 
 
 class DateInput(forms.DateInput):
@@ -594,9 +607,6 @@ class PreFaturaAdmin(BotaoExcluirLinhaMixin, EdicaoComRegrasMixin, ExclusaoEmLot
 
 class AcordoFaturamentoAdmin(BotaoExcluirLinhaMixin, EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Select2AdminModelAdminMixin, ExportToXLSMixin, admin.ModelAdmin):
     form = AcordoFaturamentoForm
-    # Tela de ADD com os DOIS botoes: Salvar (manual) e “Importar planilha”.
-    # O template estende o change_form e so injeta o botao extra no form.
-    change_form_template = 'admin_faturas/acordo_faturamento_change_form.html'
     dashboard_competencia_field = 'inicio_vigencia'
     dashboard_vencimento_field = 'final_vigencia'
     dashboard_valor_field = 'valor_mensal'
@@ -866,6 +876,14 @@ class AcordoFaturamentoAdmin(BotaoExcluirLinhaMixin, EdicaoComRegrasMixin, Exclu
         return f"{total:.2f}"
     total_value.short_description = 'Vl.Mensal(30 dias)'
 
+    def changelist_view(self, request, extra_context=None):
+        extra_context = dict(extra_context or {})
+        if self.has_add_permission(request):
+            extra_context['acordo_import_url'] = reverse(
+                'admin:admin_faturas_acordofaturamento_importar')
+        return super().changelist_view(
+            request, extra_context=extra_context)
+
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
@@ -875,7 +893,7 @@ class AcordoFaturamentoAdmin(BotaoExcluirLinhaMixin, EdicaoComRegrasMixin, Exclu
             path('gerar_prefaturas/<int:acordo_faturamento_id>/',
                  self.admin_site.admin_view(self.gerar_prefaturas_view),
                  name='gerar_prefaturas'),
-            # IMPORTAÇÃO da planilha CONVENIOS.xlsx (botão na tela de ADD).
+            # IMPORTAÇÃO da planilha CONVENIOS.xlsx (botão na changelist).
             path('importar-planilha/',
                  self.admin_site.admin_view(self.importar_planilha_view),
                  name='admin_faturas_acordofaturamento_importar'),
@@ -885,128 +903,264 @@ class AcordoFaturamentoAdmin(BotaoExcluirLinhaMixin, EdicaoComRegrasMixin, Exclu
     # ------------------------------------------------------------------
     # IMPORTAÇÃO DE PLANILHA (CONVENIOS.xlsx)
     # ------------------------------------------------------------------
-    def add_view(self, request, form_url='', extra_context=None):
-        """Tela de ADD com o botão "Importar planilha" ao lado de Salvar.
-
-        A importação NÃO substitui o cadastro manual: a tela continua sendo
-        a de add normal, apenas com um segundo botão que leva à tela de
-        upload/pré-visualização (ver `importar_planilha_view`).
-        """
-        extra_context = dict(extra_context or {})
-        extra_context['importar_planilha_url'] = reverse(
-            'admin:admin_faturas_acordofaturamento_importar')
-        return super().add_view(request, form_url, extra_context)
-
     def importar_planilha_view(self, request):
-        """Upload → PRÉ-VISUALIZAÇÃO → confirmação da importação.
+        """Upload, revisão editável e gravação atômica dos acordos."""
+        from zipfile import BadZipFile
 
-        Fluxo em duas etapas:
-
-        1. GET / POST sem `confirmar`: lê a planilha e mostra quantos
-           acordos serão criados, quais empresas/cidades nascem e as
-           divergências encontradas. NADA é gravado;
-        2. POST com `confirmar=1`: grava tudo dentro de UMA transação — se
-           qualquer acordo falhar, o lote inteiro é desfeito.
-        """
-        from urllib.parse import unquote
         from django.template.response import TemplateResponse
-        from .importacao import ler_planilha, importar
+        from openpyxl.utils.exceptions import InvalidFileException
+        from uuid import uuid4
+
+        from dominios.breadcrumbs import breadcrumbs_context
+        from .importacao import (
+            ACORDOS_SESSION_KEY, ACORDOS_TEMP_PREFIX,
+            AcordoImportRowFormSet, UploadAcordosForm, importar,
+            formatar_clientes_revisao, ler_planilha,
+        )
 
         contexto = dict(self.admin_site.each_context(request))
         contexto.update({'title': 'Importar acordos de faturamento',
                          'opts': self.model._meta,
                          'model_admin': self})
+        contexto.update(breadcrumbs_context(
+            self.admin_site, request, self.model._meta.app_label,
+            modelo_nome='Importar acordos',
+            modelo_url=reverse(
+                'admin:admin_faturas_acordofaturamento_changelist')))
 
-        if request.method == 'POST' and request.POST.get('confirmar'):
-            # Etapa 2 — GRAVAÇÃO. A planilha é relida do caminho temporário
-            # guardado na etapa 1 (não confiamos em dados vindos do POST).
-            caminho = request.session.get(
-                'importacao_acordos_arquivo')
-            if not caminho:
-                messages.error(
-                    request,
-                    'A sessão de importação expirou. Envie a planilha '
-                    'novamente.')
-                return redirect(reverse(
-                    'admin:admin_faturas_acordofaturamento_importar'))
-            try:
-                acordos, _avisos = ler_planilha(caminho)
-                estabelecimento, liberado = self._estabelecimento_da_sessao(
-                    request, getattr(request.user, 'perfil', None))
-                if estabelecimento is None:
-                    messages.error(
-                        request,
-                        'Nenhum estabelecimento definido para o usuário. '
-                        'Escolha o estabelecimento na sessão antes de '
-                        'importar.')
-                    return redirect(reverse(
-                        'admin:admin_faturas_acordofaturamento_changelist'))
-                with transaction.atomic():
-                    resumo = importar(acordos, request.user,
-                                      estabelecimento)
-                criados = len(resumo['acordos_criados'])
-                if criados:
-                    messages.success(
-                        request,
-                        f'{criados} acordo(s) importado(s) com sucesso. '
-                        f'{len(resumo["empresas_criadas"])} empresa(s) e '
-                        f'{len(resumo["cidades_criadas"])} cidade(s) '
-                        'criada(s).')
-                if resumo['acordos_ignorados']:
-                    messages.warning(
-                        request,
-                        f'{len(resumo["acordos_ignorados"])} acordo(s) '
-                        'não foram importados: veja o motivo na lista abaixo.')
-                    for cnpj, motivo in resumo['acordos_ignorados'][:10]:
-                        messages.warning(request, f'{cnpj}: {motivo}')
-            except Exception as erro:
-                messages.error(
-                    request,
-                    f'Não foi possível importar a planilha: {erro}. '
-                    'Nada foi gravado.')
-            request.session.pop('importacao_acordos_arquivo', None)
-            return redirect(reverse(
-                'admin:admin_faturas_acordofaturamento_changelist'))
+        def remover_pendencia(token, pendencia=None):
+            pendencias = dict(request.session.get(ACORDOS_SESSION_KEY, {}))
+            existente = pendencias.pop(token, None)
+            request.session[ACORDOS_SESSION_KEY] = pendencias
+            storage_name = (existente or pendencia or {}).get('storage_name')
+            if storage_name:
+                try:
+                    default_storage.delete(storage_name)
+                except OSError:
+                    logger.exception(
+                        'Falha ao remover planilha temporária da importação %s',
+                        token)
 
-        # Etapa 1 — LEITURA / PRÉ-VISUALIZAÇÃO
-        if request.method == 'POST' and request.FILES.get('planilha'):
-            arquivo = request.FILES['planilha']
-            if not arquivo.name.lower().endswith(('.xlsx', '.xlsm')):
-                messages.error(
-                    request,
-                    'Envie uma planilha .xlsx (formato do Excel).')
-                return TemplateResponse(
-                    request,
-                    'admin_faturas/importar_acordos.html', contexto)
-            import tempfile
-            destino = tempfile.NamedTemporaryFile(
-                suffix='.xlsx', delete=False)
-            for chunk in arquivo.chunks():
-                destino.write(chunk)
-            destino.close()
-            request.session['importacao_acordos_arquivo'] = destino.name
-            try:
-                acordos, avisos = ler_planilha(destino.name)
-            except Exception as erro:
-                messages.error(
-                    request,
-                    f'Não foi possível ler a planilha: {erro}')
-                return TemplateResponse(
-                    request,
-                    'admin_faturas/importar_acordos.html', contexto)
+        def renderizar_revisao(acordos, avisos, formset, pendencia, token):
+            for acordo, form in zip(acordos, formset.forms):
+                form.preview = acordo
             contexto.update({
                 'acordos': acordos,
                 'avisos': avisos,
                 'total_competencias': sum(
-                    a['qtd_competencias'] for a in acordos),
+                    acordo['qtd_competencias'] for acordo in acordos),
+                'formset': formset,
+                'pendencia': pendencia,
+                'token': token,
                 'previa': True,
             })
             return TemplateResponse(
-                request,
-                'admin_faturas/importar_acordos.html', contexto)
+                request, 'admin_faturas/importar_acordos.html', contexto)
 
-        return TemplateResponse(
-            request, 'admin_faturas/importar_acordos.html', contexto)
+        if not self.has_add_permission(request):
+            messages.error(
+                request, 'Você não tem permissão para importar acordos. '
+                'Solicite ao administrador o acesso de criação.')
+            return redirect(
+                'admin:admin_faturas_acordofaturamento_changelist')
+
+        token = request.GET.get('token') or request.POST.get('token')
+        if request.method == 'POST' and request.POST.get('acao') == 'cancelar':
+            pendencia = request.session.get(
+                ACORDOS_SESSION_KEY, {}).get(token)
+            if token:
+                remover_pendencia(token, pendencia)
+            messages.info(
+                request, 'Importação cancelada; nenhum acordo foi criado.')
+            return redirect(
+                'admin:admin_faturas_acordofaturamento_changelist')
+
+        if not token:
+            form = UploadAcordosForm(
+                request.POST or None, request.FILES or None)
+            if request.method == 'POST' and form.is_valid():
+                arquivo = form.cleaned_data['planilha']
+                conteudo = arquivo.read()
+                try:
+                    acordos, avisos = ler_planilha(conteudo)
+                except (BadZipFile, InvalidFileException, OSError, ValueError):
+                    logger.exception('Falha ao ler planilha de acordos')
+                    form.add_error(
+                        'planilha',
+                        'Não foi possível ler a planilha. Verifique o arquivo '
+                        'e tente novamente.')
+                else:
+                    if not acordos:
+                        form.add_error(
+                            'planilha',
+                            'Nenhum acordo válido foi encontrado. Corrija a '
+                            'planilha e tente novamente.')
+                    else:
+                        token = uuid4().hex
+                        extensao = arquivo.name.rsplit('.', 1)[-1].lower()
+                        try:
+                            storage_name = default_storage.save(
+                                f'{ACORDOS_TEMP_PREFIX}{token}.{extensao}',
+                                ContentFile(conteudo))
+                        except OSError:
+                            logger.exception(
+                                'Falha ao armazenar planilha de acordos')
+                            form.add_error(
+                                'planilha',
+                                'Não foi possível guardar a planilha para '
+                                'revisão. Tente novamente.')
+                        else:
+                            pendencias = dict(request.session.get(
+                                ACORDOS_SESSION_KEY, {}))
+                            pendencias[token] = {
+                                'storage_name': storage_name,
+                                'nome': arquivo.name.rsplit('/', 1)[-1],
+                            }
+                            request.session[ACORDOS_SESSION_KEY] = pendencias
+                            return redirect(f'{request.path}?token={token}')
+
+            contexto.update({
+                'form': form,
+                'cancel_url': reverse(
+                    'admin:admin_faturas_acordofaturamento_changelist'),
+            })
+            return TemplateResponse(
+                request, 'admin_faturas/importar_acordos.html', contexto)
+
+        pendencia = request.session.get(
+            ACORDOS_SESSION_KEY, {}).get(token)
+        if not pendencia:
+            messages.error(
+                request,
+                'A importação expirou ou não foi encontrada. Selecione a '
+                'planilha novamente.')
+            return redirect(
+                'admin:admin_faturas_acordofaturamento_importar')
+
+        try:
+            with default_storage.open(pendencia['storage_name'], 'rb') as f:
+                conteudo = f.read()
+            acordos, avisos = ler_planilha(conteudo)
+        except (BadZipFile, InvalidFileException, OSError, ValueError):
+            logger.exception('Falha ao reler planilha temporária de acordos')
+            remover_pendencia(token, pendencia)
+            messages.error(
+                request, 'Não foi possível recuperar a planilha da revisão. '
+                'Envie o arquivo novamente.')
+            return redirect(
+                'admin:admin_faturas_acordofaturamento_importar')
+
+        iniciais = [{
+            'incluir': True,
+            'cidade': acordo['cidade'],
+            'cidade_rotulo': acordo['cidade_rotulo'],
+            'cnpj': acordo['cnpj'],
+            'acordo_faturamento': acordo['acordo_faturamento'],
+            'nr_contrato': acordo['nr_contrato'],
+            'nr_aditivo': '',
+            'empenho_global': acordo['empenho_global'],
+            'inicio_vigencia': acordo['inicio_vigencia'],
+            'final_vigencia': acordo['final_vigencia'],
+            'dia_envio': acordo['emitido_no'],
+            'dias_pagamento': 30,
+            'valor_mensal': acordo['valor_mensal'],
+            'valor_diaria': acordo['valor_diaria'],
+            'modo_fatura': 'CO',
+            'modalidade_contrato': 'CO',
+            'descricao_internacao': 'acolhimento',
+            'tx_retencao_nf': Decimal('0.00'),
+            'vl_retencao_nf': Decimal('0.00'),
+            'clientes': formatar_clientes_revisao(acordo['clientes']),
+        } for acordo in acordos]
+        formset = AcordoImportRowFormSet(
+            request.POST if request.method == 'POST' else None,
+            initial=iniciais,
+            prefix='acordos')
+        estabelecimento, _ = self._estabelecimento_da_sessao(
+            request, getattr(request.user, 'perfil', None))
+        contexto['estabelecimento'] = estabelecimento
+
+        if request.method == 'POST' and request.POST.get('acao') == 'confirmar':
+            valido = formset.is_valid()
+            if len(formset.forms) != len(acordos):
+                erro_revisao = (
+                    'A revisão não corresponde à planilha carregada. '
+                    'Atualize a tela e tente novamente.')
+                if formset.forms:
+                    formset.forms[0].add_error(None, erro_revisao)
+                else:
+                    messages.error(request, erro_revisao)
+                valido = False
+            selecionados = [
+                form for form in formset.forms
+                if form.is_valid() and form.cleaned_data.get('incluir')]
+            if valido and not selecionados:
+                formset.forms[0].add_error(
+                    'incluir',
+                    'Selecione pelo menos um acordo para importar.')
+                valido = False
+            if valido and estabelecimento is None:
+                formset.forms[0].add_error(
+                    None,
+                    'Nenhum estabelecimento está definido para o usuário. '
+                    'Selecione um estabelecimento na sessão antes de importar.')
+                valido = False
+
+            if valido:
+                acordos_revisados = []
+                for acordo, form in zip(acordos, formset.forms):
+                    dados = form.cleaned_data
+                    if not dados['incluir']:
+                        continue
+                    revisado = dict(acordo)
+                    for campo in (
+                            'cidade', 'cidade_rotulo', 'cnpj',
+                            'acordo_faturamento', 'nr_contrato', 'nr_aditivo',
+                            'empenho_global', 'inicio_vigencia',
+                            'final_vigencia', 'dias_pagamento',
+                            'valor_mensal', 'valor_diaria', 'modo_fatura',
+                            'modalidade_contrato', 'descricao_internacao',
+                            'tx_retencao_nf', 'vl_retencao_nf', 'clientes'):
+                        revisado[campo] = dados[campo]
+                    revisado['emitido_no'] = dados['dia_envio']
+                    acordos_revisados.append(revisado)
+
+                try:
+                    with transaction.atomic():
+                        resumo = importar(
+                            acordos_revisados, request.user, estabelecimento)
+                except (DatabaseError, OSError, ValidationError, ValueError) as erro:
+                    logger.exception('Falha ao importar acordos de faturamento')
+                    detalhe = (
+                        erro.messages[0]
+                        if isinstance(erro, ValidationError) else str(erro))
+                    formset.forms[0].add_error(
+                        None,
+                        f'Não foi possível concluir a importação: {detalhe} '
+                        'Nenhum dado foi gravado. Corrija e tente novamente.')
+                else:
+                    remover_pendencia(token, pendencia)
+                    criados = len(resumo['acordos_criados'])
+                    if criados:
+                        messages.success(
+                            request,
+                            f'{criados} acordo(s) importado(s) com sucesso. '
+                            f'{len(resumo["empresas_criadas"])} empresa(s), '
+                            f'{len(resumo["cidades_criadas"])} cidade(s) e '
+                            f'{len(resumo["clientes_criados"])} cliente(s) '
+                            'criado(s).')
+                    if resumo['acordos_ignorados']:
+                        messages.warning(
+                            request,
+                            f'{len(resumo["acordos_ignorados"])} acordo(s) '
+                            'não foram importados; confira os motivos.')
+                        for cnpj, motivo in resumo['acordos_ignorados'][:10]:
+                            messages.warning(request, f'{cnpj}: {motivo}')
+                    return redirect(
+                        'admin:admin_faturas_acordofaturamento_changelist')
+
+        return renderizar_revisao(
+            acordos, avisos, formset, pendencia, token)
 
     def duplicate_button(self, obj):
         if obj.pre_faturado:
@@ -1260,7 +1414,7 @@ class AcordoFaturamentoAdmin(BotaoExcluirLinhaMixin, EdicaoComRegrasMixin, Exclu
 
 
 class SaldoFilter(admin.SimpleListFilter):
-    title = _('Saldo (Valor positivo)')
+    title = _('Saldo')
     parameter_name = 'saldo'
 
     def lookups(self, request, model_admin):
@@ -1273,18 +1427,12 @@ class SaldoFilter(admin.SimpleListFilter):
 
     def queryset(self, request, queryset):
         value = self.value()
-        if 'saldo' not in request.GET:
-            # Se o filtro de saldo não está na URL, aplica o filtro de saldo positivo por padrão
+        if value == 'positive':
             return queryset.filter(valor_saldo__gt=0)
-        elif value == 'positive':
-            return queryset.filter(valor_saldo__gt=0)
-        elif value == 'negative':
+        if value == 'negative':
             return queryset.filter(valor_saldo__lt=0)
-        elif value == 'zero':
+        if value == 'zero':
             return queryset.filter(valor_saldo=0)
-        elif value == 'all':
-            # Retorna todos os objetos quando 'all' é selecionado ou nenhum filtro é aplicado
-            return queryset
         return queryset
 
 
@@ -1443,7 +1591,8 @@ class BaixaFaturaInline(admin.TabularInline):
         return base
 
 
-class FaturaAdmin(BotaoExcluirLinhaMixin, EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Select2AdminModelAdminMixin, ExportToXLSMixin, admin.ModelAdmin):
+class FaturaAdmin(BotaoExcluirLinhaMixin, EdicaoComRegrasMixin, ExclusaoEmLoteComRegrasMixin, AdminEstabelecimentoPadraoMixin, FaturasDashboardMixin, Select2AdminModelAdminMixin, ExportToXLSWithAttachmentsMixin, admin.ModelAdmin):
+    export_xls_attachment_fields = ('anexo_nf',)
     dashboard_competencia_field = 'competencia'
     dashboard_vencimento_field = 'dt_vencimento'
     dashboard_valor_field = 'valor_fatura'
@@ -1480,8 +1629,77 @@ class FaturaAdmin(BotaoExcluirLinhaMixin, EdicaoComRegrasMixin, ExclusaoEmLoteCo
                 self.admin_site.admin_view(self.baixas_da_fatura_view),
                 name='admin_faturas_fatura_baixas',
             ),
+            path(
+                '<path:object_id>/anexo-nf/',
+                self.admin_site.admin_view(self.anexo_nf_view),
+                name='admin_faturas_fatura_anexo_nf',
+            ),
         ]
         return custom_urls + urls
+
+    def anexo_nf_view(self, request, object_id):
+        from django.template.response import TemplateResponse
+
+        from dominios.breadcrumbs import breadcrumbs_context
+
+        fatura = get_object_or_404(self.get_queryset(request), pk=object_id)
+        if not self.has_change_permission(request, fatura):
+            messages.error(
+                request, 'Você não tem permissão para anexar arquivos a esta '
+                'fatura.')
+            return redirect('admin:admin_faturas_fatura_changelist')
+        if fatura.anexo_nf:
+            messages.warning(
+                request, 'Esta fatura já tem uma Nota Fiscal anexada. O '
+                'arquivo existente não foi alterado.')
+            return redirect('admin:admin_faturas_fatura_changelist')
+
+        form = FaturaAnexoUploadForm(
+            request.POST or None, request.FILES or None)
+        if request.method == 'POST' and form.is_valid():
+            try:
+                with transaction.atomic():
+                    arquivo = form.cleaned_data['arquivo']
+                    fatura.anexo_nf.save(arquivo.name, arquivo, save=False)
+                    nome_arquivo = fatura.anexo_nf.name
+                    fatura.us_atualizacao = request.user
+                    fatura.dt_atualizacao = timezone.now()
+                    fatura.save(update_fields=[
+                        'anexo_nf', 'us_atualizacao', 'dt_atualizacao'])
+            except (OSError, ValidationError, IntegrityError, ValueError):
+                nome_arquivo = getattr(fatura.anexo_nf, 'name', '')
+                if nome_arquivo:
+                    try:
+                        fatura.anexo_nf.storage.delete(nome_arquivo)
+                    except OSError:
+                        logger.exception(
+                            'Falha ao remover anexo após salvar fatura %s',
+                            fatura.pk)
+                fatura.refresh_from_db()
+                form.add_error(
+                    None, 'Não foi possível salvar a Nota Fiscal. Confira o '
+                    'arquivo e tente novamente.')
+                logger.exception(
+                    'Falha ao anexar Nota Fiscal à fatura %s', fatura.pk)
+            else:
+                messages.success(
+                    request, f'Nota Fiscal anexada à fatura {fatura.pk}.')
+                return redirect('admin:admin_faturas_fatura_changelist')
+
+        contexto = dict(self.admin_site.each_context(request))
+        contexto.update(breadcrumbs_context(
+            self.admin_site, request, self.model._meta.app_label,
+            modelo_nome='Anexar Nota Fiscal',
+            modelo_url=reverse(
+                'admin:admin_faturas_fatura_changelist')))
+        contexto.update({
+            'title': 'Anexar Nota Fiscal',
+            'opts': self.model._meta,
+            'fatura': fatura,
+            'form': form,
+        })
+        return TemplateResponse(
+            request, 'admin_faturas/anexar_arquivo.html', contexto)
 
     # ------------------------------------------------------------------
     # GESTÃO DE BAIXAS (modal na tela da fatura)
@@ -1895,10 +2113,21 @@ class FaturaAdmin(BotaoExcluirLinhaMixin, EdicaoComRegrasMixin, ExclusaoEmLoteCo
                     'periodo_tratamento', 'competencia', 'dia_envio',
                     'dt_vencimento', 'valor', 'valor_fatura', 'valor_saldo',
                     'dt_liquidacao', 'descricao', 'nr_nota_fiscal',
-                    'anexo_nf', 'estabelecimento', 'status']
+                    'anexo_nf_link', 'estabelecimento', 'status']
     list_editable_sempre = ['valor_fatura', 'descricao', 'nr_nota_fiscal',
-                            'anexo_nf', 'status']
+                            'status']
     list_editable = list_editable_sempre
+
+    def anexo_nf_link(self, obj):
+        if obj.anexo_nf:
+            return format_html(
+                '<a href="{}" target="_blank" rel="noopener noreferrer">'
+                'Ver NF</a>',
+                obj.anexo_nf.url)
+        url = reverse(
+            'admin:admin_faturas_fatura_anexo_nf', args=[obj.pk])
+        return format_html('<a href="{}">Anexar NF</a>', url)
+    anexo_nf_link.short_description = 'Anexo NF'
 
     def get_linhas_nao_editaveis(self, request):
         """Faturas TRAVADAS na listagem: só texto, sem edição em linha.

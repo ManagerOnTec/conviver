@@ -28,6 +28,9 @@
   {{ block.super }}
   {{ media.js }}
   <script src="{% static 'admin/js/filters.js' %}" defer></script>
+  {% if top_filter_config %}
+    <script src="{% static 'js/admin_top_date_filter.js' %}" defer></script>
+  {% endif %}
   <script src="{% static 'js/admin_changelist_actions.js' %}" defer></script>
   <script src="{% static 'js/admin_baixas_modal.js' %}" defer></script>
 {% endblock %}
@@ -109,6 +112,9 @@
                   {% change_list_object_tools %}
                   {% if pagamento_import_url %}
                     <li><a href="{{ pagamento_import_url }}">Importar Pagamentos</a></li>
+                  {% endif %}
+                  {% if acordo_import_url %}
+                    <li><a href="{{ acordo_import_url }}">Importar planilha</a></li>
                   {% endif %}
                   {% if cl.formset %}
                     <li class="li-salvar-listagem">

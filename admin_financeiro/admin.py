@@ -1,11 +1,15 @@
+import logging
+
 from django.contrib import admin
 from django.contrib import messages as admin_messages
 from django.contrib import messages
+from django.core.exceptions import FieldError
 from django.utils.translation import gettext_lazy as _
 from .models import ControleBancario, CompetenciaBancaria, MovimentoBancario
 from admin_pagamentos.models import Pagamento
 from admin_faturas.models import Fatura
-from admin_faturas.dashboard import FaturasDashboardMixin
+from admin_faturas.dashboard import FaturasDashboardMixin, _money, _qtd
+from dominios.admin_dashboard_mixins import AdminDashboardAndTopFilterMixin
 from django.urls import reverse, path
 from dominios.utils import ExportToXLSMixin, AdminEstabelecimentoPadraoMixin, StatusFilterAdminMixin, chain_form_init, ExclusaoEmLoteComRegrasMixin, BotaoExcluirLinhaMixin
 from datetime import timedelta, date
@@ -23,6 +27,45 @@ from django.http import HttpResponse
 from django.contrib import admin
 from django.apps import apps
 from django.db.models import Model
+
+
+logger = logging.getLogger(__name__)
+
+
+class MovimentoConciliacaoFilter(admin.SimpleListFilter):
+    title = 'Conciliação'
+    parameter_name = 'conciliacao'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('conciliado', 'Conciliado'),
+            ('nao_conciliado', 'Não conciliado'),
+        )
+
+    def queryset(self, request, queryset):
+        valor = self.value()
+        if not valor:
+            return queryset
+        if valor not in {'conciliado', 'nao_conciliado'}:
+            admin_messages.warning(
+                request,
+                'O filtro de conciliação é inválido. Escolha Conciliado ou '
+                'Não conciliado.')
+            return queryset
+        try:
+            if valor == 'conciliado':
+                return queryset.filter(
+                    linhas_extrato__status='C').distinct()
+            return queryset.exclude(
+                linhas_extrato__status='C').distinct()
+        except (FieldError, TypeError, ValueError):
+            logger.exception(
+                'Falha ao filtrar movimentos por conciliação.')
+            admin_messages.error(
+                request,
+                'Não foi possível aplicar o filtro de conciliação. '
+                'Tente novamente ou remova esse filtro.')
+            return queryset
 
 """
 @admin.action(description="Exportar todos os campos para XLS")
@@ -322,15 +365,112 @@ class BancoPadraoFilter(admin.SimpleListFilter):
             return queryset
 
 
+class AdminFinanceiroTopDashboardMixin(AdminDashboardAndTopFilterMixin):
+    dashboard_date_filter_fields = '__all__'
+    dashboard_date_field = 'dt_registro'
+    top_filter_search_label = 'Busca'
+    top_filter_search_placeholder = (
+        'Banco, conta, competência ou observação...')
+    top_extra_filter_label = 'Status'
 
+    def _url_filtro_topo(self, request, **alteracoes):
+        params = request.GET.copy()
+        params.pop('p', None)
+        for chave, valor in alteracoes.items():
+            if valor in (None, ''):
+                params.pop(chave, None)
+            else:
+                params[chave] = valor
+        query = params.urlencode()
+        return f'{request.path}?{query}' if query else request.path
 
+    def get_top_extra_filters(self, request):
+        status = request.GET.get('status')
+        return [
+            {
+                'label': 'Todos',
+                'url': self._url_filtro_topo(request, status=None),
+                'active': not status,
+                'icon': 'fa-list',
+            },
+            {
+                'label': 'Ativos',
+                'url': self._url_filtro_topo(request, status='A'),
+                'active': status == 'A',
+                'icon': '✅',
+            },
+            {
+                'label': 'Inativos',
+                'url': self._url_filtro_topo(request, status='I'),
+                'active': status == 'I',
+                'icon': '🚫',
+            },
+        ]
+
+    def _estabelecimentos_topo(self, request):
+        perfil = Perfil.objects.filter(user=request.user).first()
+        if perfil:
+            estabelecimentos = perfil.estabelecimento.filter(status='A')
+            padrao_id = perfil.estabelecimento_padrao_id
+            if padrao_id:
+                estabelecimentos = (
+                    estabelecimentos
+                    | Estabelecimento.objects.filter(
+                        pk=padrao_id, status='A')
+                ).distinct()
+        elif request.user.is_superuser:
+            estabelecimentos = Estabelecimento.objects.filter(status='A')
+            padrao_id = None
+        else:
+            estabelecimentos = Estabelecimento.objects.none()
+            padrao_id = None
+
+        estabelecimentos = estabelecimentos.order_by('estabelecimento')
+        session_id = getattr(request, 'session', {}).get(
+            'estabelecimento_id')
+        if session_id and estabelecimentos.filter(pk=session_id).exists():
+            padrao_id = session_id
+        if padrao_id and not estabelecimentos.filter(pk=padrao_id).exists():
+            padrao_id = None
+        return estabelecimentos, str(padrao_id) if padrao_id else None
+
+    def get_top_dropdown_subfilters(self, request):
+        if not any(field.name == 'estabelecimento'
+                   for field in self.model._meta.get_fields()):
+            return []
+
+        estabelecimentos, padrao_id = self._estabelecimentos_topo(request)
+        parametro = 'estabelecimento'
+        atual = request.GET.get(parametro)
+        opcoes = [{
+            'label': 'Estabelecimento padrão / todos',
+            'url': self._url_filtro_topo(
+                request, **{parametro: None}),
+            'selected': not atual and not padrao_id,
+        }]
+        opcoes.extend({
+            'label': estabelecimento.estabelecimento,
+            'url': self._url_filtro_topo(
+                request, **{parametro: estabelecimento.pk}),
+            'selected': (
+                str(estabelecimento.pk) == atual
+                or not atual and str(estabelecimento.pk) == padrao_id
+            ),
+        } for estabelecimento in estabelecimentos)
+        return [{
+            'label': 'Estabelecimento',
+            'options': opcoes,
+        }]
 
 
 # Inline de SaldoBanco para ser exibido dentro de ControleBancario
 @admin.register(CompetenciaBancaria)
-class CompetenciaBancariaAdmin(AdminEstabelecimentoPadraoMixin, ExportToXLSMixin, admin.ModelAdmin):
+class CompetenciaBancariaAdmin(
+        AdminEstabelecimentoPadraoMixin, AdminFinanceiroTopDashboardMixin,
+        ExportToXLSMixin, admin.ModelAdmin):
   
     form = CompetenciaBancariaForm
+    dashboard_date_field = 'dt_registro'
 
     actions = ['export_as_xls', 'fechar_competencias'] # Registrar a ação no admin
 
@@ -373,6 +513,80 @@ class CompetenciaBancariaAdmin(AdminEstabelecimentoPadraoMixin, ExportToXLSMixin
     fechar_link.short_description = 'Fechamento'
 
     ordering = ['-dt_abertura_competencia',]
+
+    def get_dashboard_kpis(self, request, queryset):
+        from django.db.models import Count, Q, Sum
+
+        metricas = queryset.aggregate(
+            total=Count('pk', distinct=True),
+            abertas=Count(
+                'pk', filter=Q(dt_fechamento_competencia__isnull=True),
+                distinct=True),
+            fechadas=Count(
+                'pk', filter=Q(dt_fechamento_competencia__isnull=False),
+                distinct=True),
+            saldo_atual=Sum('saldo_atual'),
+        )
+        return [
+            {
+                'title': 'Competências',
+                'value': _qtd(metricas['total']),
+                'subtitle': 'No filtro atual',
+                'color_class': 'kpi-blue',
+                'icon': 'fa-calendar-days',
+            },
+            {
+                'title': 'Abertas',
+                'value': _qtd(metricas['abertas']),
+                'subtitle': 'Competências em andamento',
+                'color_class': 'kpi-green',
+                'icon': 'fa-circle-check',
+            },
+            {
+                'title': 'Fechadas',
+                'value': _qtd(metricas['fechadas']),
+                'subtitle': 'Competências encerradas',
+                'color_class': 'kpi-red',
+                'icon': 'fa-lock',
+            },
+            {
+                'title': 'Saldo atual',
+                'value': _money(metricas['saldo_atual']),
+                'subtitle': 'Soma no filtro atual',
+                'color_class': 'kpi-purple',
+                'icon': 'fa-money-bill-wave',
+            },
+        ]
+
+    def get_top_dropdown_subfilters(self, request):
+        seletores = super().get_top_dropdown_subfilters(request)
+        parametro = 'dt_fechamento_competencia__isnull'
+        atual = request.GET.get(parametro)
+        situacao = {
+            'label': 'Situação da competência',
+            'options': [
+                {
+                    'label': 'Todas',
+                    'url': self._url_filtro_topo(
+                        request, **{parametro: None}),
+                    'selected': not atual,
+                },
+                {
+                    'label': 'Abertas',
+                    'url': self._url_filtro_topo(
+                        request, **{parametro: 'True'}),
+                    'selected': atual == 'True',
+                },
+                {
+                    'label': 'Fechadas',
+                    'url': self._url_filtro_topo(
+                        request, **{parametro: 'False'}),
+                    'selected': atual == 'False',
+                },
+            ],
+        }
+        seletores.insert(0, situacao)
+        return seletores
 
     def save_model(self, request, obj, form, change):
         if not change:
@@ -451,8 +665,11 @@ class CompetenciaBancariaAdmin(AdminEstabelecimentoPadraoMixin, ExportToXLSMixin
 
 # Admin de ControleBancario
 @admin.register(ControleBancario)
-class ControleBancarioAdmin(AdminEstabelecimentoPadraoMixin, ExportToXLSMixin, admin.ModelAdmin):
+class ControleBancarioAdmin(
+        AdminEstabelecimentoPadraoMixin, AdminFinanceiroTopDashboardMixin,
+        ExportToXLSMixin, admin.ModelAdmin):
     list_display = ['conta']  # Exibir a conta no controle bancário
+    dashboard_date_field = 'dt_registro'
 
     # Necessário para o select2 de digitação (autocomplete) na Competência Bancária.
     search_fields = ['conta__agencia__numero_agencia', 'conta__numero_conta',
@@ -463,6 +680,46 @@ class ControleBancarioAdmin(AdminEstabelecimentoPadraoMixin, ExportToXLSMixin, a
     readonly_fields = ['dt_registro', 'us_registro', 'dt_atualizacao', 'us_atualizacao',]
 
     list_filter = [StatusFilterAdminMixin, EstabelecimentoFilterAdminMixin]
+
+    def get_dashboard_kpis(self, request, queryset):
+        from django.db.models import Count, Q
+
+        metricas = queryset.aggregate(
+            total=Count('pk', distinct=True),
+            ativos=Count('pk', filter=Q(status='A'), distinct=True),
+            inativos=Count('pk', filter=Q(status='I'), distinct=True),
+            estabelecimentos=Count('estabelecimento_id', distinct=True),
+        )
+        return [
+            {
+                'title': 'Controles bancários',
+                'value': _qtd(metricas['total']),
+                'subtitle': 'No filtro atual',
+                'color_class': 'kpi-blue',
+                'icon': 'fa-building-columns',
+            },
+            {
+                'title': 'Ativos',
+                'value': _qtd(metricas['ativos']),
+                'subtitle': 'Controles ativos',
+                'color_class': 'kpi-green',
+                'icon': 'fa-circle-check',
+            },
+            {
+                'title': 'Inativos',
+                'value': _qtd(metricas['inativos']),
+                'subtitle': 'Controles inativos',
+                'color_class': 'kpi-red',
+                'icon': 'fa-ban',
+            },
+            {
+                'title': 'Estabelecimentos',
+                'value': _qtd(metricas['estabelecimentos']),
+                'subtitle': 'No filtro atual',
+                'color_class': 'kpi-purple',
+                'icon': 'fa-house',
+            },
+        ]
 
     def save_model(self, request, obj, form, change):
         if not change:
@@ -627,6 +884,7 @@ class MovimentoBancarioAdmin(BotaoExcluirLinhaMixin, ExclusaoEmLoteComRegrasMixi
         StatusFilterAdminMixin,
         EstabelecimentoFilterAdminMixin,
         BancoPadraoFilter,
+        MovimentoConciliacaoFilter,
         ('dt_movimento', admin.DateFieldListFilter),
         ('dt_registro', admin.DateFieldListFilter),
     ]

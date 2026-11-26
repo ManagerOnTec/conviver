@@ -78,6 +78,8 @@ def _qtd(valor):
 class FaturasDashboardMixin(AdminDashboardAndTopFilterMixin):
     """Base dos admins de faturas: competência, vencimento, saldo e status."""
 
+    dashboard_date_filter_fields = '__all__'
+
     # Campo de competência (base dos presets de mês/ano).
     dashboard_competencia_field = 'competencia'
     # Campo de vencimento (presets de período e KPI "vencidas").
@@ -118,8 +120,20 @@ class FaturasDashboardMixin(AdminDashboardAndTopFilterMixin):
         hoje = timezone.localdate()
         ano, mes = hoje.year, hoje.month
 
+        def url_periodo(**mudancas):
+            params = self._query_params(request)
+            for chave in self.get_top_date_filter_range_keys():
+                params.pop(chave, None)
+            for chave, valor in mudancas.items():
+                if valor in (None, ''):
+                    params.pop(chave, None)
+                else:
+                    params[chave] = valor
+            query = params.urlencode()
+            return f'{request.path}?{query}' if query else request.path
+
         periodos = [
-            {'label': 'Todos', 'url': self._url_com(request),
+            {'label': 'Todos', 'url': url_periodo(),
              'active': not self._tem_filtro_periodo(request)},
         ]
 
@@ -134,7 +148,7 @@ class FaturasDashboardMixin(AdminDashboardAndTopFilterMixin):
             campo = self.dashboard_competencia_field
             periodos.append({
                 'label': rotulo,
-                'url': self._url_com(request, **{
+                'url': url_periodo(**{
                     f'{campo}__year': ref.year,
                     f'{campo}__month': ref.month,
                 }),
@@ -148,7 +162,7 @@ class FaturasDashboardMixin(AdminDashboardAndTopFilterMixin):
         periodos += [
             {
                 'label': f'Vence {mes:02d}/{ano}',
-                'url': self._url_com(request, **{
+                'url': url_periodo(**{
                     f'{campo_venc}__year': ano,
                     f'{campo_venc}__month': mes,
                 }),
@@ -157,7 +171,7 @@ class FaturasDashboardMixin(AdminDashboardAndTopFilterMixin):
             },
             {
                 'label': 'Vencidas',
-                'url': self._url_com(request, **{
+                'url': url_periodo(**{
                     f'{campo_venc}__lt': hoje.isoformat(),
                 }),
                 'active': f'{campo_venc}__lt' in request.GET,
@@ -179,10 +193,14 @@ class FaturasDashboardMixin(AdminDashboardAndTopFilterMixin):
         return queryset.aggregate(**campos)
 
     def _tem_filtro_periodo(self, request):
-        return any(chave.startswith((
-            f'{self.dashboard_competencia_field}__',
-            f'{self.dashboard_vencimento_field}__',
-        )) for chave in request.GET.keys())
+        return (
+            any(request.GET.get(chave) for chave in
+                self.get_top_date_filter_range_keys())
+            or any(chave.startswith((
+                f'{self.dashboard_competencia_field}__',
+                f'{self.dashboard_vencimento_field}__',
+            )) for chave in request.GET.keys())
+        )
 
     def get_dashboard_kpis(self, request, queryset):
         return [

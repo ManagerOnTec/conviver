@@ -102,14 +102,32 @@
     <!-- Filtro de datas customizadas De / Até -->
     <form method="get" action="{{ request.path }}" class="top-custom-date-box" id="top-date-range-form">
       {% for k, v in request.GET.items %}
-        {% if k != date_field_gte and k != date_field_lte and k != 'p' and k != 'periodo' %}
+        {% if k not in selected_top_date_filter_range_keys and k != 'p' and k != 'periodo' %}
           <input type="hidden" name="{{ k }}" value="{{ v }}">
         {% endif %}
       {% endfor %}
+      {% if top_date_filter_fields|length > 1 %}
+        <label class="top-subfilter-group">
+          <span class="filter-group-label">Data:</span>
+          <select class="top-subfilter-select" id="top-date-field-select"
+                  aria-label="Campo de data para filtrar">
+            {% for field in top_date_filter_fields %}
+              <option value="{{ field.name }}"
+                      data-gte-key="{{ field.gte_key }}"
+                      data-lte-key="{{ field.lte_key }}"
+                      {% if field.name == selected_top_date_filter_field %}selected{% endif %}>
+                {{ field.label }}
+              </option>
+            {% endfor %}
+          </select>
+        </label>
+      {% endif %}
       <span class="filter-group-label">De:</span>
-      <input type="date" name="{{ date_field_gte }}" value="{{ current_date_gte }}" class="top-date-input">
+      <input type="date" name="{{ date_field_gte }}" value="{{ current_date_gte }}"
+             class="top-date-input" id="top-date-from">
       <span class="filter-group-label">Até:</span>
-      <input type="date" name="{{ date_field_lte }}" value="{{ current_date_lte }}" class="top-date-input">
+      <input type="date" name="{{ date_field_lte }}" value="{{ current_date_lte }}"
+             class="top-date-input" id="top-date-to">
       <button type="submit" class="top-date-btn">Filtrar</button>
     </form>
   </div>

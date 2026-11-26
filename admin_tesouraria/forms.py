@@ -6,6 +6,8 @@ from admin_financeiro.models import CompetenciaBancaria
 
 from .models import MovimentoCaixa, CompetenciaCaixa
 
+ORIGENS_COM_BAIXA_FATURA = ('recebimento', 'ajuste')
+
 
 class MovimentoCaixaForm(forms.ModelForm):
     """Form do movimento de caixa.
@@ -16,10 +18,19 @@ class MovimentoCaixaForm(forms.ModelForm):
     parcialmente montada no `_post_clean`).
     """
 
+    # BAIXA DE FATURA (recebimento em dinheiro): o usuário escolhe a FATURA
+    # (com saldo); o sistema cria a `BaixaFatura` concomitante ao movimento —
+    # espelho da baixa de pagamento em caixa, só que para ENTRADA.
+    fatura_receber = forms.ModelChoiceField(
+        queryset=None, required=False, label='Fatura a receber (baixa)',
+        help_text='Opcional: origem “Recebimento avulso” ou “Ajuste/estorno” '
+                  'com ENTRADA de dinheiro. O valor da entrada baixa o saldo '
+                  'desta fatura.')
+
     class Meta:
         model = MovimentoCaixa
         fields = '__all__'
-        exclude = ['estabelecimento', 'transferencia_id']
+        exclude = ['estabelecimento', 'transferencia_id', 'baixa_fatura']
         widgets = {
             'dt_movimento': forms.DateInput(attrs={'type': 'date'},
                                             format='%Y-%m-%d'),
@@ -42,6 +53,12 @@ class MovimentoCaixaForm(forms.ModelForm):
             self.fields['competencia_bancaria'].queryset = \
                 CompetenciaBancaria.objects.filter(
                     dt_fechamento_competencia__isnull=True, status='A')
+        # BAIXA DE FATURA: só faturas ATIVAS COM SALDO (o valor da entrada
+        # abate o saldo; a baixa pode, no máximo, zerá-lo).
+        if 'fatura_receber' in self.fields:
+            from admin_faturas.models import Fatura
+            self.fields['fatura_receber'].queryset = Fatura.objects.filter(
+                status='A', valor_saldo__gt=0).order_by('-pk')
 
     def clean(self):
         dados = super().clean()
@@ -69,6 +86,28 @@ class MovimentoCaixaForm(forms.ModelForm):
             self.add_error('origem',
                            'O tipo “Depósito em Banco” exige a origem '
                            '“Depósito em banco (caixa → banco)”.')
+
+        # BAIXA DE FATURA: só ENTRADA, nas origens de recebimento/ajuste.
+        fatura_receber = dados.get('fatura_receber')
+        if fatura_receber is not None:
+            if entrada <= 0 or tipo != 'E':
+                self.add_error(
+                    'fatura_receber',
+                    'A baixa de fatura vale para ENTRADA de dinheiro: informe '
+                    'o VALOR DE ENTRADA e o tipo “Entrada”.')
+            elif origem not in ORIGENS_COM_BAIXA_FATURA:
+                self.add_error(
+                    'fatura_receber',
+                    'A baixa de fatura só vale para a origem “Recebimento '
+                    'avulso” ou “Ajuste/estorno”.')
+            else:
+                saldo = (fatura_receber.valor_saldo or 0)
+                if entrada > saldo:
+                    self.add_error(
+                        'valor_entrada',
+                        f'O valor da entrada (R$ {entrada}) é maior que o '
+                        f'saldo da fatura {fatura_receber.pk} (R$ {saldo}). '
+                        'A baixa pode, no máximo, zerar o saldo.')
 
         # Competência aberta.
         if competencia is not None and competencia.dt_fechamento:
@@ -123,3 +162,30 @@ class MovimentoCaixaForm(forms.ModelForm):
                                'A transação é de DEPÓSITO BANCÁRIO: selecione a '
                                'origem “Depósito em banco”.')
         return dados
+
+    def save(self, commit=True):
+        """Grava o movimento e a BAIXA DE FATURA concomitante.
+
+        Com `fatura_receber` preenchida, cria a `BaixaFatura` nova (sem
+        gravar): ela segue para `MovimentoCaixa.save()` como `baixa_fatura`,
+        e o helper `_registrar_baixa_fatura_do_caixa` a grava DEPOIS que o
+        movimento tem pk — abatendo o saldo da fatura (concomitância igual à
+        da baixa de pagamento em caixa).
+        """
+        movimento = super().save(commit=False)
+        fatura = self.cleaned_data.get('fatura_receber')
+        if fatura is not None:
+            from admin_faturas.models import BaixaFatura
+            nova_baixa = BaixaFatura(
+                fatura_baixada=[fatura],
+                valor_baixa=movimento.valor_entrada or 0,
+                dt_recebimento=movimento.dt_movimento,
+                transacao_financeira_id=movimento.transacao_financeira_id,
+                competencia_bancaria=None,
+            )
+            # A baixa fica PENDENTE (sem pk): o save() do modelo a registra
+            # DEPOIS que o movimento tem pk (concomitância com o movimento).
+            object.__setattr__(movimento, '_baixa_fatura_pendente', nova_baixa)
+        if commit:
+            movimento.save()
+        return movimento

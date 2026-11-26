@@ -1135,6 +1135,112 @@ class ExportToXLSMixin:
     export_as_csv.short_description = "📄 Exportar Selecionados para CSV (UTF-8)"
 
 
+class ExportToXLSWithAttachmentsMixin(ExportToXLSMixin):
+    """Exporta anexos selecionados junto da planilha, com links relativos."""
+
+    export_xls_attachment_fields = ()
+
+    def export_as_xls(self, request, queryset):
+        attachment_fields = self.export_xls_attachment_fields
+        if not attachment_fields:
+            return super().export_as_xls(request, queryset)
+
+        import io
+        import re
+        import zipfile
+        from copy import copy
+        from pathlib import PurePosixPath
+
+        import openpyxl
+
+        from django.utils.text import slugify
+
+        registros = list(queryset)
+        anexos = {}
+        try:
+            for obj in registros:
+                for field_name in attachment_fields:
+                    arquivo = getattr(obj, field_name)
+                    if not arquivo:
+                        continue
+                    nome_original = arquivo.name
+                    extensao = PurePosixPath(
+                        nome_original.replace('\\', '/')).suffix.lower()
+                    if not re.fullmatch(r'\.[a-z0-9]{1,10}', extensao):
+                        extensao = ''
+                    caminho_zip = (
+                        f'anexos/{field_name}/{obj.pk}{extensao}')
+                    with arquivo.storage.open(nome_original, 'rb') as conteudo:
+                        anexos[(obj.pk, field_name)] = (
+                            caminho_zip, conteudo.read(),
+                            PurePosixPath(
+                                nome_original.replace('\\', '/')).name)
+        except (OSError, ValueError):
+            logging.getLogger(__name__).exception(
+                'Falha ao ler anexo durante a exportação XLS do modelo %s',
+                self.model._meta.label)
+            self.message_user(
+                request,
+                'Não foi possível ler um dos anexos selecionados. Nenhum '
+                'arquivo de exportação foi gerado.',
+                level=messages.ERROR)
+            return HttpResponseRedirect(request.get_full_path())
+
+        if not anexos:
+            return super().export_as_xls(request, registros)
+
+        resposta_xlsx = super().export_as_xls(request, registros)
+        if resposta_xlsx['Content-Type'] != (
+                'application/vnd.openxmlformats-officedocument.'
+                'spreadsheetml.sheet'):
+            self.message_user(
+                request,
+                'Não foi possível gerar a planilha XLSX para incluir os '
+                'anexos. Tente novamente ou contate o administrador.',
+                level=messages.ERROR)
+            return HttpResponseRedirect(request.get_full_path())
+
+        planilha = openpyxl.load_workbook(
+            io.BytesIO(resposta_xlsx.content))
+        ws = planilha.active
+        nomes_campos = [field.name for field in self.model._meta.fields]
+        for linha, obj in enumerate(registros, start=2):
+            for field_name in attachment_fields:
+                anexo = anexos.get((obj.pk, field_name))
+                if anexo is None:
+                    continue
+                caminho_zip, _, nome_original = anexo
+                celula = ws.cell(
+                    row=linha, column=nomes_campos.index(field_name) + 1)
+                celula.value = 'Abrir anexo'
+                celula.hyperlink = caminho_zip
+                celula.hyperlink.tooltip = nome_original
+                fonte = copy(celula.font)
+                fonte.color = '0563C1'
+                fonte.underline = 'single'
+                celula.font = fonte
+
+        conteudo_planilha = io.BytesIO()
+        planilha.save(conteudo_planilha)
+        nome_base = slugify(str(self.model._meta.verbose_name_plural)) \
+            or 'exportacao'
+        conteudo_zip = io.BytesIO()
+        with zipfile.ZipFile(
+                conteudo_zip, 'w', compression=zipfile.ZIP_DEFLATED) as pacote:
+            pacote.writestr(f'{nome_base}.xlsx', conteudo_planilha.getvalue())
+            for caminho_zip, conteudo, _ in anexos.values():
+                pacote.writestr(caminho_zip, conteudo)
+
+        response = HttpResponse(
+            conteudo_zip.getvalue(), content_type='application/zip')
+        response['Content-Disposition'] = (
+            f'attachment; filename="{nome_base}_com_anexos.zip"')
+        return response
+
+    export_as_xls.short_description = (
+        '📊 Exportar Excel e anexos selecionados')
+
+
 
 class ListEditableComRegras:
     """`list_editable` que RESPONDE ÀS REGRAS do fluxo.

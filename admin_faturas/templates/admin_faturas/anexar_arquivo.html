@@ -1,0 +1,29 @@
+{% extends "admin/base_site.html" %}
+
+{% block breadcrumbs %}
+  {% include "admin/includes/breadcrumbs.html" %}
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <h1>Anexar Nota Fiscal à fatura {{ fatura.pk }}</h1>
+  <p>{{ fatura.cliente }} · vencimento
+    {{ fatura.dt_vencimento|date:"d/m/Y" }}</p>
+
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    <div class="form-row">
+      {{ form.arquivo.label_tag }}
+      {{ form.arquivo }}
+      {% for erro in form.arquivo.errors %}<p class="errornote">{{ erro }}</p>{% endfor %}
+      <p class="help">PDF, JPG, JPEG ou PNG de até 5 MB.</p>
+    </div>
+    <div class="submit-row">
+      <input type="submit" class="default" value="Anexar NF">
+      <a href="{% url 'admin:admin_faturas_fatura_changelist' %}"
+         class="button">Voltar às faturas</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

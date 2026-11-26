@@ -1,0 +1,36 @@
+{% extends "admin/base_site.html" %}
+
+{% block breadcrumbs %}
+  {% include "admin/includes/breadcrumbs.html" %}
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <h1>{{ title }} do pagamento {{ pagamento.pk }}</h1>
+  <p>{{ pagamento.fornecedor }} · vencimento
+    {{ pagamento.dt_vencimento|date:"d/m/Y" }}</p>
+
+  {% if arquivo_atual %}
+    <p>Arquivo atual:
+      <a href="{{ arquivo_atual.url }}" target="_blank"
+         rel="noopener noreferrer">Abrir {{ rotulo }}</a>.
+      Enviar outro arquivo substituirá o atual.</p>
+  {% endif %}
+
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    <div class="form-row">
+      {{ form.arquivo.label_tag }}
+      {{ form.arquivo }}
+      {% for erro in form.arquivo.errors %}<p class="errornote">{{ erro }}</p>{% endfor %}
+      <p class="help">Selecione o arquivo que deseja anexar.</p>
+    </div>
+    <div class="submit-row">
+      <input type="submit" class="default" value="Anexar {{ rotulo }}">
+      <a href="{% url 'admin:admin_pagamentos_pagamento_changelist' %}"
+         class="button">Voltar aos pagamentos</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

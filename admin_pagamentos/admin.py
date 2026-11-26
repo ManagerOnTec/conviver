@@ -13,6 +13,7 @@ Regras (ver `instrucoes_pagamentos.md` e `admin_financeiro/instrucoes_financeiro
 """
 from datetime import date
 from decimal import Decimal
+import logging
 
 from django.contrib import admin, messages
 from django.db import models, transaction
@@ -31,7 +32,8 @@ from admin_financeiro.models import CompetenciaBancaria
 from dominios.utils import (
     AdminEstabelecimentoPadraoMixin, AdminSaveModelAuditMixin,
     BotaoExcluirLinhaMixin, EdicaoComRegrasMixin,
-    ExclusaoEmLoteComRegrasMixin, ExportToXLSMixin, StatusFilterAdminMixin,
+    ExclusaoEmLoteComRegrasMixin, ExportToXLSMixin,
+    ExportToXLSWithAttachmentsMixin, StatusFilterAdminMixin,
 )
 
 from .dashboard import FornecedorPagadorFilter, PagamentosDashboardMixin, \
@@ -39,12 +41,14 @@ from .dashboard import FornecedorPagadorFilter, PagamentosDashboardMixin, \
 
 from .forms import (
     BaixaPagamentoForm, ClassificacaoFornecedorForm,
-    ClassePagamentoForm, FornecedorForm,
+    ClassePagamentoForm, FornecedorForm, PagamentoAnexoUploadForm,
 )
 from .models import (
     AcordoPagamento, BaixaPagamento, ClassificacaoFornecedor,
     ClassePagamento, Fornecedor, Pagamento, PrePagamento,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ----------------------------------------------------------------------
@@ -195,7 +199,7 @@ class AcordoPagamentoAdmin(
 
     list_display = ['id', 'fornecedor_link', 'gerar_previsoes_button',
                     'duplicate_button', 'excluir_linha', 'fornecedor_classificacao',
-                    'classe_pagamento', 'valor_previsto', 'tx_retencao', 'vl_retencao',
+                    'classe_pagamento', 'valor_previsto', 'observacao', 'tx_retencao', 'vl_retencao',
                     'recorrencia', 'data_inicio', 'data_fim', 'estabelecimento',
                     'pre_pago', 'status']
     list_display_links = ['id']
@@ -608,7 +612,12 @@ class PagamentoAdmin(
         PagamentosDashboardMixin, BotaoExcluirLinhaMixin,
         EdicaoComRegrasMixin,
         ExclusaoEmLoteComRegrasMixin, AdminEstabelecimentoPadraoMixin,
-        AdminSaveModelAuditMixin, ExportToXLSMixin, admin.ModelAdmin):
+        AdminSaveModelAuditMixin, ExportToXLSWithAttachmentsMixin,
+        admin.ModelAdmin):
+
+    export_xls_attachment_fields = (
+        'anexo_nota_fiscal', 'anexo_boleto',
+    )
 
     ordering = ('dt_vencimento', 'pk')
 
@@ -675,22 +684,30 @@ class PagamentoAdmin(
     fornecedor_link.admin_order_field = 'fornecedor__descricao'
 
     def anexo_nota_fiscal_link(self, obj):
-        if not obj.anexo_nota_fiscal:
-            return '-'
-        return format_html(
-            '<a href="{}" target="_blank" rel="noopener noreferrer">'
-            'Visualizar</a>',
-            obj.anexo_nota_fiscal.url)
+        return self._link_anexo(obj, 'nf')
     anexo_nota_fiscal_link.short_description = 'Anexo NF'
 
     def anexo_boleto_link(self, obj):
-        if not obj.anexo_boleto:
-            return '-'
-        return format_html(
-            '<a href="{}" target="_blank" rel="noopener noreferrer">'
-            'Visualizar</a>',
-            obj.anexo_boleto.url)
+        return self._link_anexo(obj, 'bol')
     anexo_boleto_link.short_description = 'Anexo Boleto'
+
+    def _link_anexo(self, obj, tipo):
+        if tipo == 'nf':
+            campo, texto_visualizar, texto_anexar = (
+                'anexo_nota_fiscal', 'Ver NF', 'Anexar NF')
+        else:
+            campo, texto_visualizar, texto_anexar = (
+                'anexo_boleto', 'Ver BOL', 'Anexar BOL')
+        arquivo = getattr(obj, campo)
+        if arquivo:
+            return format_html(
+                '<a href="{}" target="_blank" rel="noopener noreferrer">'
+                '{}</a>',
+                arquivo.url, texto_visualizar)
+        url = reverse(
+            'admin:admin_pagamentos_pagamento_anexo',
+            args=[obj.pk, tipo])
+        return format_html('<a href="{}">{}</a>', url, texto_anexar)
 
     def get_urls(self):
         urls = super().get_urls()
@@ -704,6 +721,9 @@ class PagamentoAdmin(
             path('<path:object_id>/baixas/',
                  self.admin_site.admin_view(self.baixas_view),
                  name='admin_pagamentos_pagamento_baixas'),
+            path('<path:object_id>/anexo/<str:tipo>/',
+                 self.admin_site.admin_view(self.anexo_pagamento_view),
+                 name='admin_pagamentos_pagamento_anexo'),
         ]
         return custom + urls
 
@@ -716,6 +736,96 @@ class PagamentoAdmin(
     def importar_pagamentos_view(self, request):
         from .importacao import importar_pagamentos_view
         return importar_pagamentos_view(request, self)
+
+    def anexo_pagamento_view(self, request, object_id, tipo):
+        from django.core.exceptions import ValidationError
+        from django.db import IntegrityError
+        from django.template.response import TemplateResponse
+
+        from dominios.breadcrumbs import breadcrumbs_context
+
+        campos = PagamentoAnexoUploadForm.CAMPOS_ANEXO
+        if tipo not in campos:
+            messages.error(request, 'O tipo de anexo solicitado é inválido.')
+            return redirect('admin:admin_pagamentos_pagamento_changelist')
+        pagamento = get_object_or_404(Pagamento, pk=object_id)
+        if not self.has_change_permission(request, pagamento):
+            messages.error(
+                request, 'Você não tem permissão para anexar arquivos a este '
+                'pagamento.')
+            return redirect('admin:admin_pagamentos_pagamento_changelist')
+        campo_modelo, rotulo = campos[tipo]
+        if getattr(pagamento, campo_modelo):
+            messages.warning(
+                request, f'Este pagamento já tem {rotulo} anexado. O anexo '
+                'existente não foi alterado.')
+            return redirect('admin:admin_pagamentos_pagamento_changelist')
+
+        form = PagamentoAnexoUploadForm(
+            request.POST or None, request.FILES or None, tipo=tipo)
+        if request.method == 'POST' and form.is_valid():
+            arquivo_anterior = getattr(pagamento, campo_modelo)
+            nome_anterior = arquivo_anterior.name if arquivo_anterior else ''
+            try:
+                with transaction.atomic():
+                    arquivo_novo = form.cleaned_data['arquivo']
+                    getattr(pagamento, campo_modelo).save(
+                        arquivo_novo.name, arquivo_novo, save=False)
+                    nome_novo = getattr(pagamento, campo_modelo).name
+                    pagamento.us_atualizacao = request.user
+                    pagamento.dt_atualizacao = timezone.now()
+                    pagamento.save(update_fields=[
+                        campo_modelo, 'us_atualizacao', 'dt_atualizacao'])
+            except (OSError, ValidationError, IntegrityError, ValueError):
+                nome_novo = getattr(pagamento, campo_modelo).name
+                if nome_novo and nome_novo != nome_anterior:
+                    try:
+                        getattr(pagamento, campo_modelo).storage.delete(
+                            nome_novo)
+                    except OSError:
+                        logger.exception(
+                            'Falha ao remover anexo após salvar pagamento %s',
+                            pagamento.pk)
+                pagamento.refresh_from_db()
+                form.add_error(
+                    None, 'Não foi possível salvar o anexo. Confira o '
+                    'arquivo e tente novamente.')
+                logger.exception(
+                    'Falha ao anexar arquivo ao pagamento %s',
+                    pagamento.pk)
+            else:
+                if nome_anterior and nome_anterior != nome_novo:
+                    try:
+                        arquivo_anterior.storage.delete(nome_anterior)
+                    except OSError:
+                        messages.warning(
+                            request,
+                            'O novo anexo foi salvo, mas não foi possível '
+                            'remover o arquivo anterior. Solicite a limpeza '
+                            'ao administrador.')
+                if not form.errors:
+                    messages.success(
+                        request, f'{rotulo} anexado ao pagamento '
+                        f'{pagamento.pk}.')
+                    return redirect(
+                        'admin:admin_pagamentos_pagamento_changelist')
+
+        contexto = dict(self.admin_site.each_context(request))
+        contexto.update(breadcrumbs_context(
+            self.admin_site, request, self.model._meta.app_label,
+            modelo_nome=f'Anexar {rotulo}',
+            modelo_url=reverse(
+                'admin:admin_pagamentos_pagamento_changelist')))
+        contexto.update({
+            'title': f'Anexar {rotulo}',
+            'opts': self.model._meta,
+            'pagamento': pagamento,
+            'form': form,
+            'rotulo': rotulo,
+            'arquivo_atual': getattr(pagamento, campo_modelo),
+        })
+        return TemplateResponse(
+            request, 'admin_pagamentos/anexar_arquivo.html', contexto)
 
     # ------------------------------------------------------------------
     # FINALIZAR / REABRIR

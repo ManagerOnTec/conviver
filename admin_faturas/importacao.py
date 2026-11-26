@@ -52,8 +52,161 @@ Sobre o valor: quando a descrição traz diária, o `VALOR` da linha é
 import re
 import unicodedata
 from decimal import Decimal, InvalidOperation
+from io import BytesIO
 
+from django import forms
+from django.core.exceptions import ValidationError
+from django.forms import formset_factory
 from django.utils import timezone
+from dominios.choices import (
+    descricao_internacao_choices, modalidade_contrato_choices,
+    modo_fatura_choices,
+)
+
+
+class UploadAcordosForm(forms.Form):
+    planilha = forms.FileField(
+        label='Planilha Excel',
+        help_text='Selecione a planilha CONVENIOS.xlsx.')
+
+    def clean_planilha(self):
+        arquivo = self.cleaned_data['planilha']
+        extensao = arquivo.name.rsplit('.', 1)[-1].lower() \
+            if '.' in arquivo.name else ''
+        if extensao not in ('xlsx', 'xlsm'):
+            raise ValidationError(
+                'Envie uma planilha do Excel no formato .xlsx ou .xlsm.')
+        if not arquivo.size:
+            raise ValidationError('A planilha está vazia.')
+        return arquivo
+
+
+def formatar_clientes_revisao(clientes):
+    linhas = []
+    for cliente in clientes:
+        nome = cliente['nome']
+        nascimento = cliente.get('nascimento')
+        if nascimento:
+            nome = f'{nome} | {nascimento.strftime("%d/%m/%Y")}'
+        linhas.append(nome)
+    return '\n'.join(linhas)
+
+
+class AcordoImportRowForm(forms.Form):
+    incluir = forms.BooleanField(
+        label='Importar', required=False, initial=True)
+    cidade = forms.CharField(label='Cidade', max_length=100)
+    cidade_rotulo = forms.CharField(label='Empresa / órgão', max_length=255)
+    cnpj = forms.CharField(label='CNPJ', max_length=18)
+    acordo_faturamento = forms.CharField(
+        label='Acordo de faturamento', max_length=255)
+    nr_contrato = forms.CharField(
+        label='Contrato', max_length=30, required=False)
+    nr_aditivo = forms.CharField(
+        label='Aditivo', max_length=30, required=False)
+    empenho_global = forms.CharField(
+        label='Empenho', max_length=30, required=False)
+    inicio_vigencia = forms.DateField(
+        label='Início da vigência',
+        widget=forms.DateInput(
+            format='%Y-%m-%d', attrs={'type': 'date'}))
+    final_vigencia = forms.DateField(
+        label='Fim da vigência',
+        widget=forms.DateInput(
+            format='%Y-%m-%d', attrs={'type': 'date'}))
+    dia_envio = forms.IntegerField(
+        label='Dia de envio', min_value=1, max_value=31)
+    dias_pagamento = forms.IntegerField(
+        label='Dias para pagamento', min_value=0, max_value=32767,
+        initial=30)
+    valor_mensal = forms.DecimalField(
+        label='Valor mensal', max_digits=10, decimal_places=2,
+        min_value=Decimal('0'), required=False)
+    valor_diaria = forms.DecimalField(
+        label='Valor diária', max_digits=10, decimal_places=2,
+        min_value=Decimal('0'), required=False)
+    modo_fatura = forms.ChoiceField(
+        label='Modalidade', choices=modo_fatura_choices, initial='CO')
+    modalidade_contrato = forms.ChoiceField(
+        label='Tipo de contrato', choices=modalidade_contrato_choices,
+        initial='CO')
+    descricao_internacao = forms.ChoiceField(
+        label='Descrição da NF', choices=descricao_internacao_choices,
+        initial='acolhimento')
+    tx_retencao_nf = forms.DecimalField(
+        label='Retenção (%)', max_digits=5, decimal_places=2,
+        min_value=Decimal('0'), max_value=Decimal('100'),
+        initial=Decimal('0'))
+    vl_retencao_nf = forms.DecimalField(
+        label='Retenção (R$)', max_digits=10, decimal_places=2,
+        min_value=Decimal('0'), initial=Decimal('0'))
+    clientes = forms.CharField(
+        label='Clientes (um por linha)',
+        required=False,
+        widget=forms.Textarea(attrs={
+            'rows': 4,
+            'style': 'width:270px;box-sizing:border-box',
+        }),
+        help_text=(
+            'Remova uma linha para excluir o cliente. Para informar '
+            'nascimento, use: Nome | dd/mm/aaaa.'))
+
+    def clean_clientes(self):
+        from datetime import datetime
+
+        clientes = []
+        vistos = set()
+        for numero, linha in enumerate(
+                self.cleaned_data['clientes'].splitlines(), start=1):
+            linha = linha.strip()
+            if not linha:
+                continue
+            nome, separador, nascimento_texto = linha.rpartition('|')
+            nascimento = None
+            if separador:
+                nome = nome.strip()
+                try:
+                    nascimento = datetime.strptime(
+                        nascimento_texto.strip(), '%d/%m/%Y').date()
+                except ValueError as erro:
+                    raise ValidationError(
+                        f'Linha {numero}: use uma data válida no formato '
+                        'dd/mm/aaaa após o separador "|".') from erro
+            else:
+                nome = linha
+            if not nome:
+                raise ValidationError(
+                    f'Linha {numero}: informe o nome do cliente.')
+            chave = (normalizar_texto(nome), nascimento)
+            if chave in vistos:
+                continue
+            vistos.add(chave)
+            clientes.append({'nome': nome, 'nascimento': nascimento})
+        return clientes
+
+    def clean_cnpj(self):
+        cnpj = re.sub(r'\D', '', self.cleaned_data['cnpj'])
+        if len(cnpj) != 14:
+            raise ValidationError(
+                'O CNPJ deve conter exatamente 14 dígitos.')
+        return cnpj
+
+    def clean(self):
+        dados = super().clean()
+        inicio = dados.get('inicio_vigencia')
+        fim = dados.get('final_vigencia')
+        if inicio and fim and fim < inicio:
+            self.add_error(
+                'final_vigencia',
+                'O fim da vigência deve ser igual ou posterior ao início.')
+        return dados
+
+
+AcordoImportRowFormSet = formset_factory(
+    AcordoImportRowForm, extra=0)
+
+ACORDOS_SESSION_KEY = 'importacoes_acordos_faturamento'
+ACORDOS_TEMP_PREFIX = 'faturas/importacoes/acordos/'
 
 
 # ----------------------------------------------------------------------
@@ -501,12 +654,20 @@ def ler_planilha(caminho_arquivo):
             "A biblioteca 'openpyxl' é necessária para importar a planilha.\n"
             "Instale com: pip install openpyxl") from exc
 
-    wb = openpyxl.load_workbook(caminho_arquivo, data_only=True)
+    if isinstance(caminho_arquivo, (bytes, bytearray)):
+        conteudo = bytes(caminho_arquivo)
+        abrir = lambda data_only: openpyxl.load_workbook(
+            BytesIO(conteudo), data_only=data_only)
+    else:
+        abrir = lambda data_only: openpyxl.load_workbook(
+            caminho_arquivo, data_only=data_only)
+
+    wb = abrir(data_only=True)
     ws = wb.active
     # Segunda leitura SEM `data_only`: fórmulas e CORES não existem no modo
     # calculado. As fórmulas dão a DIÁRIA; a cor da coluna A diz quais
     # linhas NÃO são competência.
-    wb_formulas = openpyxl.load_workbook(caminho_arquivo, data_only=False)
+    wb_formulas = abrir(data_only=False)
     ws_formulas = wb_formulas.active
 
     avisos = []
@@ -760,7 +921,7 @@ def importar(acordos, user, estabelecimento):
     - A CIDADE é criada em SC se não existir;
     - Os CLIENTES da coluna D viram `Pessoa` (classificação 'paciente') e
       são VINCULADOS ao acordo;
-    - O ACORDO importado é criado com `modo_fatura='CO'` (fatura consolidada).
+    - `modo_fatura='CO'` (Convênio) é o padrão; a revisão pode alterá-lo.
     """
     from admin_cadastros.models import Empresa, Pessoa
     from admin_faturas.models import AcordoFaturamento
@@ -832,20 +993,21 @@ def importar(acordos, user, estabelecimento):
         acordo = AcordoFaturamento.objects.create(
             acordo_faturamento=dados['acordo_faturamento'][:255],
             pagador_pj=empresa,
-            # Planilha de convênios importa acordos consolidados por padrão.
-            modo_fatura='CO',
-            modalidade_contrato='CO',
+            modo_fatura=dados.get('modo_fatura', 'CO'),
+            modalidade_contrato=dados.get('modalidade_contrato', 'CO'),
             nr_contrato=(dados['nr_contrato'] or '')[:30],
+            nr_aditivo=(dados.get('nr_aditivo') or '')[:30],
             empenho_global=(dados['empenho_global'] or '')[:30],
-            descricao_internacao='acolhimento',
+            descricao_internacao=dados.get(
+                'descricao_internacao', 'acolhimento'),
             inicio_vigencia=dados['inicio_vigencia'],
             final_vigencia=dados['final_vigencia'],
             dia_envio=dados['emitido_no'],
-            dias_pagamento=30,
+            dias_pagamento=dados.get('dias_pagamento', 30),
             valor_mensal=dados['valor_mensal'],
             valor_diaria=dados['valor_diaria'],
-            tx_retencao_nf=Decimal('0.00'),
-            vl_retencao_nf=Decimal('0.00'),
+            tx_retencao_nf=dados.get('tx_retencao_nf', Decimal('0.00')),
+            vl_retencao_nf=dados.get('vl_retencao_nf', Decimal('0.00')),
             estabelecimento=estabelecimento,
             us_registro=user,
             dt_registro=agora,

@@ -94,6 +94,24 @@ class FornecedorForm(forms.ModelForm):
         return descricao
 
 
+class PagamentoAnexoUploadForm(forms.Form):
+    CAMPOS_ANEXO = {
+        'nf': ('anexo_nota_fiscal', 'Nota Fiscal'),
+        'bol': ('anexo_boleto', 'Boleto'),
+    }
+
+    arquivo = forms.FileField(label='Arquivo')
+
+    def __init__(self, *args, tipo, **kwargs):
+        super().__init__(*args, **kwargs)
+        if tipo not in self.CAMPOS_ANEXO:
+            raise ValueError('Tipo de anexo de pagamento inválido.')
+        campo_modelo, rotulo = self.CAMPOS_ANEXO[tipo]
+        self.fields['arquivo'].label = f'Arquivo de {rotulo}'
+        self.fields['arquivo'].validators = list(
+            Pagamento._meta.get_field(campo_modelo).validators)
+
+
 class BaixaPagamentoForm(forms.ModelForm):
     class Meta:
         model = BaixaPagamento

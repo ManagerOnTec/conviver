@@ -39,6 +39,15 @@ Fornecedor → AcordoPagamento → PrePagamento → Pagamento → BaixaPagamento
   gerou o pagamento: a partir daí quem manda é o Pagamento).
 - **`finalizado`** → fica no **Pagamento** (a trava do fluxo, espelho do
   `faturado` da Fatura).
+- Nas colunas de anexo da listagem de Pagamentos, **Ver NF** e **Ver BOL**
+  abrem os arquivos em nova aba. Quando um tipo de anexo estiver vazio, a
+  listagem exibe a ação **Anexar** correspondente, mesmo que o outro anexo já
+  exista ou que o pagamento esteja finalizado/tenha baixa. O envio ocorre em
+  formulário próprio com validação de extensão e auditoria; um anexo já
+  existente não pode ser substituído pela listagem.
+- A ação **Exportar Selecionados para Excel** inclui NF e boleto no ZIP junto
+  da planilha; cada célula de anexo tem hyperlink relativo para o arquivo
+  correspondente dentro do pacote extraído.
 
 ## A regra maior: competência FECHADA trava tudo
 
@@ -152,6 +161,10 @@ nenhum campo de digitação.
 - **presets de período** (Todos / competência atual e anterior / vencidas /
   a vencer) montados sobre `dashboard_competencia_field` e
   `dashboard_vencimento_field`;
+- **filtro de data do topo**, que permite selecionar qualquer campo Date ou
+  DateTime do modelo da tela (incluindo competência, vencimento, liquidação,
+  pagamento, registro e atualização) e então informar o intervalo; campos
+  DateTime consideram o dia inteiro;
 - **atalhos** de status, pré-pago/previsto e finalizado/aberto, e de saldo
   (em aberto / pago) quando o modelo tem `valor_saldo`;
 - **dropdowns seletores do topo** (`get_top_dropdown_subfilters`), cada um

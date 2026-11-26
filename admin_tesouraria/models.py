@@ -311,6 +311,16 @@ class MovimentoCaixa(models.Model):
         'admin_pagamentos.BaixaPagamento', on_delete=models.PROTECT,
         blank=True, null=True, related_name='movimentos_caixa',
         verbose_name='Baixa de Pagamento')
+    # BAIXA DE FATURA (recebimento em dinheiro): a ENTRADA deste movimento
+    # baixa a fatura — abate o `valor_saldo` dela e registra a BaixaFatura.
+    # Concomitante: excluir o movimento exclui a baixa e devolve o saldo.
+    baixa_fatura = models.ForeignKey(
+        'admin_faturas.BaixaFatura', on_delete=models.PROTECT,
+        blank=True, null=True, related_name='movimentos_caixa',
+        verbose_name='Baixa de Fatura',
+        help_text='Fatura recebida em DINHEIRO neste movimento (origem '
+                  '“Recebimento avulso” ou “Ajuste/estorno” com tipo '
+                  'Entrada).')
 
     us_registro = models.ForeignKey(
         User, related_name='mov_caixa_registro', on_delete=models.PROTECT,
@@ -454,10 +464,50 @@ class MovimentoCaixa(models.Model):
                 erros['tipo'] = (
                     'Depósito em banco sai do CAIXA; saque do banco entra no '
                     f'CAIXA. Para esta origem use o tipo “{rotulo}”.')
+        # 6) BAIXA DE FATURA: só para ENTRADA de recebimento/ajuste.
+        if self.baixa_fatura_id:
+            if ent <= 0:
+                erros['baixa_fatura'] = (
+                    'A baixa de fatura vale para ENTRADA de dinheiro: informe '
+                    'o VALOR DE ENTRADA e o tipo “Entrada”.')
+            elif self.origem not in ('recebimento', 'ajuste'):
+                erros['baixa_fatura'] = (
+                    'A baixa de fatura só vale para a origem “Recebimento '
+                    'avulso” ou “Ajuste/estorno”.')
+            else:
+                baixa = self._fk_segura('baixa_fatura')
+                if baixa is None:
+                    erros['baixa_fatura'] = 'Informe a BAIXA DE FATURA.'
+                else:
+                    fatura = baixa.fatura_baixada_do_bd()
+                    if fatura is None:
+                        erros['baixa_fatura'] = (
+                            'A baixa escolhida não está vinculada a uma '
+                            'fatura.')
+                    else:
+                        saldo = (fatura.valor_saldo or 0)
+                        if not baixa._state.adding:
+                            saldo += (baixa.valor_baixa or 0)
+                        if ent > saldo:
+                            erros['valor_entrada'] = (
+                                f'O valor da entrada (R$ {ent}) é maior que o '
+                                f'saldo da fatura {fatura.pk} (R$ {saldo}). A '
+                                'baixa pode, no máximo, zerar o saldo.')
         if erros:
             raise VE(erros)
 
     def save(self, *args, **kwargs):
+        # Baixa de fatura PENDENTE (criada pelo form, ainda sem pk): é ligada
+        # ao movimento para o save() registrá-la depois de ter pk.
+        pendente = self.__dict__.pop('_baixa_fatura_pendente', None)
+        if pendente is not None and not self.baixa_fatura_id:
+            # A FK fica SEM instância até o helper gravar a baixa (Django
+            # recusa save() com related não salvo); o id é lido no helper.
+            object.__setattr__(self, '_baixa_fatura_pendente', pendente)
+        baixa_fatura_nova = (
+            self.baixa_fatura_id is not None
+            and self.baixa_fatura is not None
+            and self.baixa_fatura._state.adding)
         if self.competencia_caixa_id:
             self.estabelecimento = (self.competencia_caixa.controle_caixa
                                     .estabelecimento)
@@ -473,6 +523,15 @@ class MovimentoCaixa(models.Model):
         # Transferência caixa ⇄ banco: lança o OUTRO lado.
         if self.origem in ('deposito_banco', 'saque_banco'):
             _sincronizar_banco(self)
+        # BAIXA DE FATURA (recebimento em dinheiro): grava a BaixaFatura
+        # concomitante — ela abate o saldo da fatura e fica ligada a este
+        # movimento (excluir o movimento exclui a baixa e devolve o saldo).
+        if self.baixa_fatura_id and baixa_fatura_nova:
+            _registrar_baixa_fatura_do_caixa(self)
+        elif getattr(self, '_baixa_fatura_pendente', None) is not None:
+            # A baixa pendente do form: grava agora que o movimento tem pk.
+            pendente = self.__dict__.pop('_baixa_fatura_pendente', None)
+            _registrar_baixa_fatura_do_caixa(self, baixa=pendente)
 
     def delete(self, *args, **kwargs):
         competencia = self.competencia_caixa
@@ -480,6 +539,7 @@ class MovimentoCaixa(models.Model):
         # e a baixa foi ligada a ele. Excluir o movimento leva a baixa junto
         # (ela devolve o valor ao saldo do pagamento).
         baixa = self.baixa_pagamento if self.baixa_pagamento_id else None
+        baixa_fatura = self.baixa_fatura if self.baixa_fatura_id else None
         # Apaga também o OUTRO lado da transferência (caixa ⇄ banco).
         if self.transferencia_id:
             from admin_financeiro.models import MovimentoBancario
@@ -489,6 +549,9 @@ class MovimentoCaixa(models.Model):
         competencia.recalcular_saldos()
         if baixa is not None:
             baixa.excluir_devolvendo_saldo()
+        if baixa_fatura is not None:
+            # A baixa de fatura SAI junto (devolve o saldo da fatura).
+            baixa_fatura.excluir_devolvendo_saldo()
 
 
 def _transacao_movimenta_caixa(transacao):
@@ -506,6 +569,49 @@ def _transacao_movimenta_caixa(transacao):
 def _transacao_movimenta_banco(transacao):
     movimento = (getattr(transacao, 'movimento', '') or '').lower()
     return movimento in ('banco', 'deposito', 'saque')
+
+
+def _registrar_baixa_fatura_do_caixa(movimento_caixa, baixa=None):
+    """Grava a BaixaFatura de um RECEBIMENTO EM DINHEIRO no caixa.
+
+    Espelho do que `BaixaPagamento` faz com o `MovimentoCaixa` de saída, só
+    que para a ENTRADA: a fatura escolhida é baixada pelo valor da entrada.
+
+    A BaixaFatura herda de Fatura (multitable) e precisa do retrato próprio —
+    o `save()` dela já cria esse retrato e abate o `valor_saldo` da fatura
+    baixada. Aqui só preenchemos os campos que o movimento de caixa conhece:
+    fatura, valor (= entrada), transação, data e auditoria.
+    """
+    baixa = baixa or movimento_caixa.baixa_fatura
+    if baixa is None or not baixa._state.adding:
+        return
+    from admin_faturas.models import Fatura, BaixaFatura
+
+    fatura_id = baixa.pk_fatura_baixada()
+    fatura = Fatura.objects.filter(pk=fatura_id).first() if fatura_id else None
+    if fatura is None:
+        raise ValidationError(
+            {'baixa_fatura': 'Escolha a FATURA que está sendo recebida.'})
+
+    baixa.valor_baixa = movimento_caixa.valor_entrada
+    baixa.dt_recebimento = movimento_caixa.dt_movimento
+    baixa.transacao_financeira_id = movimento_caixa.transacao_financeira_id
+    baixa.competencia_bancaria = None          # dinheiro: é CAIXA, não banco
+    baixa.observacao = (
+        f'Recebimento em caixa — {movimento_caixa.get_origem_display()} '
+        f'({movimento_caixa.competencia_caixa})')
+    if baixa.us_registro_baixa_id is None:
+        baixa.us_registro_baixa_id = movimento_caixa.us_registro_id
+    if baixa.estabelecimento_baixa_id is None:
+        baixa.estabelecimento_baixa_id = fatura.estabelecimento_id
+    # Auditoria herdada: a baixa é um retrato do recebimento pelo operador.
+    baixa.us_registro_id = baixa.us_registro_id or movimento_caixa.us_registro_id
+    baixa.dt_registro = movimento_caixa.dt_registro or timezone.now()
+    baixa.save()
+    # Religa o movimento à baixa REAL (a pk pode ter mudado no retrato).
+    MovimentoCaixa.objects.filter(pk=movimento_caixa.pk).update(
+        baixa_fatura_id=baixa.pk)
+    movimento_caixa.baixa_fatura_id = baixa.pk
 
 
 def _sincronizar_banco(movimento_caixa):

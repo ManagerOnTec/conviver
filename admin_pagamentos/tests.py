@@ -1,20 +1,65 @@
 from datetime import date
 from io import BytesIO
+from types import SimpleNamespace
 from unittest.mock import patch
 
+from django.contrib import admin
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase
 from openpyxl import Workbook
 
+from .admin import PagamentoAdmin
+from .models import Pagamento
 from .importacao import (
     PagamentoImportRowForm, UploadPagamentoForm, _ler_arquivo,
     _classe_mais_frequente_por_fornecedor, _ler_planilha, _ler_xml,
     _registro_pdf,
 )
+from .forms import PagamentoAnexoUploadForm
 
 
 class PagamentoImportacaoTests(SimpleTestCase):
+    def test_pagamento_finalizado_com_boleto_permite_anexar_nf_ausente(self):
+        admin_pagamento = PagamentoAdmin(Pagamento, admin.site)
+        obj = SimpleNamespace(
+            pk=123,
+            anexo_nota_fiscal='',
+            anexo_boleto=SimpleNamespace(
+                name='pagamentos/boletos/boleto.pdf',
+                url='/media/pagamentos/boletos/boleto.pdf'),
+            finalizado=True,
+        )
+
+        link_nf = str(admin_pagamento.anexo_nota_fiscal_link(obj))
+        link_boleto = str(admin_pagamento.anexo_boleto_link(obj))
+
+        self.assertIn('Anexar NF', link_nf)
+        self.assertIn('/123/anexo/nf/', link_nf)
+        self.assertIn('Ver BOL', link_boleto)
+
+    def test_formulario_anexo_aceita_pdf_e_xml_na_nota_fiscal(self):
+        form_nf = PagamentoAnexoUploadForm(
+            data={}, files={
+                'arquivo': SimpleUploadedFile('nota.xml', b'<nfe/>'),
+            }, tipo='nf')
+        form_boleto = PagamentoAnexoUploadForm(
+            data={}, files={
+                'arquivo': SimpleUploadedFile('boleto.pdf', b'%PDF'),
+            }, tipo='bol')
+
+        self.assertTrue(form_nf.is_valid(), form_nf.errors)
+        self.assertTrue(form_boleto.is_valid(), form_boleto.errors)
+
+    def test_formulario_anexo_recusa_extensao_incompativel(self):
+        form = PagamentoAnexoUploadForm(
+            data={}, files={
+                'arquivo': SimpleUploadedFile('boleto.xml', b'<nfe/>'),
+            }, tipo='bol')
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('arquivo', form.errors)
+
     def test_campos_de_data_exibem_valores_no_formato_html_date(self):
         form = PagamentoImportRowForm(initial={
             'competencia': date(2026, 11, 24),

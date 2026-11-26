@@ -103,6 +103,12 @@ Ordem do menu (por `verbose_name_plural`):
   - lançamento que **já é origem de pacote** (não pode ser empacotado de novo).
 - Coluna **Conciliação** na listagem: Conciliado / Pendente / Ignorado / Não
   conciliado.
+- Filtro lateral **Conciliação**: “Conciliado” mostra movimentos ligados a
+  linhas de extrato com status conciliado; “Não conciliado” inclui movimentos
+  sem linha e linhas pendentes ou ignoradas.
+- O filtro de data do topo permite escolher entre os campos de data do
+  movimento, incluindo data do movimento, registro e atualização; o intervalo
+  considera o dia inteiro também para campos de data/hora.
 
 ## Conciliação bancária (tela própria — item 4)
 

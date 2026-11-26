@@ -79,6 +79,8 @@ class PagamentosDashboardMixin(AdminDashboardAndTopFilterMixin):
     lidos em cada tela:
     """
 
+    dashboard_date_filter_fields = '__all__'
+
     # Campo de competência (base dos presets de mês/ano).
     dashboard_competencia_field = 'competencia'
     # Campo de vencimento (presets de período e KPI “vencidas”).
@@ -114,10 +116,14 @@ class PagamentosDashboardMixin(AdminDashboardAndTopFilterMixin):
         return f"{request.path}?{qs}" if qs else request.path
 
     def _tem_filtro_periodo(self, request):
-        return any(chave.startswith((
-            f'{self.dashboard_competencia_field}__',
-            f'{self.dashboard_vencimento_field}__',
-        )) for chave in request.GET.keys())
+        return (
+            any(request.GET.get(chave) for chave in
+                self.get_top_date_filter_range_keys())
+            or any(chave.startswith((
+                f'{self.dashboard_competencia_field}__',
+                f'{self.dashboard_vencimento_field}__',
+            )) for chave in request.GET.keys())
+        )
 
     # ------------------------------------------------------------------
     # Presets do período (barra superior)
@@ -139,6 +145,8 @@ class PagamentosDashboardMixin(AdminDashboardAndTopFilterMixin):
 
         def url_periodo(**filtros):
             params = self._query_params(request)
+            for chave in self.get_top_date_filter_range_keys():
+                params.pop(chave, None)
             for chave in list(params.keys()):
                 if chave.startswith((f'{campo_comp}__', f'{campo_venc}__')):
                     params.pop(chave, None)

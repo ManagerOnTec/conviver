@@ -1,122 +1,259 @@
 {% extends "admin/base_site.html" %}
-{% load i18n %}
-{% comment %}
-IMPORTAR ACORDOS DE FATURAMENTO (CONVENIOS.xlsx).
+{% load i18n static %}
 
-Duas etapas no MESMO template:
-1. sem `previa` → só o formulário de upload;
-2. com `previa` → tabela do que SERÁ criado + divergências + botão
-“Confirmar importação”.
+{% block extrastyle %}
+  {{ block.super }}
+  <style>
+    .clientes-importacao-lista {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin: 6px 0;
+      max-height: 260px;
+      overflow-y: auto;
+    }
+    .clientes-importacao-item {
+      align-items: flex-start;
+      background: #f5f7f9;
+      border: 1px solid #d5d9dd;
+      border-radius: 4px;
+      display: flex;
+      gap: 6px;
+      justify-content: space-between;
+      padding: 4px 6px;
+    }
+    .clientes-importacao-nome {
+      color: #000;
+      overflow-wrap: anywhere;
+    }
+    .clientes-importacao-remover {
+      background: transparent;
+      border: 0;
+      color: #b02a37;
+      cursor: pointer;
+      flex: 0 0 auto;
+      font-size: 18px;
+      font-weight: bold;
+      line-height: 1;
+      padding: 0 4px;
+    }
+    .clientes-importacao-novo-nome {
+      box-sizing: border-box;
+      width: 100%;
+    }
+    .clientes-importacao-novo-controles {
+      display: grid;
+      gap: 4px;
+      grid-template-columns: minmax(0, 1fr) auto;
+      margin-top: 4px;
+    }
+    .clientes-importacao-aviso {
+      color: #b02a37;
+      margin: 4px 0;
+    }
+  </style>
+{% endblock %}
 
-Nada é gravado na etapa 1: a view só lê e mostra.
-{% endcomment %}
+{% block extrahead %}
+  {{ block.super }}
+  <script src="{% static 'js/acordos_importacao_clientes.js' %}" defer></script>
+{% endblock %}
 
 {% block breadcrumbs %}
-<div class="breadcrumbs">
-  <a href="{% url 'admin:index' %}">Início</a>
-  &rsaquo; <a href="{% url 'admin:admin_faturas_acordofaturamento_changelist' %}">Acordos de Faturamento</a>
-  &rsaquo; Importar planilha
-</div>
+  {% include "admin/includes/breadcrumbs.html" %}
 {% endblock %}
 
 {% block content %}
-<div class="impor-wrap" style="padding:12px 16px;max-width:1400px">
-
+<div id="content-main" style="padding:12px 16px">
   {% if messages %}
-  <ul class="messagelist">
-    {% for m in messages %}<li class="{{ m.tags }}">{{ m }}</li>{% endfor %}
-  </ul>
-  {% endif %}
-
-  <h1 style="font-size:18px;margin:0 0 6px">Importar acordos de faturamento</h1>
-  <p style="color:#6b7280;font-size:12px;margin:0 0 14px">
-    Planilha <strong>CONVENIOS.xlsx</strong>. Cada linha é uma competência;
-    linhas repetidas do mesmo órgão + cliente formam <strong>um</strong> acordo
-    (a vigência vai da primeira à última emissão).
-  </p>
-
-  {% if not previa %}
-  <form method="post" enctype="multipart/form-data"
-    style="border:1px solid #e5e7eb;border-radius:6px;padding:14px;background:#f9fafb;max-width:560px">
-    {% csrf_token %}
-    <label for="planilha" style="display:block;font-size:12px;font-weight:600;margin-bottom:6px">
-      Arquivo (.xlsx)
-    </label>
-    <input type="file" name="planilha" id="planilha" accept=".xlsx,.xlsm" required
-      style="display:block;margin-bottom:12px;font-size:12px">
-    <button type="submit" class="button default">Ler planilha e pré-visualizar</button>
-    <a class="button" style="margin-left:8px" href="{% url 'admin:admin_faturas_acordofaturamento_add' %}">Voltar ao
-      cadastro</a>
-  </form>
-
-  {% else %}
-  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
-    <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px 14px;background:#f9fafb">
-      <div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:600">Acordos a criar</div>
-      <div style="font-size:18px;font-weight:700">{{ acordos|length }}</div>
-    </div>
-    <div style="border:1px solid #e5e7eb;border-radius:6px;padding:8px 14px;background:#f9fafb">
-      <div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:600">Competências somadas</div>
-      <div style="font-size:18px;font-weight:700">{{ total_competencias }}</div>
-    </div>
-  </div>
-
-  {% if avisos %}
-  <div style="margin-bottom:12px;border:1px solid #e0a800;background:#fff8e1;border-radius:6px;padding:10px 14px">
-    <strong style="font-size:12px">Divergências encontradas ({{ avisos|length }})</strong>
-    <ul style="margin:6px 0 0 18px;font-size:12px;color:#713f12">
-      {% for nivel, msg in avisos %}<li>{{ msg }}</li>{% endfor %}
+    <ul class="messagelist">
+      {% for message in messages %}
+        <li class="{{ message.tags }}">{{ message }}</li>
+      {% endfor %}
     </ul>
-  </div>
   {% endif %}
 
-  <div style="overflow:auto;max-height:60vh;border:1px solid #e5e7eb;border-radius:6px">
-    <table style="width:100%;border-collapse:collapse;font-size:12px">
-      <thead>
-        <tr style="background:#f3f4f6;position:sticky;top:0">
-          <th style="padding:5px 8px;text-align:left">Cidade</th>
-          <th style="padding:5px 8px;text-align:left">CNPJ (pagador)</th>
-          <th style="padding:5px 8px;text-align:left">Contrato</th>
-          <th style="padding:5px 8px;text-align:center">Compet.</th>
-          <th style="padding:5px 8px;text-align:left">Vigência</th>
-          <th style="padding:5px 8px;text-align:right">Valor mensal</th>
-          <th style="padding:5px 8px;text-align:right">Diária</th>
-          <th style="padding:5px 8px;text-align:left">Empenho</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for a in acordos %}
-        <tr style="border-bottom:1px solid #eef0f3">
-          <td style="padding:4px 8px">{{ a.cidade_rotulo }}</td>
-          <td style="padding:4px 8px;font-variant-numeric:tabular-nums">{{ a.cnpj }}</td>
-          <td style="padding:4px 8px">{{ a.nr_contrato|default:"—" }}</td>
-          <td style="padding:4px 8px;text-align:center">{{ a.qtd_competencias }}</td>
-          <td style="padding:4px 8px;white-space:nowrap">
-            {{ a.inicio_vigencia|date:"d/m/Y" }} → {{ a.final_vigencia|date:"d/m/Y" }}
-          </td>
-          <td style="padding:4px 8px;text-align:right">{{ a.valor_mensal }}</td>
-          <td style="padding:4px 8px;text-align:right">{{ a.valor_diaria }}</td>
-          <td style="padding:4px 8px">{{ a.empenho_global|default:"—" }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+  <h1>Importar acordos de faturamento</h1>
 
-  <form method="post" style="margin-top:14px">
-    {% csrf_token %}
-    <input type="hidden" name="confirmar" value="1">
-    <button type="submit" class="button default"
-      onclick="return confirm('Gravar {{ acordos|length }} acordo(s) agora?')">
-      Confirmar importação ({{ acordos|length }} acordo(s))
-    </button>
-    <a class="button" style="margin-left:8px" href="{% url 'admin:admin_faturas_acordofaturamento_importar' %}">
-      Enviar outra planilha
-    </a>
-    <a class="button" style="margin-left:8px" href="{% url 'admin:admin_faturas_acordofaturamento_changelist' %}">
-      Cancelar
-    </a>
-  </form>
+  {% if previa %}
+    <p>
+      Arquivo: <strong>{{ pendencia.nome }}</strong> ·
+      {{ acordos|length }} acordo(s) · {{ total_competencias }}
+      competência(s). Nenhum registro será criado antes da confirmação.
+    </p>
+    <p>
+      Estabelecimento da sessão:
+      <strong>{{ estabelecimento|default:"Não definido" }}</strong>
+    </p>
+    <p class="help">
+      A empresa será reutilizada pelo CNPJ e a cidade pelo nome; cadastros que
+      não existirem serão criados somente após confirmar. A modalidade começa
+      como Convênio, mas pode ser alterada em cada linha.
+    </p>
+
+    {% if avisos %}
+      <div class="messagelist">
+        {% for nivel, mensagem in avisos %}
+          <div class="{% if nivel == 'erro' %}error{% else %}warning{% endif %}">
+            {{ mensagem }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <form method="post" id="acordos-import-review">
+      {% csrf_token %}
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="acao" value="confirmar">
+      {{ formset.management_form }}
+      {% if formset.non_form_errors %}
+        <div class="errornote">{{ formset.non_form_errors }}</div>
+      {% endif %}
+
+      <div style="overflow:auto;max-height:65vh;border:1px solid #d5d9dd">
+        <table style="border-collapse:collapse;min-width:2200px;width:100%">
+          <thead>
+            <tr>
+              <th>Importar</th>
+              <th>Cidade</th>
+              <th>Empresa/órgão</th>
+              <th>CNPJ</th>
+              <th>Acordo</th>
+              <th>Clientes</th>
+              <th>Contrato</th>
+              <th>Aditivo</th>
+              <th>Empenho</th>
+              <th>Início</th>
+              <th>Fim</th>
+              <th>Dia envio</th>
+              <th>Dias pagamento</th>
+              <th>Valor mensal</th>
+              <th>Valor diária</th>
+              <th>Modalidade</th>
+              <th>Tipo contrato</th>
+              <th>Descrição NF</th>
+              <th>Retenção (%)</th>
+              <th>Retenção (R$)</th>
+              <th>Competências</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for form in formset %}
+              {% with a=form.preview %}
+                <tr>
+                  <td>{{ form.incluir }}{{ form.incluir.errors }}</td>
+                  <td>{{ form.cidade }}{{ form.cidade.errors }}</td>
+                  <td>{{ form.cidade_rotulo }}{{ form.cidade_rotulo.errors }}</td>
+                  <td>{{ form.cnpj }}{{ form.cnpj.errors }}</td>
+                  <td>{{ form.acordo_faturamento }}{{ form.acordo_faturamento.errors }}</td>
+                  <td style="min-width:290px;white-space:normal">
+                    <strong>{{ a.qtd_clientes }} identificado(s) na planilha</strong>
+                    <div class="clientes-importacao" data-client-editor>
+                      <div class="clientes-importacao-lista" data-client-list>
+                        {% for cliente in a.clientes %}
+                          <div class="clientes-importacao-item"
+                               data-client-item
+                               data-client-name="{{ cliente.nome }}"
+                               data-client-birthdate="{% if cliente.nascimento %}{{ cliente.nascimento|date:'d/m/Y' }}{% endif %}">
+                            <span class="clientes-importacao-nome">
+                              {{ cliente.nome }}
+                              {% if cliente.nascimento %}
+                                — {{ cliente.nascimento|date:"d/m/Y" }}
+                              {% endif %}
+                            </span>
+                            <button type="button"
+                                    class="clientes-importacao-remover"
+                                    data-remove-client
+                                    aria-label="Remover {{ cliente.nome }}">×</button>
+                          </div>
+                        {% empty %}
+                          <p data-no-clients>Nenhum cliente identificado.</p>
+                        {% endfor %}
+                      </div>
+                      <input type="text"
+                             class="clientes-importacao-novo-nome"
+                             data-new-client-name
+                             maxlength="255"
+                             aria-label="Nome do novo cliente"
+                             placeholder="Nome do cliente">
+                      <div class="clientes-importacao-novo-controles">
+                        <input type="date"
+                               data-new-client-birthdate
+                               aria-label="Data de nascimento (opcional)">
+                        <button type="button" class="button"
+                                data-add-client>Adicionar</button>
+                      </div>
+                      <p class="clientes-importacao-aviso"
+                         data-client-editor-message role="status"
+                         aria-live="polite"></p>
+                      <div data-client-storage>{{ form.clientes }}</div>
+                      {{ form.clientes.errors }}
+                      <p class="help">Use × para excluir. Para incluir, informe
+                        o nome e, se souber, a data de nascimento.</p>
+                    </div>
+                  </td>
+                  <td>{{ form.nr_contrato }}{{ form.nr_contrato.errors }}</td>
+                  <td>{{ form.nr_aditivo }}{{ form.nr_aditivo.errors }}</td>
+                  <td>{{ form.empenho_global }}{{ form.empenho_global.errors }}</td>
+                  <td>{{ form.inicio_vigencia }}{{ form.inicio_vigencia.errors }}</td>
+                  <td>{{ form.final_vigencia }}{{ form.final_vigencia.errors }}</td>
+                  <td>{{ form.dia_envio }}{{ form.dia_envio.errors }}</td>
+                  <td>{{ form.dias_pagamento }}{{ form.dias_pagamento.errors }}</td>
+                  <td>{{ form.valor_mensal }}{{ form.valor_mensal.errors }}</td>
+                  <td>{{ form.valor_diaria }}{{ form.valor_diaria.errors }}</td>
+                  <td>{{ form.modo_fatura }}{{ form.modo_fatura.errors }}</td>
+                  <td>{{ form.modalidade_contrato }}{{ form.modalidade_contrato.errors }}</td>
+                  <td>{{ form.descricao_internacao }}{{ form.descricao_internacao.errors }}</td>
+                  <td>{{ form.tx_retencao_nf }}{{ form.tx_retencao_nf.errors }}</td>
+                  <td>{{ form.vl_retencao_nf }}{{ form.vl_retencao_nf.errors }}</td>
+                  <td>{{ a.qtd_competencias }}</td>
+                </tr>
+                {% if form.non_field_errors %}
+                  <tr><td colspan="21" class="errornote">{{ form.non_field_errors }}</td></tr>
+                {% endif %}
+              {% endwith %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="submit-row">
+        <input type="submit" class="default"
+               value="Confirmar e importar acordos">
+      </div>
+    </form>
+
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="acao" value="cancelar">
+      <div class="submit-row">
+        <input type="submit" value="Cancelar importação">
+      </div>
+    </form>
+  {% else %}
+    <p>Envie a planilha CONVENIOS.xlsx. Os dados serão exibidos para revisão,
+      com campos editáveis, antes de qualquer gravação.</p>
+
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <div class="form-row">
+        {{ form.planilha.label_tag }}
+        {{ form.planilha }}
+        {% if form.planilha.help_text %}
+          <p class="help">{{ form.planilha.help_text }}</p>
+        {% endif %}
+        {% for erro in form.planilha.errors %}
+          <p class="errornote">{{ erro }}</p>
+        {% endfor %}
+      </div>
+      <div class="submit-row">
+        <input type="submit" class="default"
+               value="Ler planilha e revisar">
+        <a href="{{ cancel_url }}" class="button">Voltar aos acordos</a>
+      </div>
+    </form>
   {% endif %}
 </div>
 {% endblock %}

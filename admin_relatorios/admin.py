@@ -8,6 +8,7 @@ from .forms import GerenciadorRelatorioGeralForm, GerenciadorRelatorioPersonaliz
 from django.utils import timezone
 from django.http import HttpResponse
 from django.utils.html import format_html
+from django.utils.text import capfirst
 from django.contrib import messages
 from django.urls import reverse
 from django.contrib.contenttypes.models import ContentType
@@ -259,7 +260,7 @@ class ModuloProntuarioFilter(admin.SimpleListFilter):
                 tipo__in=['evolucao', 'psicoterapia', 'prescricao', 'adep',
                           'sinaisvitais', 'sinais_vitais', 'perdasganhos',
                           'perdas_ganhos', 'sae', 'diagnostico', 'planocuidados',
-                          'plano_cuidados']
+                          'plano_cuidados', 'exame']
             )
         elif val == 'evolucao':
             return queryset.filter(tipo__in=['evolucao', 'psicoterapia'])
@@ -290,6 +291,48 @@ class ModuloProntuarioFilter(admin.SimpleListFilter):
 @admin.register(Relatorio)
 class RelatorioAdmin(AdminDashboardAndTopFilterMixin, admin.ModelAdmin):
     dashboard_date_field = 'dt_registro'
+    # LOOKUP de tipo de data no filtro do TOPO (como em Faturas/Pagamentos):
+    # o usuário escolhe o campo de data (Registro, etc.) antes de informar o
+    # intervalo — '__all__' oferece todos os campos Date/DateTime do modelo.
+    dashboard_date_filter_fields = '__all__'
+    # Datas ATRELADAS ao atendimento (mesmo sendo de outro modelo): entram no
+    # seletor de tipo de data do filtro do topo.
+    dashboard_date_filter_extra_fields = (
+        'atendimento__dt_atendimento', 'atendimento__dt_alta')
+
+    def get_top_date_filter_fields(self):
+        """Campos de data do seletor do topo + os ATRELADOS ao atendimento.
+
+        O mixin só oferece campos Date/DateTime do próprio modelo; aqui
+        acrescentamos os campos de data do ATENDIMENTO (`atendimento__dt_...`),
+        que filtram a listagem via traversal de FK. Cada um volta no mesmo
+        formato do mixin (`name`, `label`, `gte_key`, `lte_key`, `legacy_*`).
+        """
+        fields = super().get_top_date_filter_fields()
+        nomes_extras = getattr(self, 'dashboard_date_filter_extra_fields', ())
+        for nome in nomes_extras:
+            partes = nome.split('__')
+            # Resolve o campo final no modelo de destino (ex.: Atendimento).
+            try:
+                modelo = self.model._meta.get_field(partes[0]).related_model
+                campo = modelo._meta.get_field(partes[-1])
+            except Exception:
+                continue
+            if not isinstance(campo, models.DateField):
+                continue
+            label = 'Atendimento: ' + str(getattr(
+                campo, 'verbose_name', campo.name) or campo.name)
+            fields.append({
+                'name': nome,
+                'label': capfirst(label),
+                # Sempre `__date__` (DateTimeField) para bater com o dia;
+                # para DateField puro `__date` também funciona no Postgres.
+                'gte_key': f'{nome}__date__gte',
+                'lte_key': f'{nome}__date__lte',
+                'legacy_gte_key': f'{nome}__gte',
+                'legacy_lte_key': f'{nome}__lte',
+            })
+        return fields
 
     def get_changelist(self, request, **kwargs):
         """A listagem usa o template editável do projeto

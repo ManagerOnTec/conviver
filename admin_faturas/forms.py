@@ -168,6 +168,13 @@ class FaturaForm(forms.ModelForm):
             self.fields['faturado'].disabled = True
 
 
+class FaturaAnexoUploadForm(forms.Form):
+    arquivo = forms.FileField(
+        label='Arquivo da Nota Fiscal',
+        validators=Fatura._meta.get_field('anexo_nf').validators,
+    )
+
+
 
 
 import copy

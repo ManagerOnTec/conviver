@@ -17,6 +17,11 @@ Fluxo: **Acordo de Faturamento → Pré-Fatura → Fatura → Baixa de Fatura**.
 - Na changelist de Pré-Faturas/Faturas, opções de pagador são derivadas dos registros dessas telas (inclusive acordos inativos/históricos), usando o pagador do próprio registro ou, se estiver nulo, o do acordo.
 - Ao filtrar, corresponde ao pagador gravado na Pré-Fatura/Fatura; usa o pagador do acordo como fallback somente quando o snapshot do registro está nulo. Não incluir registros com pagador explicitamente diferente.
 - Na changelist de Acordos, as opções continuam derivadas dos acordos ativos.
+- Na lista de Faturas, o filtro de saldo não restringe registros por padrão; escolher uma opção limita a listagem explicitamente.
+- O filtro de data do topo permite escolher entre os campos Date/DateTime do
+  modelo da tela (por exemplo, competência, vencimento, liquidação, registro e
+  atualização) antes de informar o intervalo. Campos de data/hora consideram
+  o dia inteiro.
 
 ## Regras de EDIÇÃO e EXCLUSÃO (prevalecem sobre o resto)
 
@@ -39,6 +44,19 @@ Implementação (`motivo_recusa_edicao` / `motivo_recusa_exclusao`):
 
 As mesmas regras valem na **listagem editável** (`get_linhas_nao_editaveis`) e
 na **ação em lote** — não repetir a condição em outro lugar.
+
+### Anexo NF pela listagem
+
+- A coluna **Anexo NF** mostra **Ver NF** quando o arquivo existe; caso esteja
+  vazio, mostra **Anexar NF**, inclusive em fatura finalizada ou com baixa.
+- O upload exige permissão de alteração e valida as extensões e o limite
+  definidos pelo campo `Fatura.anexo_nf` (PDF/JPG/JPEG/PNG, até 5 MB).
+- O fluxo só preenche um anexo vazio; se já houver NF, ela pode ser visualizada,
+  mas não substituída pela listagem.
+- O envio atualiza `us_atualizacao` e `dt_atualizacao`; anexar a NF não altera
+  os demais dados nem o estado de faturamento/baixas.
+- **Exportar Selecionados para Excel** inclui a NF no ZIP junto da planilha;
+  a coluna do anexo contém hyperlink relativo ao arquivo exportado.
 
 ## FLUXO CONTÍNUO — edição e exclusão (regra única)
 
@@ -202,8 +220,8 @@ Uso: `class XAdmin(ExclusaoEmLoteComRegrasMixin, ..., admin.ModelAdmin)` e
 **Padrão obrigatório:** acordos importados recebem `modo_fatura='CO'` (um acordo consolidado), independentemente da contagem de clientes na planilha. Não importar como `CL`.
 
 Tela própria em `admin_faturas/importacao.py`, aberta pelo botão
-**“Importar planilha”** que fica ao lado de **“Salvar”** na tela de **ADD**
-de AcordoFaturamento.
+**“Importar planilha”** ao lado de **“Adicionar”** na listagem de Acordos de
+Faturamento. O formulário manual de adicionar/alterar não contém esse botão.
 
 ### Regra central: linha repetida é COMPETÊNCIA, não acordo novo
 
@@ -223,7 +241,7 @@ qtd_competencias = nº de linhas do grupo   (relatório, não é campo)
 |---|---|---|
 | [1] | CIDADE | vira `Cidade` (UF fixa **SC**); o sufixo depois de ` - ` é o setor e é **descartado** na busca da cidade |
 | [2] | CNPJ | vira `Empresa` → `pagador_pj` do acordo |
-| [3] | acolhidos | nomes de clientes (não vinculados na importação) |
+| [3] | acolhidos | nomes de clientes (criados ou associados ao acordo na importação) |
 | [5] | EMITIDO EM | competência; define vigência e `dia_envio` |
 | [7] | VALOR | valor da NF daquela competência |
 | [10] | DESCRIÇÃO | decisores (abaixo) |
@@ -343,20 +361,33 @@ Elas são **ignoradas** e o total aparece como alerta na pré-visualização:
 
 ### Campos fixos na importação
 
-`modo_fatura='CL'`, `modalidade_contrato='CO'`, `dias_pagamento=30`,
-`dia_envio` = dia do primeiro `EMITIDO EM`, `descricao_internacao='acolhimento'`,
-retenções zeradas, `estabelecimento` = o da sessão/perfil.
+O padrão de **Modalidade** (`modo_fatura`) é `CO` (**Convênio**); a revisão
+permite alterá-lo por acordo. `modalidade_contrato='CO'` significa **Contrato**
+e é um campo diferente. Os demais padrões são `dias_pagamento=30`,
+`dia_envio` = dia do primeiro `EMITIDO EM`,
+`descricao_internacao='acolhimento'`, retenções zeradas e `estabelecimento` =
+o da sessão/perfil.
 
-### Fluxo em duas etapas (nada grava na etapa 1)
+### Fluxo de importação e revisão (nada grava antes da confirmação)
 
-1. **Upload** → a view lê e mostra: quantos acordos, quantas competências,
-   empresas/cidades que serão criadas e as **divergências**;
-2. **Confirmar** → grava tudo em **UMA** transação (falha → lote inteiro
-   desfeito).
+1. **Upload** → o arquivo fica temporariamente associado à sessão; nenhuma
+   entidade de negócio é gravada.
+2. **Revisão** → mostra os acordos agrupados e as divergências; permite
+   incluir/excluir linhas e corrigir cidade, empresa, CNPJ, contrato, empenho,
+   vigência, valores, modalidade, tipo de contrato, prazo e retenções. A lista
+   também exibe os nomes dos clientes de cada acordo; o botão `×` remove um
+   cliente e o formulário inclui novos nomes, com nascimento opcional. Os dados
+   já reconhecidos na planilha são pré-preenchidos.
+   Empresa é reutilizada pelo CNPJ e cidade pelo nome; cadastro ausente é
+   criado na confirmação. O estabelecimento vem da sessão/perfil e não é
+   editável.
+3. **Confirmar** → relê o arquivo temporário, valida as alterações e grava
+   acordos e cadastros relacionados em **UMA transação**; qualquer falha
+   desfaz o lote inteiro e mantém a revisão disponível para correção.
 
 Divergências reportadas sem bloquear: valores diferentes no mesmo grupo
 (usa o primeiro) e linhas com CNPJ inválido. Linhas separadoras (`-`) são
-ignoradas silenciosamente.
+ignoradas silenciosamente. O CNPJ editado na revisão deve conter 14 dígitos.
 
 ### Não fazer na importação
 
@@ -364,7 +395,8 @@ ignoradas silenciosamente.
 - Não criar duplicado se a previsão já gerou pagamento — a importação só
   cria acordos **novos**;
 - Não confiar em dados do POST na etapa 2: a planilha é **relida** do
-  arquivo temporário guardado na sessão.
+  arquivo temporário guardado na sessão; somente os campos editáveis da revisão
+  são aplicados aos dados relidos.
 
 ## Como testar
 
