@@ -1,0 +1,773 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+{% block titulos %}{{title}}|{% endblock %}
+
+{% block menul %}
+<div class="form-group text-left m-3 mt-2">
+    {% if pode_editar %}
+    <a title="Novo funcionário" href="{% url 'gp_funcionario_cadastrar' %}"
+        class="btn-novo mt-2 list-group-item list-group-item-action bg-primary text-white rounded">
+        <i class="fas fa-plus me-2"></i>Novo Funcionário
+    </a>
+    {% endif %}
+
+    <form class="mt-3 text-white text-left" method="GET" action="{% url 'gp_funcionario_listar' %}">
+        <div class="item-left">
+            <h5>Filtros</h5>
+        </div>
+        <div class="item-left mb-2">
+            <input type="text" name="q" value="{{ filter.q|default:'' }}" class="form-control"
+                placeholder="Nome ou CPF...">
+        </div>
+        <div class="item-left mb-2">
+            <label class="form-label mb-0 small">Situação</label>
+            <select name="situacao" class="form-select">
+                <option value="">Todas</option>
+                <option value="A" {% if filter.situacao=='A' %}selected{% endif %}>Ativos</option>
+                <option value="F" {% if filter.situacao=='F' %}selected{% endif %}>Afastados</option>
+                <option value="D" {% if filter.situacao=='D' %}selected{% endif %}>Desligados</option>
+            </select>
+        </div>
+        <div class="item-left mb-2">
+            <label class="form-label mb-0 small">Admissão (de/até)</label>
+            <input type="date" name="admissao_inicio" value="{{ filter.admissao_inicio|default:'' }}"
+                class="form-control">
+            <input type="date" name="admissao_fim" value="{{ filter.admissao_fim|default:'' }}" class="form-control">
+        </div>
+        <div class="form-check ms-2 mb-1">
+            <input class="form-check-input" type="checkbox" name="sem_aso_agendado" value="1" {% if
+                filter.sem_aso_agendado %}checked{% endif %}>
+            <label class="form-check-label small">Sem ASO agendado/realizado</label>
+        </div>
+        <div class="form-check ms-2 mb-1">
+            <input class="form-check-input" type="checkbox" name="sem_ficha" value="1" {% if filter.sem_ficha
+                %}checked{% endif %}>
+            <label class="form-check-label small">Ficha de registro pendente</label>
+        </div>
+        <div class="form-check ms-2 mb-1">
+            <input class="form-check-input" type="checkbox" name="sem_periodico" value="1" {% if filter.sem_periodico
+                %}checked{% endif %}>
+            <label class="form-check-label small">Periódico pendente</label>
+        </div>
+        <div class="form-check ms-2 mb-1">
+            <input class="form-check-input" type="checkbox" name="cursos_vencidos" value="1" {% if
+                filter.cursos_vencidos %}checked{% endif %}>
+            <label class="form-check-label small">Cursos vencidos</label>
+        </div>
+        <div class="form-check ms-2 mb-1">
+            <input class="form-check-input" type="checkbox" name="ferias_pendentes" value="1" {% if
+                filter.ferias_pendentes %}checked{% endif %}>
+            <label class="form-check-label small">Férias pendentes/programadas</label>
+        </div>
+        <div class="row mt-2">
+            <div class="col-md-12">
+                <button class="col-md-12 btn btn-primary btn-outline-light" type="submit">
+                    <i class="fas fa-check"></i> Filtrar
+                </button>
+            </div>
+            <div class="col-md-12 mt-2">
+                <button class="col-md-12 btn btn-outline-danger" name="limpar" value="1" type="submit">
+                    <i class="fas fa-times-circle"></i> Limpar
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block cabdados %}
+{% include 'parciais/_list_header.html' with icon_class='fas fa-users' title='Gestão de Pessoas' subtitle='Funcionários,
+documentação, ASO, cursos e férias em uma única listagem.' context_label='Estabelecimento' context_value=estabelecimento
+%}
+{% endblock %}
+
+{% block lista %}
+<!-- DASHBOARD clicável -->
+<div class="row g-2 mb-3">
+    {% for kpi in kpis %}
+    <div class="col-md-3 col-lg-2">
+        <a href="{{ kpi.url|default:'#' }}" class="text-decoration-none">
+            <div class="card h-100">
+                <div class="card-body text-center py-2">
+                    <div class="fs-5 fw-bold">{{ kpi.value }}</div>
+                    <div class="small text-muted">{{ kpi.title }}</div>
+                </div>
+            </div>
+        </a>
+    </div>
+    {% endfor %}
+</div>
+
+<div id="table-container" class="listing-table-shell">
+    <table class="table listing-table align-middle mb-0">
+        <thead class="sticky-lista listing-table-head text-white">
+            <tr>
+                <th scope="col">Ações</th>
+                <th scope="col">Funcionário</th>
+                <th scope="col">Admissão</th>
+                <th scope="col">Documentos</th>
+                <th scope="col">ASO</th>
+                <th scope="col">Ficha de Registro</th>
+                <th scope="col">Cartão-Ponto</th>
+                <th scope="col">Periódico</th>
+                <th scope="col">Cursos Obrigatórios</th>
+                <th scope="col">Férias</th>
+                <th scope="col">Situação</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody">
+            {% for funcionario in funcionarios %}
+            <tr class="data-row">
+                <td>
+                    <div class="listing-action-bar">
+                        <a href="{% url 'gp_funcionario_detalhe' pk=funcionario.pk %}" title="Visualizar"
+                            class="btn btn-outline-primary btn-sm listing-action-btn">
+                            <i class="fas fa-folder-open"></i>
+                        </a>
+                        {% if pode_editar %}
+                        <a href="{% url 'gp_funcionario_editar' pk=funcionario.pk %}" title="Editar"
+                            class="btn btn-outline-warning btn-sm listing-action-btn">
+                            <i class="fas fa-edit"></i>
+                        </a>
+                        {% endif %}
+                    </div>
+                </td>
+                <td><strong>{{ funcionario.nome }}</strong></td>
+                <td>{{ funcionario.data_admissao|date:"d/m/Y" }}</td>
+
+                <!-- Documentos -->
+                <td>
+                    {% if pode_editar %}
+                    <button type="button" class="btn btn-outline-secondary btn-sm" title="Anexar documento"
+                        data-bs-toggle="modal" data-bs-target="#modal-documento"
+                        data-url="{% url 'gp_funcionario_documento' pk=funcionario.pk %}">
+                        <i class="fas fa-paperclip"></i>
+                    </button>
+                    {% endif %}
+                    <span class="badge bg-secondary ms-1"
+                        title="{{ funcionario.documentos_lista|length }} documento(s)">{{
+                        funcionario.documentos_lista|length }}</span>
+                    {% if funcionario.documentos_lista %}
+                    <button type="button" class="btn btn-outline-primary btn-sm ms-1" title="Ver documentos"
+                        data-bs-toggle="modal" data-bs-target="#modal-ver-documentos"
+                        data-funcionario="{{ funcionario.nome }}"
+                        data-json="{{ funcionario.documentos_lista|map_doc }}">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    {% endif %}
+                </td>
+
+                <!-- ASO -->
+                <td>
+                    <div class="small">{{ funcionario.aso_situacao_rotulo }}</div>
+                    {% if pode_editar %}
+                    <div class="mt-1">
+                        <button type="button" class="btn btn-outline-primary btn-sm" title="Agendar ASO"
+                            data-bs-toggle="modal" data-bs-target="#modal-aso-agendar"
+                            data-url="{% url 'gp_aso' pk=funcionario.pk acao='agendar' %}">
+                            <i class="fas fa-calendar-plus"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-success btn-sm" title="Registrar realização"
+                            data-bs-toggle="modal" data-bs-target="#modal-aso-registrar"
+                            data-url="{% url 'gp_aso' pk=funcionario.pk acao='registrar' %}">
+                            <i class="fas fa-check-double"></i>
+                        </button>
+                        {% if funcionario.aso_lista %}
+                        <button type="button" class="btn btn-outline-info btn-sm" title="Histórico de ASOs"
+                            data-bs-toggle="modal" data-bs-target="#modal-aso-historico"
+                            data-funcionario="{{ funcionario.nome }}" data-json="{{ funcionario.aso_lista|map_aso }}">
+                            <i class="fas fa-history"></i>
+                        </button>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </td>
+
+                <!-- Ficha de Registro -->
+                <td>
+                    {% with ficha=funcionario.ficha_registro %}
+                    {% if ficha and ficha.anexo %}
+                    <div class="small">Cadastrada ({{ ficha.data_registro|date:"d/m/Y" }})</div>
+                    <a href="{{ ficha.anexo.url }}" target="_blank" class="btn btn-outline-primary btn-sm"
+                        title="Visualizar ficha">
+                        <i class="fas fa-eye"></i>
+                    </a>
+                    {% else %}
+                    <span class="badge bg-warning text-dark">Pendente</span>
+                    {% endif %}
+                    {% if pode_editar %}
+                    <button type="button" class="btn btn-outline-secondary btn-sm" title="Anexar/substituir ficha"
+                        data-bs-toggle="modal" data-bs-target="#modal-ficha"
+                        data-url="{% url 'gp_ficha' pk=funcionario.pk %}">
+                        <i class="fas fa-upload"></i>
+                    </button>
+                    {% endif %}
+                    {% endwith %}
+                </td>
+
+                <!-- Cartão-Ponto -->
+                <td>
+                    {% with cartao=funcionario.cartao_ponto %}
+                    {% if cartao %}
+                    <div class="small">Nº {{ cartao.numero_cartao }}</div>
+                    {% else %}
+                    <span class="badge bg-warning text-dark">Pendente</span>
+                    {% endif %}
+                    {% if pode_editar %}
+                    <button type="button" class="btn btn-outline-secondary btn-sm" title="Registrar/editar cartão"
+                        data-bs-toggle="modal" data-bs-target="#modal-cartao"
+                        data-url="{% url 'gp_cartao' pk=funcionario.pk %}"
+                        data-numero="{{ cartao.numero_cartao|default:'' }}">
+                        <i class="fas fa-id-card"></i>
+                    </button>
+                    {% endif %}
+                    {% endwith %}
+                </td>
+
+                <!-- Periódico -->
+                <td>
+                    <div class="small">{{ funcionario.periodico_situacao_rotulo }}</div>
+                    {% if pode_editar %}
+                    <div class="mt-1">
+                        <button type="button" class="btn btn-outline-primary btn-sm" title="Agendar exame"
+                            data-bs-toggle="modal" data-bs-target="#modal-periodico-agendar"
+                            data-url="{% url 'gp_periodico' pk=funcionario.pk acao='agendar' %}">
+                            <i class="fas fa-calendar-plus"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-success btn-sm" title="Registrar realização"
+                            data-bs-toggle="modal" data-bs-target="#modal-periodico-registrar"
+                            data-url="{% url 'gp_periodico' pk=funcionario.pk acao='registrar' %}">
+                            <i class="fas fa-check-double"></i>
+                        </button>
+                        {% if funcionario.periodico_lista %}
+                        <button type="button" class="btn btn-outline-info btn-sm" title="Histórico de exames"
+                            data-bs-toggle="modal" data-bs-target="#modal-periodico-historico"
+                            data-funcionario="{{ funcionario.nome }}"
+                            data-json="{{ funcionario.periodico_lista|map_periodico }}">
+                            <i class="fas fa-history"></i>
+                        </button>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </td>
+
+                <!-- Cursos -->
+                <td>
+                    <div class="small">
+                        <span class="badge bg-success">{{ funcionario.cursos_concluidos_qtde }} ok</span>
+                        <span class="badge bg-warning text-dark">{{ funcionario.cursos_pendentes_qtde }} pend.</span>
+                        {% if funcionario.cursos_vencidos_qtde %}
+                        <span class="badge bg-danger">{{ funcionario.cursos_vencidos_qtde }} venc.</span>
+                        {% endif %}
+                    </div>
+                    {% if pode_editar %}
+                    <button type="button" class="btn btn-outline-secondary btn-sm mt-1" title="Registrar curso"
+                        data-bs-toggle="modal" data-bs-target="#modal-curso"
+                        data-url="{% url 'gp_curso' pk=funcionario.pk %}" data-funcionario="{{ funcionario.pk }}">
+                        <i class="fas fa-graduation-cap"></i>
+                    </button>
+                    {% endif %}
+                </td>
+
+                <!-- Férias -->
+                <td>
+                    {% with ferias=funcionario.ferias_atual %}
+                    {% if ferias %}
+                    <div class="small">
+                        Aquisitivo: {{ ferias.periodo_aquisitivo_inicio|date:"d/m/Y" }}–{{
+                        ferias.periodo_aquisitivo_final|date:"d/m/Y" }}<br>
+                        Saldo: {{ ferias.saldo_dias }}/{{ ferias.dias_direito }} dias
+                        {% if ferias.status == 'G' and ferias.data_inicio_ferias %}
+                        · início {{ ferias.data_inicio_ferias|date:"d/m/Y" }}
+                        {% endif %}
+                        {% if ferias.concessivo_vencendo %}<span class="badge bg-warning text-dark ms-1">concessivo
+                            vencendo</span>{% endif %}
+                        {% if ferias.concessivo_vencido %}<span class="badge bg-danger ms-1">concessivo vencido</span>{%
+                        endif %}
+                    </div>
+                    {% else %}
+                    <span class="badge bg-warning text-dark">Sem registro</span>
+                    {% endif %}
+                    {% if pode_editar %}
+                    <div class="mt-1">
+                        <button type="button" class="btn btn-outline-primary btn-sm"
+                            title="Registrar período aquisitivo" data-bs-toggle="modal"
+                            data-bs-target="#modal-ferias-aquisitivo"
+                            data-url="{% url 'gp_ferias' pk=funcionario.pk acao='aquisitivo' %}">
+                            <i class="fas fa-calendar-day"></i>
+                        </button>
+                        {% if ferias and ferias.status == 'P' %}
+                        <button type="button" class="btn btn-outline-info btn-sm" title="Programar férias"
+                            data-bs-toggle="modal" data-bs-target="#modal-ferias-programar"
+                            data-url="{% url 'gp_ferias' pk=funcionario.pk acao='programar' %}">
+                            <i class="fas fa-calendar-check"></i>
+                        </button>
+                        {% endif %}
+                        {% if ferias and ferias.status == 'G' %}
+                        <form method="post" action="{% url 'gp_ferias' pk=funcionario.pk acao='iniciar' %}"
+                            class="d-inline" onsubmit="return confirm('Registrar INÍCIO das férias hoje?');">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline-success btn-sm" title="Registrar início">
+                                <i class="fas fa-plane-departure"></i>
+                            </button>
+                        </form>
+                        {% endif %}
+                        {% if ferias and ferias.status == 'E' %}
+                        <form method="post" action="{% url 'gp_ferias' pk=funcionario.pk acao='retorno' %}"
+                            class="d-inline" onsubmit="return confirm('Registrar RETORNO das férias hoje?');">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline-success btn-sm" title="Registrar retorno">
+                                <i class="fas fa-plane-arrival"></i>
+                            </button>
+                        </form>
+                        {% endif %}
+                        {% if funcionario.ferias_lista %}
+                        <button type="button" class="btn btn-outline-info btn-sm" title="Histórico de férias"
+                            data-bs-toggle="modal" data-bs-target="#modal-ferias-historico"
+                            data-funcionario="{{ funcionario.nome }}"
+                            data-json="{{ funcionario.ferias_lista|map_ferias }}">
+                            <i class="fas fa-history"></i>
+                        </button>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    {% endwith %}
+                </td>
+
+                <!-- Situação -->
+                <td>
+                    <span
+                        class="badge {% if funcionario.status_funcionario == 'A' %}bg-success{% elif funcionario.status_funcionario == 'F' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+                        {{ funcionario.get_status_funcionario_display }}
+                    </span>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="11">Nenhum funcionário encontrado para os filtros informados.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if pode_editar %}
+<!-- ===== MODAIS ===== -->
+<form id="modal-form-geral" method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+</form>
+
+<div class="modal fade" id="modal-documento" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Anexar documento</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label">Tipo de documento</label>
+                    <input type="text" name="tipo_documento" class="form-control" required
+                        placeholder="Ex.: Contrato, Ficha médica...">
+                    <label class="form-label mt-2">Arquivo</label>
+                    <input type="file" name="anexo" class="form-control" required
+                        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx">
+                    <label class="form-label mt-2">Data do documento</label>
+                    <input type="date" name="data_documento" class="form-control" required>
+                    <label class="form-label mt-2">Descrição</label>
+                    <input type="text" name="descricao" class="form-control">
+                    <label class="form-label mt-2">Anotações</label>
+                    <textarea name="anotacoes" class="form-control" rows="2"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Anexar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modal-ver-documentos" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Documentos — <span class="gp-funcionario"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body gp-lista"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modal-aso-agendar" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Agendar ASO</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label">Tipo de exame</label>
+                    <select name="tipo_exame" class="form-select">
+                        <option value="admissional">Admissional</option>
+                        <option value="periodico" selected>Periódico</option>
+                        <option value="retorno_trabalho">Retorno ao trabalho</option>
+                        <option value="mudanca_riscos">Mudança de riscos ocupacionais</option>
+                        <option value="demissional">Demissional</option>
+                    </select>
+                    <label class="form-label mt-2">Data do agendamento</label>
+                    <input type="date" name="data_agendamento" class="form-control" required>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Agendar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modal-aso-registrar" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Registrar ASO realizado</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label">Data de realização</label>
+                    <input type="date" name="data_realizacao" class="form-control" required>
+                    <label class="form-label mt-2">Validade (opcional)</label>
+                    <input type="date" name="data_validade" class="form-control">
+                    <label class="form-label mt-2">Anexo do ASO</label>
+                    <input type="file" name="anexo" class="form-control"
+                        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx">
+                    <label class="form-label mt-2">Observações</label>
+                    <textarea name="observacoes" class="form-control" rows="2"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Registrar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modal-aso-historico" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Histórico de ASOs — <span class="gp-funcionario"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body gp-lista"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modal-ficha" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Ficha de registro</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label">Arquivo da ficha</label>
+                    <input type="file" name="anexo" class="form-control" required
+                        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx">
+                    <label class="form-label mt-2">Data do registro</label>
+                    <input type="date" name="data_registro" class="form-control" required>
+                    <label class="form-label mt-2">Observações</label>
+                    <textarea name="observacoes" class="form-control" rows="2"></textarea>
+                    <p class="text-muted small mt-2">A versão anterior é preservada (nova linha no histórico).</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modal-cartao" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Cartão-ponto</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label">Número do cartão</label>
+                    <input type="text" name="numero_cartao" id="modal-cartao-numero" class="form-control" required>
+                    <label class="form-label mt-2">Início da vigência</label>
+                    <input type="date" name="data_inicio_vigencia" class="form-control">
+                    <label class="form-label mt-2">Observações</label>
+                    <textarea name="observacoes" class="form-control" rows="2"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modal-periodico-agendar" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Agendar exame periódico</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label">Data do agendamento</label>
+                    <input type="date" name="data_agendamento" class="form-control" required>
+                    <label class="form-label mt-2">Observações</label>
+                    <textarea name="observacoes" class="form-control" rows="2"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Agendar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modal-periodico-registrar" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Registrar exame periódico</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label">Data de realização</label>
+                    <input type="date" name="data_realizacao" class="form-control" required>
+                    <label class="form-label mt-2">Data do próximo exame</label>
+                    <input type="date" name="data_proximo_exame" class="form-control">
+                    <label class="form-label mt-2">Anexo (resultado/ASO)</label>
+                    <input type="file" name="anexo" class="form-control"
+                        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx">
+                    <label class="form-label mt-2">Observações</label>
+                    <textarea name="observacoes" class="form-control" rows="2"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Registrar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modal-periodico-historico" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Histórico de exames — <span class="gp-funcionario"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body gp-lista"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modal-curso" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Cursos do funcionário</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <h6 class="text-muted small">Registrar curso realizado</h6>
+                    <label class="form-label">Curso</label>
+                    <select name="curso" class="form-select" required>
+                        <option value="">Selecione</option>
+                        {% for curso in cursos %}
+                        <option value="{{ curso.pk }}">{{ curso.nome }}</option>
+                        {% endfor %}
+                    </select>
+                    <label class="form-label mt-2">Data de realização</label>
+                    <input type="date" name="data_realizacao" class="form-control">
+                    <label class="form-label mt-2">Data de validade</label>
+                    <input type="date" name="data_validade" class="form-control">
+                    <label class="form-label mt-2">Certificado</label>
+                    <input type="file" name="anexo_certificado" class="form-control"
+                        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx">
+                    <input type="hidden" name="status" value="R">
+                    <h6 class="text-muted small mt-3">Marcar curso obrigatório PENDENTE</h6>
+                    <select name="curso_pendente" class="form-select">
+                        <option value="">Selecione</option>
+                        {% for curso in cursos %}
+                        <option value="{{ curso.pk }}">{{ curso.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    <button type="submit" class="btn btn-success">Registrar realizado</button>
+                </div>
+            </form>
+            <!-- Segundo form: marcar pendente (POST para a view de pendentes) -->
+            <form method="post" action="" id="form-curso-pendente" class="border-top pt-2 px-3 pb-3">
+                {% csrf_token %}
+                <input type="hidden" name="curso" value="">
+                <select name="curso_pendente" class="form-select mb-2">
+                    <option value="">Marcar como pendente: selecione</option>
+                    {% for curso in cursos %}
+                    <option value="{{ curso.pk }}">{{ curso.nome }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-warning btn-sm w-100">Marcar como PENDENTE</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modal-ferias-aquisitivo" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Registrar período aquisitivo</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label">Período aquisitivo — início</label>
+                    <input type="date" name="periodo_aquisitivo_inicio" class="form-control" required>
+                    <label class="form-label mt-2">Período aquisitivo — final</label>
+                    <input type="date" name="periodo_aquisitivo_final" class="form-control" required>
+                    <label class="form-label mt-2">Período concessivo — início</label>
+                    <input type="date" name="periodo_concessivo_inicio" class="form-control">
+                    <label class="form-label mt-2">Período concessivo — final</label>
+                    <input type="date" name="periodo_concessivo_final" class="form-control">
+                    <label class="form-label mt-2">Dias de direito</label>
+                    <input type="number" name="dias_direito" value="30" min="0" class="form-control">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Registrar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modal-ferias-programar" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Programar férias</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label">Início das férias</label>
+                    <input type="date" name="data_inicio_ferias" class="form-control" required>
+                    <label class="form-label mt-2">Final das férias</label>
+                    <input type="date" name="data_final_ferias" class="form-control" required>
+                    <label class="form-label mt-2">Observações</label>
+                    <textarea name="observacoes" class="form-control" rows="2"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Programar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modal-ferias-historico" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Histórico de férias — <span class="gp-funcionario"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body gp-lista"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Ação do modal de cursos: realizado (POST no form) ou pendente (troca action)
+    document.addEventListener('show.bs.modal', function (event) {
+        const botao = event.relatedTarget;
+        if (!botao) return;
+        const modal = event.target;
+        const url = botao.getAttribute('data-url');
+        const form = modal.querySelector('form');
+        if (url) form.setAttribute('action', url);
+        if (modal.id === 'modal-cartao') {
+            const el = document.getElementById('modal-cartao-numero');
+            if (el) el.value = botao.getAttribute('data-numero') || '';
+        }
+        if (modal.id === 'modal-curso') {
+            form.dataset.urlBase = url;
+            const formPendente = modal.querySelector('#form-curso-pendente');
+            if (formPendente) formPendente.setAttribute('action', url);  // aponta pra gp_curso; view trata
+        }
+        // modais informativos (listas)
+        if (botao.hasAttribute('data-json')) {
+            modal.querySelector('.gp-funcionario').textContent =
+                botao.getAttribute('data-funcionario') || '';
+            modal.querySelector('.gp-lista').innerHTML = botao.getAttribute('data-json');
+        }
+    });
+
+    // Modal de cursos: pendente manda para url do pendente
+    document.getElementById('modal-curso').addEventListener('submit', function (e) {
+        const form = e.target;
+        if (form.dataset.modo === 'pendente') {
+            const cursoPendente = form.querySelector('select[name="curso_pendente"]').value;
+            if (!cursoPendente) {
+                e.preventDefault();
+                alert('Selecione o curso pendente.');
+                return;
+            }
+            const campoCurso = form.querySelector('select[name="curso"]');
+            campoCurso.value = cursoPendente;
+            form.querySelector('input[name="status"]').value = 'P';
+        }
+    });
+</script>
+{% endif %}
+{% endblock %}

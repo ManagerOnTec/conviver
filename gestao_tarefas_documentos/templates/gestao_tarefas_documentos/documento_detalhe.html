@@ -1,0 +1,127 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+{% block titulos %}{{title}}|{% endblock %}
+
+{% block menul %}
+<div class="form-group text-left m-3 mt-2">
+    <a href="{% url 'gtd_documento_listar' %}" class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-arrow-left me-2"></i>Voltar
+    </a>
+    {% if pode_editar %}
+    <a href="{% url 'gtd_documento_editar' pk=documento.pk %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-edit me-2"></i>Editar
+    </a>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block cabdados %}
+{% include 'parciais/_list_header.html' with icon_class='fas fa-folder-open' title='Gestão de Tarefas e Documentos'
+subtitle='Detalhe do documento' context_label='Estabelecimento' context_value=estabelecimento %}
+{% endblock %}
+
+{% block lista %}
+<div class="container-fluid px-3 py-3">
+    <div class="card mb-3">
+        <div class="card-body">
+            <h5><i class="fas fa-file me-2" style="color:{{ documento.situacao_cor }}"></i>
+                {{ documento.tipo.descricao }}{% if documento.descricao_documento %} — {{ documento.descricao_documento
+                }}{% endif %}</h5>
+            <div class="row mt-3">
+                <div class="col-md-3"><strong>Vigência inicial:</strong>
+                    {{ documento.vigencia_inicial|date:"d/m/Y"|default:"—" }}</div>
+                <div class="col-md-3"><strong>Vigência final:</strong>
+                    {{ documento.vigencia_final|date:"d/m/Y"|default:"—" }}</div>
+                <div class="col-md-3"><strong>Início da renovação:</strong>
+                    {{ documento.inicio_renovacao|date:"d/m/Y"|default:"—" }}</div>
+                <div class="col-md-3">
+                    <strong>Situação:</strong>
+                    <span class="badge" style="background:{{ documento.situacao_cor }};">
+                        {{ documento.situacao_rotulo }}</span>
+                    <strong class="ms-2">Validado:</strong>
+                    {% if documento.validado %}
+                    <span class="badge bg-success">Sim</span>
+                    <small class="text-muted d-block">
+                        {{ documento.dt_validacao|date:"d/m/Y H:i" }} por {{ documento.us_validacao }}</small>
+                    {% else %}<span class="badge bg-secondary">Não</span>{% endif %}
+                </div>
+            </div>
+            {% if documento.anexo %}
+            <div class="mt-2">
+                <a href="{{ documento.anexo.url }}" target="_blank" class="btn btn-outline-primary btn-sm">
+                    <i class="fas fa-paperclip me-1"></i>Abrir anexo</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header">Anotações</div>
+        <div class="card-body" style="white-space: pre-wrap;">{{ documento.anotacoes|default:"Sem anotações." }}</div>
+        {% if pode_editar %}
+        <div class="card-footer">
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal"
+                data-bs-target="#modal-anotar" data-url="{% url 'gtd_documento_anotar' pk=documento.pk %}">
+                <i class="fas fa-comment-alt me-1"></i>Adicionar anotação
+            </button>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header">Tarefas vinculadas ({{ tarefas|length }})</div>
+        <ul class="list-group list-group-flush">
+            {% for tarefa in tarefas %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <a href="{% url 'gtd_tarefa_listar' %}?documento={{ documento.pk }}">{{ tarefa.titulo }}</a>
+                <span class="badge {% if tarefa.atrasada %}bg-danger{% else %}bg-secondary{% endif %}">
+                    {{ tarefa.get_status_display }}{% if tarefa.atrasada %} · atrasada{% endif %}
+                </span>
+            </li>
+            {% empty %}
+            <li class="list-group-item text-muted">Nenhuma tarefa vinculada.</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="card">
+        <div class="card-header">Histórico de operações</div>
+        <ul class="list-group list-group-flush">
+            {% for item in historico %}
+            <li class="list-group-item">
+                <strong>{{ item.get_operacao_display }}</strong> —
+                {{ item.dt_operacao|date:"d/m/Y H:i" }} por {{ item.usuario }}<br>
+                <small class="text-muted">{{ item.descricao }}</small>
+            </li>
+            {% empty %}
+            <li class="list-group-item text-muted">Sem operações registradas.</li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+
+{% if pode_editar %}
+<div class="modal fade" id="modal-anotar" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" action="{% url 'gtd_documento_anotar' pk=documento.pk %}">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Adicionar anotação</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <textarea name="texto" class="form-control" rows="4" required></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

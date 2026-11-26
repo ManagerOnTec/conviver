@@ -142,10 +142,11 @@ class Evolucao(models.Model, RelatorioMixin):
 class Exame(models.Model, RelatorioMixin):
     atendimento = models.ForeignKey(Atendimento, on_delete=models.PROTECT)
     tipo_exame = models.ForeignKey(TipoExame, on_delete=models.PROTECT, verbose_name='Tipo de Exame')
-    solicitacao = models.TextField(
+    solicitacao = models.TextField(max_length=2000, blank=False, null=False,
         verbose_name='Solicitação / Indicação',
         error_messages={
             'blank': 'Informe a solicitação ou indicação do exame.',
+            'null': 'Informe a solicitação ou indicação do exame.',
         },
     )
     anexo_exame = models.FileField(

@@ -1,0 +1,105 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+{% block titulos %}{{title}}|{% endblock %}
+
+{% block menul %}
+<div class="form-group text-left m-3 mt-2">
+    <a href="{% url 'gp_funcionario_listar' %}" class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-arrow-left me-2"></i>Voltar
+    </a>
+    {% if pode_editar %}
+    <a href="{% url 'gp_funcionario_editar' pk=funcionario.pk %}"
+        class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-edit me-2"></i>Editar
+    </a>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block cabdados %}
+{% include 'parciais/_list_header.html' with icon_class='fas fa-users' title='Gestão de Pessoas' subtitle='Detalhe do
+funcionário' context_label='Estabelecimento' context_value=estabelecimento %}
+{% endblock %}
+
+{% block lista %}
+<div class="container-fluid px-3 py-3">
+    <div class="card mb-3">
+        <div class="card-body">
+            <h5><i class="fas fa-user me-2"></i>{{ funcionario.nome }}
+                <span
+                    class="badge {% if funcionario.status_funcionario == 'A' %}bg-success{% else %}bg-secondary{% endif %} ms-2">
+                    {{ funcionario.get_status_funcionario_display }}</span>
+            </h5>
+            <div class="row mt-3">
+                <div class="col-md-3"><strong>Admissão:</strong> {{ funcionario.data_admissao|date:"d/m/Y" }}</div>
+                <div class="col-md-3"><strong>ASO:</strong> {{ funcionario.aso_situacao_rotulo }}</div>
+                <div class="col-md-3"><strong>Periódico:</strong> {{ funcionario.periodico_situacao_rotulo }}</div>
+                <div class="col-md-3"><strong>Cartão-ponto:</strong>
+                    {{ funcionario.cartao_ponto.numero_cartao|default:"pendente" }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header">Documentos ({{ funcionario.documentos|length }})</div>
+        <ul class="list-group list-group-flush">
+            {% for documento in funcionario.documentos.all %}
+            <li class="list-group-item d-flex justify-content-between">
+                <span>{{ documento.tipo_documento }} — {{ documento.data_documento|date:"d/m/Y" }}</span>
+                <a href="{{ documento.anexo.url }}" target="_blank">ver</a>
+            </li>
+            {% empty %}
+            <li class="list-group-item text-muted">Nenhum documento.</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header">Cursos ({{ funcionario.cursos_funcionario.all|length }})</div>
+        <ul class="list-group list-group-flush">
+            {% for curso in funcionario.cursos_funcionario.select_related %}
+            <li class="list-group-item d-flex justify-content-between">
+                <span>{{ curso.curso }} — {{ curso.get_status_display }}
+                    {% if curso.vencido %}<span class="badge bg-danger">vencido</span>{% endif %}</span>
+                <small>{{ curso.data_realizacao|date:"d/m/Y"|default:"—" }} a {{
+                    curso.data_validade|date:"d/m/Y"|default:"sem venc." }}</small>
+            </li>
+            {% empty %}
+            <li class="list-group-item text-muted">Nenhum curso registrado.</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header">Férias ({{ funcionario.ferias.all|length }})</div>
+        <ul class="list-group list-group-flush">
+            {% for ferias in funcionario.ferias.all %}
+            <li class="list-group-item">
+                {{ ferias.get_status_display }} — aquisitivo
+                {{ ferias.periodo_aquisitivo_inicio|date:"d/m/Y" }} a {{ ferias.periodo_aquisitivo_final|date:"d/m/Y"
+                }};
+                gozados {{ ferias.dias_gozados }}/{{ ferias.dias_direito }}
+            </li>
+            {% empty %}
+            <li class="list-group-item text-muted">Sem períodos de férias.</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="card">
+        <div class="card-header">Histórico de operações</div>
+        <ul class="list-group list-group-flush">
+            {% for item in historico %}
+            <li class="list-group-item">
+                <strong>{{ item.get_operacao_display }}</strong> —
+                {{ item.dt_operacao|date:"d/m/Y H:i" }} por {{ item.usuario }}<br>
+                <small class="text-muted">{{ item.descricao }}</small>
+            </li>
+            {% empty %}
+            <li class="list-group-item text-muted">Sem operações registradas.</li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endblock %}

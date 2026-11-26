@@ -167,6 +167,8 @@ INSTALLED_APPS = [
     'admin_pagamentos',
     'admin_financeiro',
     'admin_tesouraria',
+    'gestao_tarefas_documentos',
+    'gestao_pessoas',
     'oficios',
     'orcamentos',
     'atas',
