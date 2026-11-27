@@ -27,6 +27,7 @@ from dominios.utils import (
 from .forms import (
     AsoAgendarForm, AsoRegistrarForm, CartaoPontoForm, CursoFuncionarioForm,
     DocumentoFuncionarioForm, FeriasForm, FichaRegistroForm,
+    FuncionarioForm,
     PeriodicoAgendarForm, PeriodicoRegistrarForm,
 )
 from .models import (
@@ -303,8 +304,7 @@ class FuncionarioCreateView(
         LoginRequiredMixin, CustomPermissionRequiredMixin,
         FilterObjectsByEstabelecimentoMixin, LiberacaoGPmixin, CreateView):
     model = Funcionario
-    fields = ['pessoa', 'data_admissao', 'status_funcionario', 'anotacoes',
-              'estabelecimento']
+    form_class = FuncionarioForm
     template_name = 'gestao_pessoas/funcionario_form.html'
     permission_required = 'gestao_pessoas.add_funcionario'
     login_url = reverse_lazy('login')
@@ -324,10 +324,20 @@ class FuncionarioCreateView(
                 initial['pessoa'] = pessoa.pk
         return initial
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        # PRÉ-CARGA pelo modal: a pessoa escolhida já vem selecionada.
+        pessoa_id = self.request.GET.get('pessoa')
+        if pessoa_id:
+            kwargs['pessoa_pre_carga'] = Pessoa.objects.filter(
+                pk=pessoa_id).first()
+        return kwargs
+
     def get_form(self, form_class=None):
         form = super().get_form(form_class)
-        form.fields['pessoa'].queryset = Pessoa.objects.filter(
-            status='A', classificacao_pessoa='funcionario').order_by('nome')
+        # Estabelecimento não é editável (padrão do projeto: vem da sessão).
+        form.fields.pop('estabelecimento', None)
+        return form
         # O ESTABELECIMENTO sai do formulário: é o da SESSÃO (padrão do
         # projeto — usuário nunca escolhe).
         form.fields.pop('estabelecimento', None)
@@ -375,8 +385,7 @@ class FuncionarioUpdateView(
         LoginRequiredMixin, CustomPermissionRequiredMixin,
         FilterObjectsByEstabelecimentoMixin, LiberacaoGPmixin, UpdateView):
     model = Funcionario
-    fields = ['pessoa', 'data_admissao', 'status_funcionario', 'anotacoes',
-              'estabelecimento']
+    form_class = FuncionarioForm
     template_name = 'gestao_pessoas/funcionario_form.html'
     permission_required = 'gestao_pessoas.change_funcionario'
     login_url = reverse_lazy('login')

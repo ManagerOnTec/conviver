@@ -264,6 +264,10 @@ class AtendimentoCreateView(LoginRequiredMixin, CustomPermissionRequiredMixin, F
 
         context['cad_index'] = reverse_lazy('cadastros_index')
         context['list_index'] = reverse_lazy('atendimento_listar')
+        # Estados para o SELETOR do modal de cidade (criação inline).
+        from admin_cadastros.models import Estado
+        context['estados_inline'] = Estado.objects.filter(
+            status='A').order_by('uf')
 
         return context
 
@@ -520,6 +524,10 @@ class PessoaCreateView(LoginRequiredMixin, FilterObjectsByEstabelecimentoMixin, 
 
         context['cad_index'] = reverse_lazy('cadastros_index')
         context['list_index'] = reverse_lazy('atendimento_listar')
+        # Estados para o SELETOR do modal de cidade (criação inline).
+        from admin_cadastros.models import Estado
+        context['estados_inline'] = Estado.objects.filter(
+            status='A').order_by('uf')
 
         return context
 
@@ -566,3 +574,135 @@ def obter_cidades(request):
     estado_id = request.GET.get('estado_id')
     cidades = Cidade.objects.filter(estado_id=estado_id).values('id', 'cidade')
     return JsonResponse({'cidades': list(cidades)})
+
+
+# ---------------------------------------------------------------------------
+# CRIAÇÃO INLINE (AJAX) — pessoa, CID e cidade, a partir da tela de
+# atendimento. Quem tem permissão de ATENDIMENTO já está liberado (mesma
+# permissão dos cadastros, revisada no AGENTS.md).
+# ---------------------------------------------------------------------------
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+
+
+class InlinePessoaCreateView(LoginRequiredMixin, View):
+    """Cria uma PESSOA via AJAX e devolve JSON {id, texto}.
+
+    `classificacao` define o tipo: 'paciente' (campo pessoa do atendimento)
+    ou 'familiar' (pessoa_entrega_documentos). A permissão é a do
+    ATENDIMENTO (quem cadastra atendimento pode cadastrar a pessoa).
+    """
+
+    def post(self, request):
+        if not request.user.has_perm('atendimentos.add_atendimento'):
+            return JsonResponse({'erro': 'Sem permissão.'}, status=403)
+        nome = (request.POST.get('nome') or '').strip()
+        classificacao = request.POST.get('classificacao') or 'paciente'
+        if classificacao not in ('paciente', 'responsavel'):
+            classificacao = 'paciente'
+        if not nome:
+            return JsonResponse({'erro': 'Informe o nome da pessoa.'},
+                                status=400)
+        cpf = (request.POST.get('cpf') or '').strip()
+        duplicada = Pessoa.objects.filter(
+            status='A', classificacao_pessoa=classificacao, nome__iexact=nome)
+        if cpf:
+            duplicada = duplicada.filter(cpf=cpf)
+        pessoa = duplicada.first()
+        if pessoa is None:
+            # A Pessoa NÃO tem estabelecimento (é global). Os campos de DATA
+            # do model têm `default=''` (bugado): precisam vir EXPLICITAMENTE
+            # como None, senão o INSERT tenta gravar '' numa DateField.
+            pessoa = Pessoa(
+                nome=nome,
+                cpf=cpf or None,
+                # RG tem unique=True: vazio deve ser NULL (duas pessoas com
+                # rg='' violariam a constraint).
+                rg=None,
+                classificacao_pessoa=classificacao,
+                sexo=request.POST.get('sexo') or 'f',
+                nacionalidade='b',
+                alergico='N',
+                dt_nascimento=None,
+                us_registro_id=request.user.pk,
+                dt_registro=timezone.now(),
+                status='A',
+            )
+            pessoa.full_clean()
+            pessoa.save()
+        return JsonResponse({'id': pessoa.pk,
+                             'texto': f'{pessoa.nome}'
+                                      + (f' (CPF {pessoa.cpf})'
+                                         if pessoa.cpf else '')})
+
+
+class InlineCidCreateView(LoginRequiredMixin, View):
+    """Cria um CID/diagnóstico via AJAX (mesma permissão do atendimento)."""
+
+    def post(self, request):
+        if not request.user.has_perm('atendimentos.add_atendimento'):
+            return JsonResponse({'erro': 'Sem permissão.'}, status=403)
+        from admin_cadastros_assistenciais.models import CID
+        codigo = (request.POST.get('codigo') or '').strip()
+        descricao = (request.POST.get('descricao') or '').strip()
+        if not codigo or not descricao:
+            return JsonResponse(
+                {'erro': 'Informe o código e a descrição do CID.'},
+                status=400)
+        cid = CID.objects.filter(codigo__iexact=codigo).first()
+        if cid is None:
+            cid = CID.objects.create(codigo=codigo, descricao=descricao,
+                                     us_registro_id=request.user.pk,
+                                     status='A')
+        return JsonResponse({'id': cid.pk,
+                             'texto': f'{cid.codigo} — {cid.descricao}'})
+
+
+class InlineCidadeCreateView(LoginRequiredMixin, View):
+    def get(self, request):
+        """Lista de estados para o SELETOR do modal (opção “novo estado”
+        entra como uf=NOVO)."""
+        if not request.user.has_perm('atendimentos.add_atendimento'):
+            return JsonResponse({'erro': 'Sem permissão.'}, status=403)
+        from admin_cadastros.models import Estado
+        estados = [{'id': e.pk, 'uf': e.uf, 'nome': e.estado}
+                   for e in Estado.objects.filter(status='A').order_by('uf')]
+        return JsonResponse({'estados': estados})
+    """Cria CIDADE via AJAX; se o estado não existir, cria o ESTADO antes
+    (mesma permissão do atendimento)."""
+
+    def post(self, request):
+        if not request.user.has_perm('atendimentos.add_atendimento'):
+            return JsonResponse({'erro': 'Sem permissão.'}, status=403)
+        from admin_cadastros.models import Cidade, Estado
+        cidade_nome = (request.POST.get('cidade') or '').strip()
+        estado_pk = request.POST.get('estado_pk')
+        uf = (request.POST.get('uf') or '').strip().upper()
+        estado_nome = (request.POST.get('estado') or '').strip()
+        if not cidade_nome:
+            return JsonResponse({'erro': 'Informe a cidade.'}, status=400)
+        estado = None
+        if estado_pk and estado_pk != '__novo__':
+            estado = Estado.objects.filter(pk=estado_pk).first()
+        if estado is None:
+            if not uf:
+                return JsonResponse(
+                    {'erro': 'Informe a UF do novo estado.'}, status=400)
+            estado = Estado.objects.filter(uf__iexact=uf).first()
+            if estado is None:
+                if not estado_nome:
+                    return JsonResponse(
+                        {'erro': 'Estado não existe: informe o nome do '
+                                 'estado para cadastrá-lo junto.'},
+                        status=400)
+                estado = Estado.objects.create(
+                    uf=uf, estado=estado_nome,
+                    us_registro_id=request.user.pk, status='A')
+        cidade = Cidade.objects.filter(
+            cidade__iexact=cidade_nome, estado=estado).first()
+        if cidade is None:
+            cidade = Cidade.objects.create(cidade=cidade_nome, estado=estado,
+                                           us_registro_id=request.user.pk,
+                                           status='A')
+        return JsonResponse({'id': cidade.pk,
+                             'texto': f'{cidade.cidade} — {estado.uf}'})

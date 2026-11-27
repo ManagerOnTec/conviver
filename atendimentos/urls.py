@@ -8,6 +8,14 @@ from . import views
 
 urlpatterns = [
 
+    # criação inline (AJAX) a partir da tela de atendimento
+    path('inline/pessoa/', views.InlinePessoaCreateView.as_view(),
+         name='atendimento_inline_pessoa'),
+    path('inline/cid/', views.InlineCidCreateView.as_view(),
+         name='atendimento_inline_cid'),
+    path('inline/cidade/', views.InlineCidadeCreateView.as_view(),
+         name='atendimento_inline_cidade'),
+
     # atendimento ##############################################
     path('atendimento_listar/', AtendimentoListView.as_view(),
          name="atendimento_listar"),

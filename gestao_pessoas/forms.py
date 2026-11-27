@@ -1,6 +1,9 @@
 """Forms da Gestão de Pessoas."""
 from django import forms
 from django.core.exceptions import ValidationError
+from django.utils import timezone
+
+from admin_cadastros.models import Pessoa
 
 from .models import (
     ANEXO_EXTENSOES, ASO_TIPO_EXAME, ASO, CartaoPonto, Curso,
@@ -197,6 +200,39 @@ class FeriasForm(forms.ModelForm):
                 f'Os dias gozados ({gozados}) não podem ultrapassar os dias '
                 f'de direito ({direito}).')
         return dados
+
+
+class FuncionarioForm(forms.ModelForm):
+    """Cadastro do funcionário: campo `pessoa` (pré-carregável via
+    ?pessoa= do modal de pendentes), estabelecimento FORA do form (a view
+    grava o da sessão) e datas com o seletor de calendário."""
+
+    class Meta:
+        model = Funcionario
+        fields = ['pessoa', 'data_admissao', 'status_funcionario',
+                  'anotacoes']
+        widgets = {
+            'pessoa': forms.Select(attrs={'class': 'form-select',
+                                          'data-width': '100%'}),
+            'data_admissao': forms.DateInput(
+                attrs={'type': 'date'}, format='%Y-%m-%d'),
+            'anotacoes': forms.Textarea(attrs={'rows': 2}),
+        }
+
+    def __init__(self, *args, pessoa_pre_carga=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Só pessoas do tipo funcionário ativas (recorte do estabelecimento
+        # não se aplica à pessoa; a vinculação é a própria linha criada).
+        self.fields['pessoa'].queryset = Pessoa.objects.filter(
+            status='A', classificacao_pessoa='funcionario').order_by('nome')
+        # PRÉ-CARGA: pessoa clicada no modal “Funcionários sem Registro”.
+        if pessoa_pre_carga is not None:
+            self.fields['pessoa'].initial = pessoa_pre_carga
+            self.fields['pessoa'].queryset = (
+                self.fields['pessoa'].queryset |
+                Pessoa.objects.filter(pk=pessoa_pre_carga.pk))
+        if not self.instance.pk:
+            self.initial.setdefault('data_admissao', timezone.localdate())
 
 
 class FuncionarioFiltroForm(forms.Form):

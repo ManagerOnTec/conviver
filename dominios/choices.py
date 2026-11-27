@@ -422,6 +422,7 @@ descricao_internacao_choices = (
 classificacao_pessoa_choices = (
     ('paciente', 'Paciente'),
     ('funcionario', 'Funcionário'),
+    ('responsavel', 'Responsável'),
 )
 
 

@@ -50,21 +50,21 @@ tz %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
                 {{ form.telefone_extra|as_crispy_field }}
               </div>
               <div class="col-md-6">
-                {{ form.cidade_encaminhamento|as_crispy_field }}
+                <div class="row g-1"><div class="col">{{ form.cidade_encaminhamento|as_crispy_field }}</div><div class="col-auto d-flex align-items-end pb-2"><button type="button" class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#modal-inline-cidade" title="Adicionar cidade"><i class="fas fa-city"></i></button></div></div>
               </div>
 
               <div class="col-md-6">
                 {{ form.entidade_encaminhamento|as_crispy_field }}
               </div>
               <div class="col-md-6">
-                {{ form.diagnostico_encaminhamento|as_crispy_field }}
+                <div class="row g-1"><div class="col">{{ form.diagnostico_encaminhamento|as_crispy_field }}</div><div class="col-auto d-flex align-items-end pb-2"><button type="button" class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#modal-inline-cid" title="Adicionar CID / diagnóstico"><i class="fas fa-plus"></i></button></div></div>
               </div>
               <div class="col-md-6">{{ form.dt_alta|as_crispy_field }}</div>
 
               <div class="col-md-6">{{ form.tipo_alta|as_crispy_field }}</div>
 
               <div class="col-md-6">
-                {{ form.pessoa_docentrega|as_crispy_field }}
+                <div class="row g-1"><div class="col">{{ form.pessoa_docentrega|as_crispy_field }}</div><div class="col-auto d-flex align-items-end pb-2"><button type="button" class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#modal-inline-familiar" title="Adicionar pessoa (tipo RESPONSÁVEL)"><i class="fas fa-user-plus"></i></button></div></div>
               </div>
               <div class="col-lg-6 col-md-6 col-sm-12">
                 {{ form.acordo_faturamento|as_crispy_field }}
@@ -150,28 +150,6 @@ tz %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
 
       <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
         {% include 'parciais/_workflow_submit_sidebar.html' with button_id='btn-atendimento-cadastrar' submit_label='Salvar' status_title='Editando...' status_spinner_class='text-warning' status_text_class='text-warning' %}
-
-        <div class="d-flex justify-content-end mt-2">
-          <div class="form-group text-center m-2">
-            <div class="col-md-12 mt-2">
-              {% if request.user.is_staff %}
-              <a title="Registrar ou atualziar Cadastros Admin"
-                href="{% url 'admin:admin_cadastros_pessoa_changelist' %}"
-                class="btn btn-sm btn-primary btn-outline-light border border-black" id="addPessoaBtn">
-                <i class="fas fa-edit" style="transition: color 0.3s">Link Admin</i>
-              </a>
-
-              <div class="col-md-12 mt-2">
-                <a title="Utilize quando retornar do admin" onclick="location.reload();"
-                  class="btn btn-sm btn-warning btn-outline-primary border border-black">
-                  <i class="fas fa-sync" style="transition: color 0.3s">Atualizar</i>
-                </a>
-              </div>
-
-              {% endif %}
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   </form>
@@ -184,5 +162,193 @@ tz %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
 
 <!-- Incluir o script para checagem de anexos -->
 <script src="{% static 'js/anexoatendimento.js' %}"></script>
+
+
+<!-- ===== MODAIS INLINE (pessoa/CID/cidade) ===== -->
+<div class="modal fade" id="modal-inline-pessoa" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form id="form-inline-pessoa">
+        {% csrf_token %}
+        <div class="modal-header">
+          <h5 class="modal-title">Nova pessoa (tipo PACIENTE)</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <label class="form-label">Nome *</label>
+          <input type="text" name="nome" class="form-control" required>
+          <label class="form-label mt-2">CPF</label>
+          <input type="text" name="cpf" class="form-control">
+          <input type="hidden" name="classificacao" value="paciente">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modal-inline-familiar" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form id="form-inline-familiar">
+        {% csrf_token %}
+        <div class="modal-header">
+          <h5 class="modal-title">Nova pessoa (tipo RESPONSÁVEL)</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <label class="form-label">Nome *</label>
+          <input type="text" name="nome" class="form-control" required>
+          <label class="form-label mt-2">CPF</label>
+          <input type="text" name="cpf" class="form-control">
+          <input type="hidden" name="classificacao" value="responsavel">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modal-inline-cid" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form id="form-inline-cid">
+        {% csrf_token %}
+        <div class="modal-header">
+          <h5 class="modal-title">Novo CID / diagnóstico</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <label class="form-label">Código *</label>
+          <input type="text" name="codigo" class="form-control" required
+                 placeholder="Ex.: J45">
+          <label class="form-label mt-2">Descrição *</label>
+          <input type="text" name="descricao" class="form-control" required
+                 placeholder="Ex.: Asma">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modal-inline-cidade" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form id="form-inline-cidade">
+        {% csrf_token %}
+        <div class="modal-header">
+          <h5 class="modal-title">Nova cidade</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <label class="form-label">Cidade *</label>
+          <input type="text" name="cidade" class="form-control" required>
+          <label class="form-label mt-2">UF *</label>
+          <input type="text" name="uf" class="form-control" maxlength="2"
+                 required>
+          <small class="form-text text-muted">Se a UF ainda não existir, o
+            estado será criado (informe o nome abaixo).</small>
+          <label class="form-label mt-2">Nome do estado (se novo)</label>
+          <input type="text" name="estado" class="form-control">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+// PADRÃO: criação inline via AJAX; ao salvar, insere a opção no select do
+// campo correspondente e já seleciona.
+function inlineAdd(url, formId, selectName, modalId, dadosOpcionais) {
+  const form = document.getElementById(formId);
+  const dados = dadosOpcionais || new FormData(form);
+  fetch(url, { method: 'POST', body: dados, credentials: 'same-origin' })
+    .then(r => r.json())
+    .then(data => {
+      if (data.erro) { alert(data.erro); return; }
+      const select = document.querySelector(
+          'select[name="' + selectName + '"]');
+      if (!select) { bootstrap.Modal.getInstance(
+          document.getElementById(modalId)).hide(); return; }
+      const opcao = new Option(data.texto, data.id, true, true);
+      select.add(opcao);
+      // dispara o evento change (select2 re-renderiza)
+      select.dispatchEvent(new Event('change'));
+      bootstrap.Modal.getInstance(
+          document.getElementById(modalId)).hide();
+    })
+    .catch(() => alert('Não foi possível salvar.'));
+}
+document.addEventListener('DOMContentLoaded', function () {
+  const csrf = document.querySelector(
+      'form input[name="csrfmiddlewaretoken"]');
+  document.getElementById('form-inline-pessoa').addEventListener(
+      'submit', function (e) {
+        e.preventDefault();
+        this.querySelector('input[name="csrfmiddlewaretoken"]').value =
+            csrf ? csrf.value : '';
+        inlineAdd('{% url 'atendimento_inline_pessoa' %}',
+                  'form-inline-pessoa', 'pessoa', 'modal-inline-pessoa');
+      });
+  document.getElementById('form-inline-familiar').addEventListener(
+      'submit', function (e) {
+        e.preventDefault();
+        this.querySelector('input[name="csrfmiddlewaretoken"]').value =
+            csrf ? csrf.value : '';
+        inlineAdd('{% url 'atendimento_inline_pessoa' %}',
+                  'form-inline-familiar', 'pessoa_docentrega',
+                  'modal-inline-familiar');
+      });
+  document.getElementById('form-inline-cid').addEventListener(
+      'submit', function (e) {
+        e.preventDefault();
+        this.querySelector('input[name="csrfmiddlewaretoken"]').value =
+            csrf ? csrf.value : '';
+        inlineAdd('{% url 'atendimento_inline_cid' %}',
+                  'form-inline-cid', 'diagnostico_encaminhamento',
+                  'modal-inline-cid');
+      });
+  document.getElementById('form-inline-cidade').addEventListener(
+      'submit', function (e) {
+        e.preventDefault();
+        this.querySelector('input[name="csrfmiddlewaretoken"]').value =
+            csrf ? csrf.value : '';
+        const selEstado = document.getElementById('inline-cidade-estado');
+        const blocoNovo = document.getElementById(
+            'inline-cidade-novo-estado');
+        const dados = new FormData(this);
+        if (selEstado.value !== '__novo__') {
+          dados.set('estado_pk', selEstado.value);
+          dados.delete('uf');
+          dados.delete('estado');
+        }
+        inlineAdd('{% url 'atendimento_inline_cidade' %}',
+                  'form-inline-cidade', 'cidade_encaminhamento',
+                  'modal-inline-cidade', dados);
+      });
+  // Seletor de estado: “+ Novo estado…” revela UF + nome
+  const selEstado = document.getElementById('inline-cidade-estado');
+  if (selEstado) {
+    selEstado.addEventListener('change', function () {
+      document.getElementById('inline-cidade-novo-estado').hidden =
+          this.value !== '__novo__';
+    });
+  }
+});
+</script>
 
 {% endblock %}
