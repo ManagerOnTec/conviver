@@ -12,6 +12,15 @@
     </a>
     {% endif %}
 
+    <!-- Funcionários PENDENTES: pessoas do tipo funcionário ATIVAS do
+         estabelecimento da sessão SEM registro na lista -->
+    <a href="#modal-funcionarios-pendentes" title="Pessoas do tipo funcionário ativas sem registro"
+       class="mt-2 list-group-item list-group-item-action custom-link rounded"
+       data-bs-toggle="modal" data-bs-target="#modal-funcionarios-pendentes">
+        <i class="fas fa-user-clock me-2"></i>Funcionários sem Registro
+        <span class="badge bg-warning text-dark ms-1">{{ funcionarios_pendentes|length }}</span>
+    </a>
+
     <form class="mt-2 text-white text-left" method="GET" action="{% url 'gp_funcionario_listar' %}">
         <div class="item-left">
             <h5>Filtros</h5>
@@ -371,6 +380,45 @@
             {% endfor %}
         </tbody>
     </table>
+</div>
+
+<!-- MODAL: funcionários pendentes (pessoas ativas sem registro) -->
+<div class="modal fade" id="modal-funcionarios-pendentes" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Pessoas do tipo funcionário sem registro</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                {% if funcionarios_pendentes %}
+                <div class="list-group">
+                    {% for pessoa in funcionarios_pendentes %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ pessoa.nome }}</strong>
+                            <small class="text-muted d-block">
+                                {% if pessoa.cpf %}CPF {{ pessoa.cpf }}{% endif %}
+                            </small>
+                        </div>
+                        <a href="{% url 'gp_funcionario_cadastrar' %}?pessoa={{ pessoa.pk }}"
+                           title="Cadastrar com esta pessoa"
+                           class="btn btn-outline-success btn-sm">
+                            <i class="fas fa-user-plus me-1"></i>Registrar funcionário
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">Todas as pessoas do tipo funcionário
+                    ativas deste estabelecimento já estão registradas.</p>
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 {% if pode_editar %}

@@ -15,6 +15,33 @@ from admin_faturas.models import AcordoFaturamento
 
 
 class Atendimento(models.Model):
+
+    def liberar_leito_se_alta(self):
+        """Quando a ALTA é registrada (dt_alta preenchida), o atendimento SAI
+        do leito em que estava internado: a ocupação ativa dele recebe a
+        saída (leito volta a LIVRE) e o atendimento sai da FK da linha
+        (o movimento/histórico guardam quem estava lá)."""
+        if not self.pk or not self.dt_alta:
+            return False
+        from gestao_leitos.models import GestaoLeito
+        ocupacao = GestaoLeito.objects.filter(
+            atendimento_id=self.pk, dt_saida__isnull=True, status='A').first()
+        if ocupacao is None:
+            return False
+        ocupacao.registrar_saida(
+            usuario=self.us_atualizacao or self.us_registro,
+            dt_saida=self.dt_alta,
+            observacoes='Saída automática pela ALTA do atendimento.')
+        return True
+
+    def save(self, *args, **kwargs):
+        alta_registrada = self.dt_alta and (
+            not self.pk or Atendimento.objects.filter(
+                pk=self.pk, dt_alta__isnull=True).exists())
+        retorno = super().save(*args, **kwargs)
+        if alta_registrada:
+            self.liberar_leito_se_alta()
+        return retorno
     pessoa = models.ForeignKey(
         Pessoa, on_delete=models.PROTECT, verbose_name='Pessoa')
     tipo_atendimento = models.ForeignKey(

@@ -283,7 +283,20 @@ class FuncionarioListView(
         # Cursos ativos para os modais (registrar realizado/pendente)
         from .models import Curso
         context['cursos'] = Curso.objects.filter(status='A').order_by('nome')
+        # FUNCIONÁRIOS PENDENTES: pessoas do tipo FUNCIONÁRIO ATIVAS do
+        # estabelecimento da sessão SEM registro na lista (modal do menul;
+        # o clique abre o cadastro com a pessoa já carregada).
+        from admin_cadastros.models import Pessoa
+        estabelecimento = _estabelecimento(self.request)
+        registradas = Funcionario.objects.filter(
+            estabelecimento=estabelecimento).values_list('pessoa_id',
+                                                         flat=True)
+        context['funcionarios_pendentes'] = Pessoa.objects.filter(
+            status='A', classificacao_pessoa='funcionario',
+        ).exclude(pk__in=registradas).order_by('nome')[:100]
         return context
+
+
 
 
 class FuncionarioCreateView(
@@ -297,6 +310,19 @@ class FuncionarioCreateView(
     login_url = reverse_lazy('login')
     success_url = reverse_lazy('gp_funcionario_listar')
     acao_gp = 'editar'
+
+    def get_initial(self):
+        """PRÉ-CARGA: pessoa clicada no modal “Funcionários sem Registro”
+        (?pessoa=<pk>) já inicia o objeto de cadastro."""
+        initial = super().get_initial()
+        pessoa_id = self.request.GET.get('pessoa')
+        if pessoa_id:
+            pessoa = Pessoa.objects.filter(
+                pk=pessoa_id, classificacao_pessoa='funcionario',
+                status='A').first()
+            if pessoa:
+                initial['pessoa'] = pessoa.pk
+        return initial
 
     def get_form(self, form_class=None):
         form = super().get_form(form_class)

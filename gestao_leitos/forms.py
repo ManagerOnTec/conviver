@@ -11,6 +11,15 @@ from atendimentos.models import Atendimento
 from .models import GESTAO_STATUS, GestaoLeito
 
 
+# ~CE~ APENAS LEITOS DE ALA DE INTERNAÇÃO DEVEM TER REGISTRO DE GESTÃO
+
+def _leitos_de_internacao(estabelecimento):
+    return Leito.objects.filter(
+        status='A',
+        local__setor__estabelecimento=estabelecimento,
+        local__setor__ala__internacao=True)
+
+
 def _atendimentos_sem_leito(estabelecimento):
     """Atendimentos ativos SEM ALTA e SEM ocupação de leito ativa."""
     ocupados = GestaoLeito.objects.filter(
@@ -259,6 +268,10 @@ class OcupacaoForm(forms.ModelForm):
 
     def __init__(self, *args, estabelecimento=None, **kwargs):
         super().__init__(*args, **kwargs)
+        # UMA linha por LEITO: a reocupação ATUALIZA a linha existente (a
+        # view decide criar/atualizar) — a validação unique do campo `leito`
+        # ("Ocupação de Leito com este Leito já existe") bloquearia isso.
+        self.fields['leito'].validators = []
         if estabelecimento is not None:
             # Validação do POST contra querysets reais (recorte server-side).
             self.fields['atendimento'].queryset = _atendimentos_sem_leito(
@@ -267,6 +280,23 @@ class OcupacaoForm(forms.ModelForm):
                 status='A', ocupado=False,
                 local__setor__estabelecimento=estabelecimento,
                 local__setor__ala__internacao=True)
+            # Em EDIÇÃO/REOCUPAÇÃO, o atendimento e o leito atuais precisam
+            # estar nos querysets (podem ter saído do recorte).
+            if self.instance and self.instance.pk:
+                if self.instance.atendimento_id:
+                    self.fields['atendimento'].queryset = (
+                        self.fields['atendimento'].queryset |
+                        Atendimento.objects.filter(
+                            pk=self.instance.atendimento_id))
+                if self.instance.leito_id:
+                    self.fields['leito'].queryset = (
+                        self.fields['leito'].queryset |
+                        Leito.objects.filter(pk=self.instance.leito_id))
+
+    def validate_unique(self):
+        # Mesma razão: a OneToOne `leito` dispararia "com este Leito já
+        # existe" na REOCUPAÇÃO (que atualiza a linha existente).
+        pass
         # Pré-seleção (ex.: ?atendimento= do modal “Pacientes sem Leitos”):
         # o objeto inicial precisa estar no queryset para o select2
         # renderizar a opção selecionada.

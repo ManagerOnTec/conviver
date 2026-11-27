@@ -202,15 +202,6 @@ def _kpis_leitos(request, estabelecimento):
     internados = vivos.filter(situacao='O').count()
 
     # Pacientes do tipo PACIENTE internados (via atendimento.pessoa)
-    internados_pacientes = vivos.filter(
-        situacao='O', atendimento__pessoa__classificacao_pessoa='paciente') \
-        .count()
-    entradas_hoje = GestaoLeito.objects.filter(
-        estabelecimento=estabelecimento,
-        dt_entrada__date=hoje).count()
-    altas_hoje = GestaoLeito.objects.filter(
-        estabelecimento=estabelecimento,
-        dt_saida__date=hoje).count()
     taxa = f'{(ocupados / total * 100):.0f}%' if total else '0%'
 
     base = reverse('gl_leito_mapa')
@@ -225,13 +216,6 @@ def _kpis_leitos(request, estabelecimento):
          'color_class': 'kpi-red', 'icon': '⛔', 'url': f'{base}?situacao=B'},
         {'title': 'Higienização', 'value': str(higienizacao), 'subtitle': '',
          'color_class': 'kpi-orange', 'icon': '🧹', 'url': f'{base}?situacao=H'},
-        {'title': 'Internados (pacientes)', 'value': str(internados_pacientes),
-         'subtitle': '', 'color_class': 'kpi-purple', 'icon': '👥',
-         'url': f'{base}?situacao=O'},
-        {'title': 'Internados hoje', 'value': str(entradas_hoje),
-         'subtitle': '', 'color_class': 'kpi-blue', 'icon': '📥', 'url': ''},
-        {'title': 'Altas hoje', 'value': str(altas_hoje), 'subtitle': '',
-         'color_class': 'kpi-green', 'icon': '📤', 'url': ''},
         {'title': 'Taxa de ocupação', 'value': taxa, 'subtitle': '',
          'color_class': 'kpi-orange', 'icon': '📊', 'url': ''},
     ]
@@ -548,6 +532,9 @@ class RegistrarOcupacaoViewBase(
                 # atualiza (reocupação) em vez de criar outra.
                 existente = GestaoLeito.objects.filter(
                     leito_id=form.instance.leito_id).first()
+                import sys as _sys
+                print('FV existente:', existente is not None,
+                      '| post_at:', form.instance.atendimento_id, file=_sys.stderr)
                 if existente is not None:
                     self.object = existente
                     self.object.atendimento = form.instance.atendimento
