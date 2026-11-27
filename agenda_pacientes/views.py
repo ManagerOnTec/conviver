@@ -242,6 +242,17 @@ class AgendaPacienteListView(
         context['agenda_opcoes_url'] = reverse('agendapaciente_opcoes')
         context['exames_pendentes_url'] = reverse(
             'agendapaciente_exames_pendentes')
+        # CONTADOR do botão “Exames Pendentes”: a MESMA query da função
+        # AgendaExamesPendentesView (exames ativos, sem resultado e sem
+        # agendamento ativo, no estabelecimento da sessão).
+        from prontuarios.models import Exame
+        context['exames_pendentes_qtde'] = Exame.objects.filter(
+            estabelecimento_id=self.request.session.get('estabelecimento_id'),
+            status='A',
+            resultados__isnull=True,
+        ).exclude(
+            agendamentos__status='A',
+        ).count()
         context['agenda_filters'] = self.filtros_sessao
         context['filter'] = self.filtros_sessao
         context['querystring'] = _querystring_filtros(self.filtros_sessao)

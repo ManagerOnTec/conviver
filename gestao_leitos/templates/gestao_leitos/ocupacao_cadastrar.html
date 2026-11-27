@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+{% block titulos %}{{title}}|{% endblock %}
+
+{% block menul %}
+<div class="form-group text-left m-3 mt-2">
+    <a href="{% url 'gl_leito_mapa' %}" class="mt-2 list-group-item list-group-item-action voltar-link rounded">
+        <i class="fas fa-arrow-left me-2"></i>Voltar
+    </a>
+    <a href="{% url 'gl_leito_mapa' %}" class="mt-2 list-group-item list-group-item-action custom-link rounded">
+        <i class="fas fa-list me-2"></i>Mapa de Leitos
+    </a>
+</div>
+{% endblock %}
+
+{% block cabdados %}
+{% include 'parciais/_list_header.html' with icon_class='fas fa-bed' title='Gestão de Leitos' subtitle=title context_label='Estabelecimento' context_value=estabelecimento %}
+{% endblock %}
+
+{% block lista %}
+<style>
+/* SELECT2 no visual dos campos do sistema: fundo branco, mesma borda e
+   altura do .form-control (não cinza do tema padrão). */
+.select2-container--default .select2-selection--single {
+    background-color: #fff;
+    border: 1px solid #ced4da;
+    border-radius: .375rem;
+    height: 38px;
+    padding-top: 6px;
+}
+.select2-container--default.select2-container--focus
+.select2-selection--single,
+.select2-container--default.select2-container--open
+.select2-selection--single {
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 .25rem rgba(13, 110, 253, .25);
+}
+.select2-container--default .select2-selection--single
+.select2-selection__rendered {
+    color: #212529;
+    line-height: 24px;
+}
+.select2-container--default .select2-selection--single
+.select2-selection__placeholder {
+    color: #6c757d;
+}
+.select2-container--default .select2-selection--single
+.select2-selection__arrow b {
+    border-color: #495057 transparent transparent transparent;
+}
+.select2-dropdown {
+    border-color: #ced4da;
+}
+.select2-container--default .select2-results__option--highlighted[aria-selected] {
+    background-color: #0d6efd;
+}
+</style>
+<div class="container">
+    <form method="post" novalidate>
+        {% csrf_token %}
+        {{ form.media }}
+        <div class="row">
+            <div class="col-lg-9 col-md-9 col-sm-12">
+                <div class="container">
+                    <div class="row">
+                        <div class="col-md-6">{{ form.leito|as_crispy_field }}</div>
+                        <div class="col-md-6">{{ form.atendimento|as_crispy_field }}</div>
+                        <div class="col-md-6">{{ form.dt_entrada|as_crispy_field }}</div>
+                        <div class="col-md-6">{{ form.situacao|as_crispy_field }}</div>
+                        <div class="col-md-12">{{ form.observacoes|as_crispy_field }}</div>
+                    </div>
+                    {% if atendimentos_disponiveis %}
+                    <div class="alert alert-info small mt-2">
+                        {{ atendimentos_disponiveis|length }} atendimento(s)
+                        ativos sem alta e sem leito neste estabelecimento.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-3 col-sm-12">
+                {% include 'parciais/_workflow_submit_sidebar.html' with button_id='btn-ocupacao-salvar' submit_label='Salvar' status_title='Salvando...' status_spinner_class='text-success' status_text_class='text-success' %}
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}

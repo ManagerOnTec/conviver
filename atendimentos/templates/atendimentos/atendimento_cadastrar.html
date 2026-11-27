@@ -50,6 +50,14 @@ tz %} {% block titulos %}{{title}}|{% endblock %}
               <div class="col-lg-12 col-md-12 col-sm-12">
                 {{ form.pessoa|as_crispy_field }}
               </div>
+              <div class="col-lg-12 col-md-12 col-sm-12">
+                <!-- Estabelecimento da sessão (padrão do projeto: não é
+                     editável; a view grava o da sessão no form_valid). -->
+                <label class="col-form-label requiredLabel" for="id_estabelecimento_sessao">Estabelecimento</label>
+                <input type="text" id="id_estabelecimento_sessao"
+                       class="form-control"
+                       value="{{ estabelecimento|default:'—' }}" disabled>
+              </div>
 
               <div class="row mt-2 mb-2">
                 <div class="col-md-6 text-start">

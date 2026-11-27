@@ -1,5 +1,6 @@
 from django.db import IntegrityError
-from admin_cadastros.models import Pessoa, PessoaCampos, TipoAtendimento
+from admin_cadastros.models import Pessoa, PessoaCampos, TipoAtendimento, \
+    Estabelecimento
 from datetime import datetime
 from django.contrib import messages
 from django import forms
@@ -43,6 +44,11 @@ class AtendimentoCreateForm(FilterByStatusMixin, forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         self.usuario = kwargs.pop('usuario', None)
+        # Estabelecimento da SESSÃO (padrão do projeto — sai do formulário e
+        # é gravado pela view): usado pelas regras de duplicidade abaixo.
+        # Precisa ser consumido ANTES do super().__init__ (o ModelForm não
+        # aceita kwargs desconhecidos).
+        self.estabelecimento_id = kwargs.pop('estabelecimento_id', None)
         super().__init__(*args, **kwargs)
         self.fields['diagnostico_encaminhamento'] = forms.ModelMultipleChoiceField(
             queryset=CID.objects.all(),
@@ -50,23 +56,47 @@ class AtendimentoCreateForm(FilterByStatusMixin, forms.ModelForm):
             required=False,
             label='CID - Diagnósticos dos encaminhamentos'
         )
-        self.fields['pessoa'].queryset = Pessoa.objects.filter(status__in=['A'], classificacao_pessoa='paciente')
+        # NOVO ATENDIMENTO: a pessoa não pode ter OUTRO atendimento ativo
+        # (status='A') SEM alta neste estabelecimento. Quem já teve alta pode.
+        # (Na EDIÇÃO, o próprio atendimento é excluído da checagem.)
+        est_id = self.estabelecimento_id or (
+            self.data.get('estabelecimento') if self.is_bound else None)
+        self.fields['pessoa'].queryset = Pessoa.objects.filter(
+            status='A', classificacao_pessoa='paciente').exclude(
+            pk__in=Atendimento.objects.filter(
+                status='A', dt_alta__isnull=True,
+                estabelecimento_id=est_id,
+            ).exclude(pk=self.instance.pk)
+            .values_list('pessoa_id', flat=True)) if est_id else \
+            Pessoa.objects.filter(status='A',
+                                  classificacao_pessoa='paciente')
 
     def clean(self):
         cleaned_data = super().clean()
         pessoa = cleaned_data.get('pessoa')
-        estabelecimento = cleaned_data.get('estabelecimento')
+        # O estabelecimento é o da SESSÃO (não vem do POST).
+        estabelecimento_id = self.estabelecimento_id or (
+            self.data.get('estabelecimento') if self.is_bound else None)
+        estabelecimento = None
+        if estabelecimento_id:
+            estabelecimento = Estabelecimento.objects.filter(
+                pk=estabelecimento_id).first()
 
+        # REGRA: pessoa com atendimento ATIVO (status='A') SEM dt_alta não
+        # pode ter outro atendimento no mesmo estabelecimento. Quem já teve
+        # alta pode. (Na edição o próprio registro sai da checagem.)
         exists = Atendimento.objects.filter(
             pessoa=pessoa,
             estabelecimento=estabelecimento,
             status='A',
-            dt_alta__isnull=False
+            dt_alta__isnull=True,
         ).exclude(pk=self.instance.pk).exists()
 
         if exists:
             raise forms.ValidationError(
-                "Já existe um registro ativo para esta pessoa e estabelecimento.")
+                "Esta pessoa já possui um ATENDIMENTO ABERTO (sem alta) "
+                "neste estabelecimento: finalize a alta dele antes de "
+                "iniciar outro atendimento.")
 
         return cleaned_data
 

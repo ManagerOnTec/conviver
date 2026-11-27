@@ -228,3 +228,15 @@ demais (ver “Padrão obrigatório dos admins” abaixo).
   pelo form).
 - O mesmo vale para o Admin: `AdminEstabelecimentoPadraoMixin` fixa o campo
   e o `save_model` grava o usuário (Padrão obrigatório dos admins, itens 4-5).
+
+## PADRÃO DE SINTAXE HTML/TEMPLATE — tags {% %} nunca quebram em linhas
+- Em templates, TODA tag `{% ... %}` (include, url, if, for, block...) deve
+  ficar em **UMA ÚNICA LINHA**, mesmo que fique longa (a linha longa é aceita;
+  a quebra NÃO é). Tag quebrada em várias linhas quebra a renderização —
+  já quebrou `_list_header`, `_patient_context_header` e
+  `_workflow_submit_sidebar` em vários módulos (o conteúdo some da tela sem
+  erro no log).
+- Regra do pep8/estilo Python NÃO se aplica a HTML/Django template: ignore
+  o comprimento de linha do template; priorize a tag inteira na linha.
+- Ao criar/atualizar um template, rode uma conferência de tags quebradas
+  (regex `\{%[^%]*\n[^%]*?%\}`) antes de concluir.

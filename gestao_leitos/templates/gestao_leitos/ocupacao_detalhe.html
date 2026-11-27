@@ -4,12 +4,10 @@
 
 {% block menul %}
 <div class="form-group text-left m-3 mt-2">
-    <a href="{% url 'gl_leito_mapa' %}"
-       class="mt-2 list-group-item list-group-item-action voltar-link rounded">
+    <a href="{% url 'gl_leito_mapa' %}" class="mt-2 list-group-item list-group-item-action voltar-link rounded">
         <i class="fas fa-arrow-left me-2"></i>Voltar
     </a>
-    <a href="{% url 'gl_leito_mapa' %}"
-       class="mt-2 list-group-item list-group-item-action custom-link rounded">
+    <a href="{% url 'gl_leito_mapa' %}" class="mt-2 list-group-item list-group-item-action custom-link rounded">
         <i class="fas fa-list me-2"></i>Mapa de Leitos
     </a>
 </div>
@@ -24,7 +22,7 @@
     <form id="ocupacao-detalhe" class="form-control mt-2">
         {% csrf_token %}
         <div class="row">
-            <div class="col-lg-12 col-md-12 col-sm-12">
+            <div class="col-lg-9 col-md-9 col-sm-12">
                 <div id="table-container">
                     <div class="container">
                         <div class="row">
@@ -35,14 +33,14 @@
                             <div class="col-md-6">
                                 <label class="form-label">Local / Setor / Ala</label>
                                 <input class="form-control"
-                                       value="{{ ocupacao.leito.local.nome }} / {{ ocupacao.leito.local.setor.nome }} / {{ ocupacao.leito.local.setor.ala.nome }}"
-                                       disabled>
+                                    value="{{ ocupacao.leito.local.nome }} / {{ ocupacao.leito.local.setor.nome }} / {{ ocupacao.leito.local.setor.ala.nome }}"
+                                    disabled>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Paciente (atendimento)</label>
                                 <input class="form-control"
-                                       value="{{ ocupacao.atendimento.pessoa }} (atendimento #{{ ocupacao.atendimento.pk }})"
-                                       disabled>
+                                    value="{% if ocupacao.atendimento %}{{ ocupacao.atendimento.pessoa }} (atendimento #{{ ocupacao.atendimento.pk }}){% else %}Sem atendimento (leito operacional){% endif %}"
+                                    disabled>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Situação</label>
@@ -54,7 +52,8 @@
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Saída</label>
-                                <input class="form-control" value="{{ ocupacao.dt_saida|date:'d/m/Y H:i'|default:'—' }}" disabled>
+                                <input class="form-control" value="{{ ocupacao.dt_saida|date:'d/m/Y H:i'|default:'—' }}"
+                                    disabled>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Dias internado</label>
@@ -66,29 +65,70 @@
                             </div>
                             <div class="col-md-12">
                                 <label class="form-label">Observações</label>
-                                <textarea class="form-control" rows="2" disabled>{{ ocupacao.observacoes|default:'—' }}</textarea>
+                                <textarea class="form-control" rows="2"
+                                    disabled>{{ ocupacao.observacoes|default:'—' }}</textarea>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Dt. Registro</label>
-                                <input class="form-control" value="{{ ocupacao.dt_registro|date:'d/m/Y H:i' }}" disabled>
+                                <input class="form-control" value="{{ ocupacao.dt_registro|date:'d/m/Y H:i' }}"
+                                    disabled>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Us. Registro</label>
                                 <input class="form-control" value="{{ ocupacao.us_registro|default:'-' }}" disabled>
                             </div>
+                            {% if ocupacao.atendimento %}
                             <div class="col-md-6">
                                 <label class="form-label">Abrir atendimento</label>
                                 <a class="form-control" style="text-decoration:none;"
-                                   href="{% url 'atendimento_detalhe' pk=ocupacao.atendimento.pk %}">
+                                    href="{% url 'atendimento_detalhe' pk=ocupacao.atendimento.pk %}">
                                     <i class="fas fa-hospital-user me-1"></i>Ir para o atendimento
                                 </a>
                             </div>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
             </div>
+            <div class="col-lg-3 col-md-3 col-sm-12">
+                {% include 'parciais/_detail_object_nav.html' with detail_url_name='gl_ocupacao_detalhe' nav_label='Navegar entre ocupações de leitos' %}
+            </div>
         </div>
     </form>
+
+    <div class="card mb-3 mt-3">
+        <div class="card-header">Movimentação do leito ({{ movimentos|length }})</div>
+        <table class="table table-sm mb-0">
+            <thead>
+                <tr>
+                    <th>Operação</th>
+                    <th>Situação</th>
+                    <th>Atendimento/Paciente</th>
+                    <th>Data/hora</th>
+                    <th>Observações</th>
+                    <th>Por</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for mov in movimentos %}
+                <tr>
+                    <td>{{ mov.get_operacao_display }}</td>
+                    <td>{{ mov.get_situacao_display }}</td>
+                    <td>
+                        {% if mov.atendimento %}
+                        {{ mov.atendimento.pessoa }} (#{{ mov.atendimento.pk }})
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>{{ mov.dt_movimento|date:"d/m/Y H:i" }}</td>
+                    <td>{{ mov.observacoes|default:"—" }}</td>
+                    <td>{{ mov.usuario }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6" class="text-muted">Sem movimentos registrados.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 
     <div class="card mb-3 mt-3">
         <div class="card-header">Histórico de operações</div>

@@ -1228,7 +1228,7 @@ class LeitoAdmin(BaseLocalAgendaAdmin):
     # `autocomplete_fields` ignora o `queryset` do form (o widget recorta pelo
     # admin do Local), então o campo é selecionado normalmente: mostra só
     # locais de internação e o usuário não aponta um local errado.
-    list_display = ('id', 'leito', 'local', 'estabelecimento_exibicao',
+    list_display = ('id', 'leito', 'local', 'setor_exibicao', 'ala_exibicao', 'estabelecimento_exibicao',
                     'ocupado', 'status', 'dt_registro', 'us_registro')
     list_display_links = ('id', 'leito')
     list_filter = (StatusFilterAdminMixin, 'ocupado',
@@ -1278,6 +1278,15 @@ class LeitoAdmin(BaseLocalAgendaAdmin):
     @admin.display(description='Estabelecimento')
     def estabelecimento_exibicao(self, obj):
         return obj.estabelecimento or '-'
+
+    @admin.display(description='Setor')
+    def setor_exibicao(self, obj):
+        return obj.local.setor if obj.local.setor_id else '-'
+
+    @admin.display(description='Ala')
+    def ala_exibicao(self, obj):
+        return (obj.local.setor.ala
+                if obj.local.setor_id and obj.local.setor.ala_id else '-')
 
     def save_model(self, request, obj, form, change):
         if not change:

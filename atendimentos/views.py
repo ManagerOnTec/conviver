@@ -207,6 +207,18 @@ class AtendimentoListView(LoginRequiredMixin, CustomPermissionRequiredMixin, Fil
 
         context['is_paginated'] = True
 
+        # PESSOAS SEM ATENDIMENTO: pessoas do tipo PACIENTE que NÃO têm
+        # atendimento aberto (status='A' SEM dt_alta) no estabelecimento da
+        # sessão — modal do menul; o clique gera o novo atendimento já com a
+        # pessoa carregada.
+        em_aberto = Atendimento.objects.filter(
+            status='A', dt_alta__isnull=True,
+            estabelecimento_id=estabelecimento_id,
+        ).values_list('pessoa_id', flat=True)
+        context['pessoas_sem_atendimento'] = Pessoa.objects.filter(
+            status='A', classificacao_pessoa='paciente',
+        ).exclude(pk__in=em_aberto).order_by('nome')[:100]
+
         return context
 
 
@@ -228,6 +240,14 @@ class AtendimentoCreateView(LoginRequiredMixin, CustomPermissionRequiredMixin, F
             if ultima_pessoa:
                 initial['pessoa'] = ultima_pessoa.id
 
+        # PRÉ-CARGA: pessoa clicada no modal “Pessoas sem Atendimento”.
+        pessoa_id = self.request.GET.get('pessoa')
+        if pessoa_id:
+            pessoa = Pessoa.objects.filter(
+                pk=pessoa_id, classificacao_pessoa='paciente',
+                status='A').first()
+            if pessoa:
+                initial['pessoa'] = pessoa.pk
         return initial
 
     def get_context_data(self, **kwargs):
@@ -250,6 +270,9 @@ class AtendimentoCreateView(LoginRequiredMixin, CustomPermissionRequiredMixin, F
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs['usuario'] = self.request.user
+        # Estabelecimento da sessão (regras de duplicidade do form).
+        kwargs['estabelecimento_id'] = self.request.session.get(
+            'estabelecimento_id')
         return kwargs
 
     def form_valid(self, form):
@@ -269,9 +292,16 @@ class AtendimentoCreateView(LoginRequiredMixin, CustomPermissionRequiredMixin, F
                 self.request, "Selecione um estabelecimento antes de criar um atendimento.")
             return self.form_invalid(form)
 
-        if Atendimento.objects.filter(Q(pessoa=form.cleaned_data['pessoa']) & Q(dt_alta=None, status='A')).exists():
+        # Duplicidade: só bloqueia atendimento aberto no MESMO estabelecimento
+        # (a regra é por estabelecimento, como no clean do form).
+        if Atendimento.objects.filter(
+                pessoa=form.cleaned_data['pessoa'],
+                estabelecimento_id=estabelecimento.id,
+                dt_alta=None, status='A').exists():
             messages.error(
-                self.request, 'Registro não realizado, para novo atendimento gere alta no atendimento anterior')
+                self.request,
+                'Registro não realizado, para novo atendimento gere alta no '
+                'atendimento anterior')
             return self.form_invalid(form)
 
         try:

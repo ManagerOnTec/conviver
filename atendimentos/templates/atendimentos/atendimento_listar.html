@@ -15,6 +15,14 @@
         <i class="fas fa-plus me-2" style="transition: color 0.3s;"></i>Novo
     </a>
 
+    <!-- Pessoas SEM atendimento: modal (padrão de Gestão de Leitos) -->
+    <a href="#modal-sem-atendimento" title="Pacientes sem atendimento aberto"
+       class="mt-2 list-group-item list-group-item-action custom-link rounded"
+       data-bs-toggle="modal" data-bs-target="#modal-sem-atendimento">
+        <i class="fas fa-user-clock me-2"></i>Pessoas sem Atendimento
+        <span class="badge bg-warning text-dark ms-1">{{ pessoas_sem_atendimento|length }}</span>
+    </a>
+
   
 
     <form class="mt-2 text-white text-left" method="GET" action="">
@@ -258,4 +266,52 @@
 </div>
 {% endif %}
 <!--FIM PAGINACAO-->
+
+<!-- MODAL: pessoas sem atendimento (padrão de Gestão de Leitos) -->
+<div class="modal fade" id="modal-sem-atendimento" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Pacientes sem atendimento aberto</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                {% if pessoas_sem_atendimento %}
+                <div class="list-group">
+                    {% for pessoa in pessoas_sem_atendimento %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ pessoa.nome }}</strong>
+                            <small class="text-muted d-block">
+                                {% if pessoa.cpf %}CPF {{ pessoa.cpf }}{% endif %}
+                                {% if pessoa.dt_nascimento %} · Nasc. {{ pessoa.dt_nascimento|date:"d/m/Y" }}{% endif %}
+                            </small>
+                        </div>
+                        <a href="{% url 'atendimento_cadastrar' %}?pessoa={{ pessoa.pk }}"
+                           title="Iniciar atendimento para esta pessoa"
+                           class="btn btn-outline-success btn-sm">
+                            <i class="fas fa-plus me-1"></i>Novo atendimento
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">Nenhuma pessoa do tipo paciente está
+                    sem atendimento neste estabelecimento.</p>
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}{% block scriptcustom %}
+{{ block.super }}
+<script>
+// Modais para o body (não ficar atrás do backdrop) — padrão da Agenda.
+document.querySelectorAll('.modal.fade').forEach(function (modal) {
+    document.body.appendChild(modal);
+});
+</script>
 {% endblock %}

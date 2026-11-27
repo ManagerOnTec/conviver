@@ -7,7 +7,8 @@ from admin_cadastros.utils import EstabelecimentoFilterAdminMixin
 from dominios.admin_dashboard_mixins import AdminDashboardAndTopFilterMixin
 from dominios.utils import AdminEstabelecimentoPadraoMixin, ExportToXLSMixin
 
-from .models import GestaoLeito, HistoricoLeito, ParametrosGestaoLeitos
+from .models import (GestaoLeito, HistoricoLeito, MovimentoLeito,
+                     ParametrosGestaoLeitos)
 
 
 @admin.register(GestaoLeito)

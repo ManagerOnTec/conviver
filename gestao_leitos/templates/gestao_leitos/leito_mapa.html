@@ -8,13 +8,20 @@
     <a href="" class="mt-2 list-group-item list-group-item-action bg-primary text-white rounded">
         <i class="fas fa-bed me-2"></i>Mapa de Leitos
     </a>
-    {% if pode_editar and leitos_livres %}
-    <a href="#modal-ocupar" title="Registrar ocupação de leito"
-       class="mt-2 list-group-item list-group-item-action custom-link rounded"
-       data-bs-toggle="modal" data-bs-target="#modal-ocupar">
+    {% if pode_add %}
+    <a href="{% url 'gl_ocupacao_cadastrar' %}" title="Registrar ocupação de leito"
+       class="mt-2 list-group-item list-group-item-action custom-link rounded">
         <i class="fas fa-user-plus me-2"></i>Registrar Ocupação
     </a>
     {% endif %}
+
+    <!-- Pacientes SEM leito: modal com atendimentos a alocar -->
+    <a href="#modal-sem-leito" title="Atendimentos sem alocação de leito"
+       class="mt-2 list-group-item list-group-item-action custom-link rounded"
+       data-bs-toggle="modal" data-bs-target="#modal-sem-leito">
+        <i class="fas fa-user-clock me-2"></i>Pacientes sem Leitos
+        <span class="badge bg-warning text-dark ms-1">{{ pacientes_sem_leito|length }}</span>
+    </a>
 
     <form class="mt-2 text-white text-left" method="GET" action="{% url 'gl_leito_mapa' %}">
         <div class="item-left">
@@ -101,107 +108,131 @@
             </tr>
         </thead>
         <tbody id="tableBody">
-            {% for ocupacao in ocupacoes %}
+            {% for leito in leitos %}
             <tr class="data-row"
-                style="border-left: 4px solid {% if ocupacao.situacao == 'O' %}#198754{% elif ocupacao.situacao == 'L' %}#0dcaf0{% elif ocupacao.situacao == 'B' %}#dc3545{% else %}#e0a800{% endif %};">
+                style="border-left: 4px solid {% if leito.gestao.situacao == 'O' %}#198754{% elif leito.gestao.situacao == 'L' %}#0dcaf0{% elif leito.gestao.situacao == 'B' %}#dc3545{% elif leito.gestao.situacao == 'H' %}#e0a800{% else %}#adb5bd{% endif %};">
                 <td>
                     <div class="listing-action-bar">
-                        <a href="{% url 'gl_ocupacao_detalhe' pk=ocupacao.pk %}" title="Visualizar"
+                        {% if leito.gestao %}
+                        <a href="{% url 'gl_ocupacao_detalhe' pk=leito.gestao.pk %}" title="Visualizar"
                             class="btn btn-outline-primary btn-sm listing-action-btn">
                             <i class="fas fa-folder-open"></i>
                         </a>
+                        {% endif %}
                         {% if pode_editar %}
-                        {% if ocupacao.dt_saida %}
-                        <button type="button" title="Ocupar novamente"
-                            class="btn btn-outline-success btn-sm listing-action-btn" data-bs-toggle="modal"
-                            data-bs-target="#modal-ocupar" data-leito="{{ ocupacao.leito.pk }}"
-                            data-leito-nome="{{ ocupacao.leito }}">
+                        {% if not leito.gestao or leito.gestao.dt_saida or leito.gestao.situacao != 'O' %}
+                        <a href="{% url 'gl_ocupacao_cadastrar' %}?leito={{ leito.pk }}"
+                            title="Ocupar leito"
+                            class="btn btn-outline-success btn-sm listing-action-btn">
                             <i class="fas fa-user-plus"></i>
-                        </button>
+                        </a>
                         {% else %}
                         <button type="button" title="Registrar saída"
                             class="btn btn-outline-danger btn-sm listing-action-btn" data-bs-toggle="modal"
-                            data-bs-target="#modal-saida" data-url="{% url 'gl_ocupacao_saida' pk=ocupacao.pk %}">
+                            data-bs-target="#modal-saida" data-url="{% url 'gl_ocupacao_saida' pk=leito.gestao.pk %}">
                             <i class="fas fa-door-open"></i>
                         </button>
-                        <button type="button" title="Trocar leito"
-                            class="btn btn-outline-warning btn-sm listing-action-btn" data-bs-toggle="modal"
-                            data-bs-target="#modal-transferir"
-                            data-url="{% url 'gl_ocupacao_transferir' pk=ocupacao.pk %}">
+                        <a href="{% url 'gl_ocupacao_editar' pk=leito.gestao.pk %}"
+                            title="Trocar leito / editar ocupação"
+                            class="btn btn-outline-warning btn-sm listing-action-btn">
                             <i class="fas fa-right-left"></i>
-                        </button>
+                        </a>
                         {% endif %}
+                        {% if leito.gestao %}
                         <button type="button" title="Bloquear/Desbloquear/Higienização"
                             class="btn btn-outline-secondary btn-sm listing-action-btn" data-bs-toggle="modal"
-                            data-bs-target="#modal-status" data-url="{% url 'gl_ocupacao_status' pk=ocupacao.pk %}">
+                            data-bs-target="#modal-status" data-url="{% url 'gl_ocupacao_status' pk=leito.gestao.pk %}">
                             <i class="fas fa-lock"></i>
                         </button>
                         {% endif %}
+                        {% if leito.gestao and pode_excluir %}
+                        <form method="post"
+                              action="{% url 'gl_ocupacao_excluir' pk=leito.gestao.pk %}{% if querystring %}?{{ querystring }}{% endif %}"
+                              onsubmit="return confirm('Excluir/Liberar o registro deste leito? O leito ficará LIVRE e o movimento ficará registrado.');"
+                              class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" title="Excluir/Liberar registro (leito fica LIVRE)"
+                                    class="btn btn-outline-danger btn-sm listing-action-btn">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </form>
+                        {% endif %}
+                        {% endif %}
                     </div>
                 </td>
-                <td><strong>{{ ocupacao.leito.leito }}</strong></td>
-                <td>{{ ocupacao.leito.local.nome|default:"—" }}</td>
-                <td>{{ ocupacao.leito.local.setor.nome|default:"—" }}</td>
-                <td>{{ ocupacao.leito.local.setor.ala.nome|default:"—" }}</td>
+                <td><strong>{{ leito.leito }}</strong></td>
+                <td>{{ leito.local.nome|default:"—" }}</td>
+                <td>{{ leito.local.setor.nome|default:"—" }}</td>
+                <td>{{ leito.local.setor.ala.nome|default:"—" }}</td>
                 <td>
-                    {% if ocupacao.atendimento_id %}
-                    <a href="{% url 'atendimento_detalhe' pk=ocupacao.atendimento.pk %}" style="text-decoration:none;">
-                        <strong>{{ ocupacao.atendimento.pessoa.nome }}</strong>
+                    {% if leito.gestao.atendimento_id %}
+                    <a href="{% url 'atendimento_detalhe' pk=leito.gestao.atendimento.pk %}" style="text-decoration:none;">
+                        <strong>{{ leito.gestao.atendimento.pessoa.nome }}</strong>
                     </a>
-                    {% else %}—{% endif %}
+                    {% else %}<span class="text-muted">Sem paciente</span>{% endif %}
                 </td>
-                <td>{{ ocupacao.dt_entrada|date:"d/m/Y H:i" }}</td>
-                <td>{{ ocupacao.dias_internado }}</td>
-                <td>{{ ocupacao.dt_saida|date:"d/m/Y H:i"|default:"—" }}</td>
+                <td>{{ leito.gestao.dt_entrada|date:"d/m/Y H:i"|default:"—" }}</td>
+                <td>{{ leito.gestao.dias_internado|default:"—" }}</td>
+                <td>{{ leito.gestao.dt_saida|date:"d/m/Y H:i"|default:"—" }}</td>
                 <td>
                     <span class="badge"
-                        style="background:{% if ocupacao.situacao == 'O' %}#198754{% elif ocupacao.situacao == 'L' %}#0dcaf0{% elif ocupacao.situacao == 'B' %}#dc3545{% else %}#e0a800{% endif %};">
-                        {{ ocupacao.get_situacao_display }}
+                        style="background:{% if leito.gestao.situacao == 'O' %}#198754{% elif leito.gestao.situacao == 'L' %}#0dcaf0{% elif leito.gestao.situacao == 'B' %}#dc3545{% elif leito.gestao.situacao == 'H' %}#e0a800{% else %}#adb5bd{% endif %};">
+                        {% if leito.gestao %}{{ leito.gestao.get_situacao_display }}{% else %}Sem registro{% endif %}
                     </span>
                 </td>
-                <td title="{{ ocupacao.observacoes }}">{{ ocupacao.observacoes|truncatechars:60|default:"—" }}</td>
+                <td title="{{ leito.gestao.observacoes }}">{{ leito.gestao.observacoes|truncatechars:60|default:"—" }}</td>
             </tr>
             {% empty %}
             <tr>
-                <td colspan="11">Nenhuma ocupação para os filtros informados.</td>
+                <td colspan="11">Nenhum leito para os filtros informados.</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
 
+{% if pode_add %}
+<!-- MODAL: pacientes sem leito -->
 {% if pode_editar %}
-<!-- MODAL: ocupar leito -->
-<div class="modal fade" id="modal-ocupar" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+<div class="modal fade" id="modal-sem-leito" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
-            <form method="post" action="{% url 'gl_leito_ocupar' leito_id=0 %}">
-                {% csrf_token %}
-                <div class="modal-header">
-                    <h5 class="modal-title">Ocupar leito <span id="ocupar-leito-nome"></span></h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            <div class="modal-header">
+                <h5 class="modal-title">Atendimentos sem alocação de leito</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                {% if pacientes_sem_leito %}
+                <div class="list-group">
+                    {% for atendimento in pacientes_sem_leito %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ atendimento.pessoa.nome }}</strong>
+                            <small class="text-muted d-block">
+                                #{{ atendimento.pk }}
+                                {% if atendimento.pessoa.cpf %} · CPF {{ atendimento.pessoa.cpf }}{% endif %}
+                                {% if atendimento.dt_atendimento %} · {{ atendimento.dt_atendimento|date:"d/m/Y H:i" }}{% endif %}
+                            </small>
+                        </div>
+                        <a href="{% url 'gl_ocupacao_cadastrar' %}?atendimento={{ atendimento.pk }}"
+                           title="Registrar ocupação para este paciente"
+                           class="btn btn-outline-success btn-sm">
+                            <i class="fas fa-user-plus me-1"></i>Registrar ocupação
+                        </a>
+                    </div>
+                    {% endfor %}
                 </div>
-                <div class="modal-body">
-                    {{ ocupar_form.media }}
-                    <label class="form-label">Leito (livre)</label>
-                    <select name="leito" class="form-select" required>
-                        <option value="">Selecione</option>
-                        {% for leito in leitos_livres %}
-                        <option value="{{ leito.pk }}">{{ leito.leito }} — {{ leito.local.nome }} / {{ leito.local.setor.nome }} / {{ leito.local.setor.ala.nome }}</option>
-                        {% endfor %}
-                    </select>
-                    {{ ocupar_form.atendimento|as_crispy_field }}
-                    {{ ocupar_form.dt_entrada|as_crispy_field }}
-                    {{ ocupar_form.observacoes|as_crispy_field }}
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-success">Ocupar</button>
-                </div>
-            </form>
+                {% else %}
+                <p class="text-muted mb-0">Nenhum atendimento ativo sem leito neste estabelecimento.</p>
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
         </div>
     </div>
 </div>
+{% endif %}
 
 <!-- MODAL: registrar saída -->
 <div class="modal fade" id="modal-saida" tabindex="-1" aria-hidden="true">
@@ -228,40 +259,6 @@
     </div>
 </div>
 
-<!-- MODAL: transferir leito -->
-<div class="modal fade" id="modal-transferir" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <form method="post">
-                {% csrf_token %}
-                <div class="modal-header">
-                    <h5 class="modal-title">Trocar leito</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
-                </div>
-                <div class="modal-body">
-                    <label class="form-label">Leito de destino</label>
-                    <select name="leito_destino" class="form-select" required>
-                        <option value="">Selecione</option>
-                        {% for leito in leitos_livres %}
-                        <option value="{{ leito.pk }}">
-                            {{ leito }} — {{ leito.local.nome }} /
-                            {{ leito.local.setor.nome }} /
-                            {{ leito.local.setor.ala.nome }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                    <label class="form-label mt-2">Observações</label>
-                    <textarea name="observacoes" class="form-control" rows="2"></textarea>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-warning">Transferir</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
 <!-- MODAL: mudar status -->
 <div class="modal fade" id="modal-status" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -275,8 +272,7 @@
                 <div class="modal-body">
                     <label class="form-label">Nova situação</label>
                     <select name="situacao" class="form-select">
-                        <option value="O">Ocupado</option>
-                        <option value="L">Livre</option>
+                        <option value="L">Livre (libera o atendimento)</option>
                         <option value="B">Bloqueado</option>
                         <option value="H">Higienização</option>
                     </select>
@@ -357,8 +353,19 @@
         if (modal.id === 'modal-ocupar') {
             const el = modal.querySelector('#ocupar-leito-nome');
             if (el) el.textContent = botao.getAttribute('data-leito-nome') || '';
-            const campo = modal.querySelector('input[name="leito"]');
-            if (campo) campo.value = botao.getAttribute('data-leito') || '';
+        }
+        // Datas default = AGORA (usuário pode alterar): saída e ocupação
+        const agoraLocal = new Date();
+        agoraLocal.setMinutes(agoraLocal.getMinutes() -
+            agoraLocal.getTimezoneOffset());
+        const valorAgora = agoraLocal.toISOString().slice(0, 16);
+        if (modal.id === 'modal-saida') {
+            const campo = modal.querySelector('input[name="dt_saida"]');
+            if (campo && !campo.value) campo.value = valorAgora;
+        }
+        if (modal.id === 'modal-ocupar') {
+            const campo = modal.querySelector('input[name="dt_entrada"]');
+            if (campo && !campo.value) campo.value = valorAgora;
         }
         if (modal.id === 'modal-transferir') {
             // recarrega a lista de leitos livres via GET no select (options em servidor)
