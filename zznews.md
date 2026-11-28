@@ -19,5 +19,7 @@ tentaar migrar para o padrao de templates e cbs:
 -tesouraria 
 resumo: todos os apps, modelos e funcoes de faturamento e financeiro, com exceção dos cadastros assistenciais.
 
+-padronizar largura de todos botoes e clicaveis em menul, seja filtro, novo, voltar, href, tudo padrao e com quebra para baixo e nao para lateral, para nao exceder as divs.
+
 
 
