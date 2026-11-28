@@ -1,4 +1,12 @@
 {% extends 'base.html' %}
+
+{% block extra_head %}
+<style>
+/* Telas de CADASTRO/EDIÇÃO/DETALHE: botão voltar ao topo sempre visível. */
+#btn-voltar-topo { display: flex !important; }
+</style>
+{% endblock %}
+
 {% load static %}
 {% load crispy_forms_tags %}
 {% block titulos %}{{ title }}|{% endblock %}

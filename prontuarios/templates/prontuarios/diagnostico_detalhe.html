@@ -10,6 +10,12 @@
 <link rel="stylesheet" href="{% static 'css/diagnostico_cadastrar_css.css' %}">
 
 
+{% block extra_head %}
+<style>
+/* Telas de CADASTRO/EDIÇÃO/DETALHE: botão voltar ao topo sempre visível. */
+#btn-voltar-topo { display: flex !important; }
+</style>
+{% endblock %}
 {% block menul %}
 <div class="form-group text-left mt-2 m-3">
 

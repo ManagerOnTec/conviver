@@ -1,4 +1,12 @@
 {% extends "admin/base_site.html" %}
+
+{% block extra_head %}
+<style>
+/* Telas de CADASTRO/EDIÇÃO/DETALHE: botão voltar ao topo sempre visível. */
+#btn-voltar-topo { display: flex !important; }
+</style>
+{% endblock %}
+
 {% load i18n %}
 {% block title %}Conciliação – {{ competencia }}{% endblock %}
 

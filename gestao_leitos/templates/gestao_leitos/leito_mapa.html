@@ -10,10 +10,14 @@
     </a>
     {% if pode_add %}
     <a href="{% url 'gl_ocupacao_cadastrar' %}" title="Registrar ocupação de leito"
-       class="mt-2 list-group-item list-group-item-action custom-link rounded">
-        <i class="fas fa-user-plus me-2"></i>Registrar Ocupação
+       id="btn-novo" class="mt-2 list-group-item list-group-item-action custom-link btn-novo rounded">
+        <i class="fas fa-plus me-2"></i>Novo
     </a>
     {% endif %}
+    <a title="Clique aqui para fechar" href="{% url 'gl_leito_mapa' %}"
+       class="mt-2 list-group-item list-group-item-action voltar-link rounded">
+        <i class="fas fa-arrow-left me-2"></i>Voltar
+    </a>
 
     <!-- Pacientes SEM leito: modal com atendimentos a alocar -->
     <a href="#modal-sem-leito" title="Atendimentos sem alocação de leito"

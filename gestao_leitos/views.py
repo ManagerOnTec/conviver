@@ -100,6 +100,12 @@ def _erros_mensagem(erro):
 # MAPA DE LEITOS
 # ---------------------------------------------------------------------------
 def _dados_filtros(request):
+    """Filtros da sessão/GET como DICIONÁRIO de strings simples.
+
+    `dict(request.GET)` transformaria cada valor em LISTA (QueryDict) e
+    quebraria os filtros com `.strip()`/comparação — sempre converter para
+    escalar (último valor).
+    """
     campos = ('q', 'ala', 'setor', 'local', 'situacao', 'status')
     dados = request.GET
     if 'limpar' in dados:
@@ -109,21 +115,27 @@ def _dados_filtros(request):
         filtros = dados
     else:
         filtros = request.session.get('gl_filters') or {}
-    return dict(filtros)
+    # QueryDict → dicionário de ESCALARES (getlist → último valor)
+    return {chave: (valor[0] if isinstance(valor, (list, tuple))
+                    else valor)
+            for chave, valor in dict(filtros).items()}
 
 
 def _aplicar_filtros_leitos(queryset, dados):
     """Filtros do mapa aplicados à hierarquia DE LEITOS (tabela Leito)."""
     filtros = {}
 
-    busca = (dados.get('q') or '').strip()
-    if busca:
-        queryset = queryset.filter(
-            Q(leito__icontains=busca)
-            | Q(local__nome__icontains=busca)
-            | Q(gestao__atendimento__pessoa__nome__icontains=busca)
-            | Q(gestao__atendimento__pessoa__cpf__icontains=busca))
-        filtros['q'] = busca
+    try:
+        busca = str(dados.get('q') or '').strip()
+        if busca:
+            queryset = queryset.filter(
+                Q(leito__icontains=busca)
+                | Q(local__nome__icontains=busca)
+                | Q(gestao__atendimento__pessoa__nome__icontains=busca)
+                | Q(gestao__atendimento__pessoa__cpf__icontains=busca))
+            filtros['q'] = busca
+    except Exception:
+        pass  # filtro inválido nunca derruba a listagem
 
     for campo, caminho in (('ala', 'local__setor__ala'),
                            ('setor', 'local__setor'),
@@ -136,15 +148,21 @@ def _aplicar_filtros_leitos(queryset, dados):
             except (TypeError, ValueError):
                 pass
 
-    situacao = dados.get('situacao')
-    if situacao in ('O', 'L', 'B', 'H'):
-        queryset = queryset.filter(gestao__situacao=situacao)
-        filtros['situacao'] = situacao
+    try:
+        situacao = str(dados.get('situacao') or '')
+        if situacao in ('O', 'L', 'B', 'H'):
+            queryset = queryset.filter(gestao__situacao=situacao)
+            filtros['situacao'] = situacao
+    except Exception:
+        pass
 
-    status = dados.get('status')
-    if status in ('A', 'I'):
-        queryset = queryset.filter(status=status)
-        filtros['status'] = status
+    try:
+        status = str(dados.get('status') or '')
+        if status in ('A', 'I'):
+            queryset = queryset.filter(status=status)
+            filtros['status'] = status
+    except Exception:
+        pass
 
     return queryset, filtros
 
@@ -275,8 +293,11 @@ class LeitoMapView(
         context['pacientes_sem_leito'] = _atendimentos_sem_leito(
             estabelecimento).select_related('pessoa')[:100]
         # Pode adicionar = permissão Django de ADD (usada no menul/botão).
+        # Alinha com as demais telas: mostra o botão "Novo" quando o usuário
+        # pode alterar a ocupação (registrar ocupação é função de gestor).
         context['pode_add'] = self.request.user.has_perm(
-            'gestao_leitos.add_gestao') and _liberacao(self.request, 'editar')
+            'gestao_leitos.add_gestao') or \
+            self.request.user.has_perm('gestao_leitos.change_gestao') and _liberacao(self.request, 'editar')
         # Leitos livres do estabelecimento (controla exibição do botão).
         context['leitos_livres'] = Leito.objects.filter(
             status='A', ocupado=False,

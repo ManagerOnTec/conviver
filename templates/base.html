@@ -10,6 +10,8 @@
       {% endblock %}ManagerOnTec
     </title>
 
+    {% block extra_head %}{% endblock %}
+
     <style>
       :root {
         --sidebar-width: 248px;
@@ -1685,6 +1687,79 @@
           padding: 0.35rem;
         }
       }
+
+      /* ============ SEÇÕES RECOLHÍVEIS DO MENUL (ganho de espaço em
+         tablets/celulares): 1) user + estabelecimento; 2) bloco de
+         botões auxiliares do app; 3) sessão de filtros. Cada cabeçalho
+         é um botão (chevron) que expande/recolhe o conteúdo abaixo. */
+      #left-menu .topo-recolher-cabecalho {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        width: 100%;
+        padding: 0.45rem 0.75rem;
+        background: rgba(255, 255, 255, 0.07);
+        border: 1px solid rgba(188, 208, 229, 0.25);
+        border-radius: 0.55rem;
+        color: #ffffff;
+        font-size: 0.8rem;
+        font-weight: 600;
+        cursor: pointer;
+        user-select: none;
+      }
+      #left-menu .topo-recolher-cabecalho:hover {
+        background: rgba(255, 255, 255, 0.14);
+      }
+      #left-menu .topo-recolher-cabecalho .fa-chevron-down,
+      #left-menu .topo-recolher-cabecalho .fa-chevron-right {
+        transition: transform 0.2s ease;
+      }
+      #left-menu .topo-recolher-aberto .fa-chevron-down {
+        transform: rotate(0deg);
+      }
+      #left-menu .topo-recolher-fechado .fa-chevron-down {
+        transform: rotate(-90deg);
+      }
+      #left-menu .topo-recolher-conteudo.recolhido {
+        display: none !important;
+      }
+      /* wrappers-alvo identificados por data no DOM */
+      #left-menu .usernav {
+        margin-top: 0.5rem;
+      }
+      /* CONTAINER de cada seção recolhível (herda o espaçamento e faz o
+         conteúdo "quicar" junto do cabeçalho — nada solto). */
+      #left-menu .topo-recolher-wrapper {
+        margin: 0.65rem !important;
+        padding: 0.35rem;
+        border: 1px solid rgba(188, 208, 229, 0.12);
+        border-radius: 0.6rem;
+      }
+      #left-menu .topo-recolher-wrapper .topo-recolher-cabecalho {
+        margin-bottom: 0.4rem;
+      }
+      /* Form de filtros: ocupa toda a largura do container (responsivo). */
+      #left-menu .topo-recolher-wrapper form {
+        width: 100%;
+        min-width: 0;
+        padding: 0 0.35rem;
+      }
+      #left-menu .topo-recolher-wrapper form .form-control,
+      #left-menu .topo-recolher-wrapper form .form-select {
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+      }
+      /* Sessão (user+estab) CENTRALIZADA dentro do próprio bloco */
+      #left-menu .topo-recolher-wrapper .usernav {
+        margin: 0 !important;
+        padding: 0.35rem;
+        text-align: center;
+      }
+      #left-menu .topo-recolher-wrapper .usernav hr {
+        margin: 0.5rem auto;
+      }
     </style>
 
     {% include 'parciais/_head.html' %}
@@ -1700,8 +1775,8 @@
     </button>
 
     <section id="main-content">
-      <aside id="left-menu" class="bg-dark">
-        <div class="text-right text-white m-2 p-2 usernav">
+      <aside id="left-menu" class="bg-dark" data-topo-menu>
+        <div class="text-right text-white m-2 p-2 usernav" data-topo-secao="Sessão">
           <div>
             <i class="user-container fas fa-user"></i> {{ request.user }}
           </div>
@@ -1756,6 +1831,214 @@
     {% block scriptcustom %}
 
     {% endblock %}
+
+    <script>
+      // ===== SEÇÕES RECOLHÍVEIS DO MENUL (ganho de espaço em tablets/
+      // celulares): Sessão (user+estabelecimento), Funções (botões auxili.
+      // do app) e Filtros (form GET, SEM o título interno duplicado).
+      // O estado é persistido na sessionStorage.
+      (function () {
+        var STORAGE = 'managerontec:topo-recolhido';
+        var menu = document.getElementById('left-menu');
+        if (!menu) return;
+        var estado = {};
+        try {
+          estado = JSON.parse(
+            sessionStorage.getItem(STORAGE) || '{}');
+        } catch (e) { estado = {}; }
+
+        function criarCabecalho(rotulo, icone) {
+          var cab = document.createElement('button');
+          cab.type = 'button';
+          cab.className = 'topo-recolher-cabecalho w-100';
+          cab.innerHTML = '<span><i class="fas ' + icone +
+            ' me-2"></i>' + rotulo + '</span>' +
+            '<i class="fas fa-chevron-down"></i>';
+          return cab;
+        }
+
+        function envolver(no, rotulo, icone, chave) {
+          if (!no || no.dataset.topoEnvolvido) return;
+          no.dataset.topoEnvolvido = '1';
+          // wrapper próprio: o conteúdo + cabeçalho ficam num CONTAINER
+          // (evita "solto" visual — o container tem o mesmo espaçamento do
+          // bloco original).
+          var container = document.createElement('div');
+          container.className = 'topo-recolher-wrapper';
+          no.parentNode.insertBefore(container, no);
+          var cab = criarCabecalho(rotulo, icone);
+          container.appendChild(cab);
+          container.appendChild(no);
+          no.classList.add('topo-recolher-conteudo');
+          var aberto = estado[chave] !== 'fechado';
+          no.classList.toggle('recolhido', !aberto);
+          cab.classList.toggle('topo-recolher-aberto', aberto);
+          cab.classList.toggle('topo-recolher-fechado', !aberto);
+          cab.addEventListener('click', function () {
+            var agoraAberto = no.classList.toggle('recolhido') === false;
+            cab.classList.toggle('topo-recolher-aberto', agoraAberto);
+            cab.classList.toggle('topo-recolher-fechado', !agoraAberto);
+            estado[chave] = agoraAberto ? 'aberto' : 'fechado';
+            try {
+              sessionStorage.setItem(STORAGE, JSON.stringify(estado));
+            } catch (e2) { /* storage bloqueado: segue */ }
+          });
+        }
+
+        // 1) SESSÃO: um ÚNICO botão-toggle cujo rótulo é SÓ O USUÁRIO;
+        //    o ESTABELECIMENTO aparece somente QUANDO EXPANDIDO.
+        var sessao = menu.querySelector('.usernav');
+        if (sessao) {
+          var divUsuario = sessao.querySelector('div:first-child');
+          var divEstab = sessao.querySelector('div.mt-2');
+          var hrEstab = sessao.querySelector('hr');
+          var nomeUsuario = ((divUsuario && divUsuario.textContent) ||
+              '').replace(/\s+/g, ' ').trim() || 'Sessão';
+          // o div do usuário some (seu texto é o rótulo do cabeçalho)
+          if (divUsuario) divUsuario.style.display = 'none';
+          if (hrEstab) hrEstab.remove();
+          // o ESTABELECIMENTO começa escondido (só no expandido)
+          if (divEstab) {
+            divEstab.classList.remove('mt-2');
+            divEstab.style.textAlign = 'center';
+            divEstab.classList.add('topo-recolher-conteudo');
+            divEstab.classList.toggle('recolhido', true);
+            // expande/recolhe o estabelecimento JUNTO com o toggle
+          }
+          envolver(sessao, nomeUsuario, 'fa-circle-user', 'sessao');
+          // recolher/expandir o toggle também controla o estabelecimento
+          var cab = sessao.previousElementSibling;
+          if (cab && divEstab) {
+            var toggleOriginal = cab.addEventListener;
+            cab.addEventListener('click', function () {
+              divEstab.classList.toggle('recolhido');
+            });
+          }
+        }
+
+        // 2) FILTROS: envolve o form GET e REMOVE o título interno
+        //    "Filtros" (o cabeçalho do botão passa a ser o único título).
+        var formFiltros = menu.querySelector('form');
+        if (formFiltros) {
+          var h5 = formFiltros.querySelector('h5');
+          if (h5 && (h5.textContent || '').trim().toLowerCase() ===
+                  'filtros') {
+            h5.remove();
+          }
+          envolver(formFiltros, 'Filtros', 'fa-filter', 'filtros');
+        }
+
+        // 3) FUNÇÕES (botões auxiliares do app): agrupa os <a> custom-link
+        //    (evolução, prescrição, ADEP, tarefas, documentos...). A FUNÇÃO
+        //    EM TELA (bg-primary, EXCETO o botão "Novo", que também usa
+        //    bg-primary mas tem id btn-novo) fica NO TOPO do grupo — acima
+        //    das demais clicáveis.
+        var funcaoEmTela = menu.querySelector(
+          'a.bg-primary:not(#btn-novo):not(.voltar-link)');
+        // Botões de NOVO das telas próprias (ex.: "Registrar Ocupação"):
+        // levam a classe .btn-novo e ficam NO TOPO, FORA do grupo Funções.
+        var botoesNovo = [];
+        Array.prototype.slice.call(menu.querySelectorAll('a.btn-novo'))
+          .forEach(function (a) { botoesNovo.push(a); });
+        var auxiliares = [];
+        Array.prototype.slice.call(menu.children).forEach(function (bloco) {
+          if (bloco === formFiltros || bloco.dataset.topoEnvolvido) return;
+          Array.prototype.slice.call(
+            bloco.querySelectorAll('a.custom-link:not(.voltar-link)'))
+            .forEach(function (a) { auxiliares.push(a); });
+        });
+        // A FUNÇÃO EM TELA NÃO entra no grupo: fica como bloco PRÓPRIO,
+        // ACIMA do grupo "Funções" (abaixo de Novo/Voltar/Listar e acima de
+        // todos os demais modelos clicáveis, na lista expandida).
+        var demais = auxiliares.filter(function (a) {
+          return a !== funcaoEmTela && botoesNovo.indexOf(a) === -1;
+        });
+        if (demais.length > 0) {
+          var grupo = document.createElement('div');
+          grupo.className = 'topo-recolher-conteudo';
+          var primeiro = demais[0];
+          primeiro.parentNode.insertBefore(grupo, primeiro);
+          demais.forEach(function (a) { grupo.appendChild(a); });
+          envolver(grupo, 'Funções', 'fa-th-large', 'funcoes');
+          // função em tela logo ACIMA do grupo Funções
+          if (funcaoEmTela) {
+            var wrapGrupo = grupo.closest('.topo-recolher-wrapper') || grupo;
+            wrapGrupo.parentNode.insertBefore(funcaoEmTela, wrapGrupo);
+          }
+        }
+
+        // 4) ORDEM FINAL (padrão em TODOS os templates — list, cad, edit,
+        //    detalhe): NOVO, VOLTAR, LISTAR e o indicador azul da função em
+        //    tela ficam SEMPRE ACIMA da sessão de FILTROS, cada bloco na
+        //    ordem em que já está (Novo primeiro). O grupo "Funções" (demais
+        //    modelos clicáveis) permanece ABAIXO da função em tela.
+        if (formFiltros) {
+          var filtroWrap = formFiltros.closest('.topo-recolher-wrapper') ||
+              formFiltros;
+          var primarios = [];
+          Array.prototype.slice.call(menu.children)
+            .forEach(function (bloco) {
+              if (bloco === filtroWrap || bloco.dataset.topoEnvolvido) return;
+              if (bloco.querySelector(
+                    'a.voltar-link, .btn-novo, a.bg-primary')) {
+                primarios.push(bloco);
+              }
+            });
+          primarios.forEach(function (bloco) {
+            menu.insertBefore(bloco, filtroWrap);
+          });
+          // O grupo "Funções" vem logo DEPOIS dos blocos primários
+          // (Novo/Voltar/Listar/função em tela) e antes dos filtros —
+          // garante que o VOLTAR fique sempre ACIMA do grupo.
+          var wrapFuncoes = (typeof grupo !== 'undefined' && grupo)
+              ? grupo.closest('.topo-recolher-wrapper') : null;
+          if (wrapFuncoes) {
+            menu.insertBefore(wrapFuncoes, filtroWrap);
+          }
+        }
+      })();
+    </script>
+
+    <!-- BOTÃO "VOLTAR AO TOPO" — canto inferior direito (padrão global;
+         serve para cadastro, edição, detalhe e listagens). -->
+    <button id="btn-voltar-topo" title="Voltar ao topo"
+            aria-label="Voltar ao topo"
+            style="position: fixed; bottom: 0.55rem; left: 50%; transform: translateX(-50%);
+                   z-index: 1045;
+                   display: none; align-items: center; justify-content: center;
+                   width: 2.6rem; height: 2.6rem; border-radius: 999px;
+                   border: 1px solid #68b6d8; cursor: pointer;
+                   background: linear-gradient(135deg, #0f766e 0%, #0b5ed7 100%);
+                   color: #ffffff; font-size: 1rem;
+                   box-shadow: 0 12px 24px rgba(15, 23, 42, 0.18);"
+            onmouseover="this.style.filter='brightness(1.15)'"
+            onmouseout="this.style.filter='none'">
+      <i class="fas fa-chevron-up"></i>
+    </button>
+    <script>
+      (function () {
+        var botao = document.getElementById('btn-voltar-topo');
+        if (!botao) return;
+        // O rolagem principal é o #right-content (scroll interno).
+        var alvo = document.getElementById('right-content') || window;
+        function atualizar() {
+            var pos = (alvo === window) ? window.pageYOffset : alvo.scrollTop;
+            botao.style.display = (pos > 120) ? 'flex' : 'none';
+        }
+        (alvo === window ? window : alvo)
+            .addEventListener('scroll', atualizar, { passive: true });
+        botao.addEventListener('click', function () {
+            if (alvo === window) { window.scrollTo({ top: 0, behavior: 'smooth' }); }
+            else { alvo.scrollTo({ top: 0, behavior: 'smooth' }); }
+        });
+        atualizar();
+      // Em telas de CADASTRO/EDIÇÃO/DETALHE o botão fica sempre
+      // visível (conteúdo curto): base.html marca por listagem.
+      if (document.body.classList.contains('mostrar-topo-fixo')) {
+        botao.style.display = 'flex';
+      }
+      })();
+    </script>
 
     <script>
       document.addEventListener('DOMContentLoaded', () => {

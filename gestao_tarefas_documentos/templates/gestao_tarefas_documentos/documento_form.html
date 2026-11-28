@@ -1,11 +1,19 @@
 {% extends 'base.html' %}
+
+{% block extra_head %}
+<style>
+/* Telas de CADASTRO/EDIÇÃO/DETALHE: botão voltar ao topo sempre visível. */
+#btn-voltar-topo { display: flex !important; }
+</style>
+{% endblock %}
+
 {% load static %}
 {% load crispy_forms_tags %}
 {% block titulos %}{{title}}|{% endblock %}
 
 {% block menul %}
 <div class="form-group text-left m-3 mt-2">
-    <a href="{% url 'gtd_documento_listar' %}" class="mt-2 list-group-item list-group-item-action custom-link rounded">
+    <a href="{% url 'gtd_documento_listar' %}" class="mt-2 list-group-item list-group-item-action voltar-link rounded">
         <i class="fas fa-arrow-left me-2"></i>Voltar
     </a>
     <a href="{% url 'gtd_documento_listar' %}" class="mt-2 list-group-item list-group-item-action custom-link rounded">

@@ -1,5 +1,11 @@
 {% extends 'base.html' %} {% load static %} {% load crispy_forms_tags %} {% load
-templatetags %} {% block titulos %}{{title}}|{% endblock %} {% block menul %}
+templatetags %} {% block titulos %}{{title}}|{% endblock %} {% block extra_head %}
+<style>
+/* Telas de CADASTRO/EDIÇÃO/DETALHE: botão voltar ao topo sempre visível. */
+#btn-voltar-topo { display: flex !important; }
+</style>
+{% endblock %}
+{% block menul %}
 <div class="form-group text-left mt-2 m-3">
   <a
     title="Clique aqui para fechar"
